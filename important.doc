@@ -1,0 +1,188 @@
+const BOT_TOKEN = "7686180552:AAE1qOcFbuoPypIT_SD5T44YUg1R0YnQ8ug"; 
+const SPREADSHEET_ID = "1thvp2a6m9sL4eVshnItcF7AEwW9zc4Xs9Q1A1H54dqU"; 
+const ADMIN_CHAT_ID = "-1003235272020"; 
+
+function doPost(e) {
+  try {
+    var contents = JSON.parse(e.postData.contents);
+    if (contents.action) {
+      return handleWebAppRequest(contents);
+    }
+  } catch (err) {
+    return ContentService.createTextOutput("Error");
+  }
+}
+
+function handleWebAppRequest(data) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var response = {};
+
+  try {
+    // 1. LOGIN
+    if (data.action === "login") {
+      var adminSheet = ss.getSheetByName("Admins");
+      var admins = adminSheet.getDataRange().getValues();
+      var userFound = false, teacherName = "";
+      
+      for (var i = 1; i < admins.length; i++) {
+        if (String(admins[i][0]) == data.login && String(admins[i][1]) == data.password) {
+          userFound = true; teacherName = admins[i][2]; break;
+        }
+      }
+      response = userFound ? { status: "success", name: teacherName } : { status: "error" };
+    }
+    
+    // 2. SAVE (NATIJALARNI SAQLASH - O'ZGARGAN QISM)
+    else if (data.action === "save") {
+      var dataSheet = ss.getSheetByName("Data");
+      // Agar Data varag'i yo'q bo'lsa, yangi ochib, sarlavha qo'yamiz (Rejim ustuni qo'shildi)
+      if (!dataSheet) { 
+        dataSheet = ss.insertSheet("Data"); 
+        dataSheet.appendRow(["Sana", "Ism", "To'g'ri", "Jami", "Foiz", "O'qituvchi", "Strike", "Rejim"]); 
+      }
+      
+      // Mana shu yerda 'mode' ni ham yuboryapmiz
+      saveToSheet(dataSheet, data.students, data.teacher, data.mode);
+      
+      // Agar Jamoalar jangi bo'lsa, ularni StudentsDB ga qo'shmaymiz
+      if (data.mode !== "team_battle") {
+          updateStudentsDB(ss, data.students);
+      }
+      
+      if (data.text) sendTelegram(ADMIN_CHAT_ID, data.text);
+      response = { status: "success" };
+    } 
+    
+    // 3. GET LIST
+    else if (data.action === "get_student_list") {
+      var dbSheet = ss.getSheetByName("StudentsDB");
+      var list = [];
+      if (dbSheet) {
+        var rows = dbSheet.getDataRange().getValues();
+        for (var i = 1; i < rows.length; i++) {
+          if(rows[i][0]) list.push(rows[i][0]);
+        }
+      }
+      response = { status: "success", list: list.sort() };
+    }
+
+    // 4. GET HISTORY
+    else if (data.action === "get_history") {
+      var dataSheet = ss.getSheetByName("Data");
+      response = { status: "success", history: getHistoryFromSheet(dataSheet) };
+    }
+    
+    // 5. STUDENT LOGIN
+    else if (data.action === "student_login") {
+      var dbSheet = ss.getSheetByName("StudentsDB");
+      var rows = dbSheet ? dbSheet.getDataRange().getValues() : [];
+      var found = false;
+      for (var i = 1; i < rows.length; i++) {
+        if (String(rows[i][0]).toLowerCase() == String(data.login).toLowerCase() && String(rows[i][1]) == data.password) {
+          found = true; break;
+        }
+      }
+      response = found ? { status: "success", name: data.login } : { status: "error" };
+    }
+    
+    // 6. STUDENT HISTORY
+    else if (data.action === "get_student_history") {
+       var dataSheet = ss.getSheetByName("Data");
+       var history = [];
+       if (dataSheet) {
+         var rows = dataSheet.getDataRange().getValues();
+         var target = String(data.name).toLowerCase();
+         for(var i=1; i<rows.length; i++){
+           if(String(rows[i][1]).toLowerCase() === target) {
+             var d = new Date(rows[i][0]);
+             var fd = ("0"+d.getDate()).slice(-2)+"."+("0"+(d.getMonth()+1)).slice(-2);
+             history.push({date: fd, percent: rows[i][4]});
+           }
+         }
+       }
+       response = {status: "success", history: history};
+    }
+
+  } catch (error) { response = { status: "error", message: error.toString() }; }
+  
+  return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// --- YORDAMCHI FUNKSIYALAR ---
+
+// 1. saveToSheet (YANGILANDI: Mode va Strike ni qabul qiladi)
+function saveToSheet(sheet, students, teacherName, mode) {
+  var date = new Date();
+  var dateStr = date.getFullYear() + "-" + (date.getMonth()+1) + "-" + date.getDate();
+  
+  // Agar Jamoalar jangi bo'lsa va students bo'sh kelsa (HTMLdan shunday keladi), hech narsa yozmaymiz
+  // Chunki jamoa natijasi faqat Telegramga ketadi.
+  // Lekin agar Duel yoki Standard bo'lsa, yozamiz.
+  if (!students || students.length === 0) return;
+
+  students.forEach(function(s) {
+    var correct = s.correct || 0;
+    var total = s.total || 0;
+    var percent = total > 0 ? (correct / total * 100).toFixed(1) : 0;
+    var strike = s.strikes || 0;
+    
+    // G ustunga Strike, H ustunga Rejim yoziladi
+    sheet.appendRow([
+      dateStr, 
+      s.name, 
+      correct, 
+      total, 
+      percent, 
+      teacherName || "Admin",
+      strike,
+      mode || "standard"
+    ]);
+  });
+}
+
+// 2. updateStudentsDB
+function updateStudentsDB(ss, students) {
+  var dbSheet = ss.getSheetByName("StudentsDB");
+  if(!dbSheet) { dbSheet = ss.insertSheet("StudentsDB"); dbSheet.appendRow(["Ism", "Parol"]); }
+  
+  var existingNames = dbSheet.getDataRange().getValues().map(function(r){ return r[0]; });
+  
+  students.forEach(function(s){
+    if(existingNames.indexOf(s.name) === -1) {
+      dbSheet.appendRow([s.name, "1234"]); 
+    }
+  });
+}
+
+// 3. Telegram
+function sendTelegram(chatId, text) {
+  if (!chatId || !text) return;
+  try {
+    UrlFetchApp.fetch("https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage", { 
+      "method": "post", 
+      "contentType": "application/json", 
+      "payload": JSON.stringify({ "chat_id": chatId, "text": text, "parse_mode": "HTML" }),
+      "muteHttpExceptions": true
+    });
+  } catch(e) { Logger.log(e); }
+}
+
+// 4. Get History (Admin)
+function getHistoryFromSheet(sheet) {
+  if (!sheet) return [];
+  var rows = sheet.getDataRange().getValues();
+  var history = [];
+  for (var i = 1; i < rows.length; i++) {
+    var d = new Date(rows[i][0]);
+    var fd = d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2) + "-" + ("0"+d.getDate()).slice(-2);
+    history.push({ date: fd, name: rows[i][1], percent: rows[i][4] }); 
+  }
+  return history;
+}
+
+// 5. Haftalik hisobot (Trigger uchun)
+function sendWeeklyReport() {
+  // Bu funksiya o'zgarishsiz qoldi, oldingi koddan ishlayveradi
+  // Faqat 'standard' va 'duel' rejimdagilarni hisoblaydi (chunki 'team_battle' bazaga tushmaydi)
+  // ... (kodni qisqartirdim, chunki u o'zgarmadi)
+}

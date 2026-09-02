@@ -1,0 +1,2100 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <title>History Arena - O'qituvchi</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+      :root {
+        --glass-bg: rgba(25, 25, 35, 0.85);
+        --primary: #0a84ff;
+        --text: #f0f0f0;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background: url("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop")
+          center fixed;
+        background-size: cover;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        color: var(--text);
+      }
+      .glass-panel {
+        background: var(--glass-bg);
+        border-radius: 32px;
+        padding: 25px;
+        width: 95%;
+        max-width: 600px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(15px);
+        position: relative;
+      }
+      .page {
+        display: none;
+      }
+      .active {
+        display: block;
+        animation: slideUp 0.4s ease;
+      }
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .hidden {
+        display: none !important;
+      }
+
+      .ios-input {
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        padding: 15px;
+        color: #fff;
+        width: 100%;
+        outline: none;
+        margin-bottom: 10px;
+      }
+      .btn-ios {
+        border: none;
+        border-radius: 16px;
+        padding: 12px;
+        font-weight: 700;
+        width: 100%;
+        cursor: pointer;
+        background: var(--primary);
+        color: #fff;
+        margin-bottom: 10px;
+        transition: 0.2s;
+      }
+      .btn-ios:active {
+        transform: scale(0.98);
+      }
+      .btn-glass {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      .mode-selector {
+        display: flex;
+        gap: 8px;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 8px;
+        border-radius: 16px;
+        margin-bottom: 15px;
+      }
+      .mode-btn {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        background: transparent;
+        color: #aaa;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.3s;
+      }
+      .mode-btn.active-mode {
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      }
+
+      .game-btn {
+        height: 90px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
+        font-size: 3rem;
+        cursor: pointer;
+        transition: 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .btn-correct {
+        background: rgba(48, 209, 88, 0.2);
+        color: #86efac;
+      }
+      .btn-false {
+        background: rgba(255, 69, 58, 0.2);
+        color: #fca5a5;
+      }
+      .btn-bonus {
+        background: rgba(255, 214, 10, 0.2);
+        color: #ffd60a;
+        height: 60px;
+        font-size: 1.5rem;
+        font-weight: bold;
+      }
+
+      .split-container {
+        display: flex;
+        gap: 10px;
+        height: 300px;
+        margin-bottom: 10px;
+      }
+      .split-side {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        border-radius: 20px;
+        cursor: pointer;
+        position: relative;
+        border: 2px solid transparent;
+        transition: 0.2s;
+      }
+      .split-side:active {
+        transform: scale(0.96);
+      }
+      .side-red {
+        background: rgba(255, 69, 58, 0.15);
+        border-color: rgba(255, 69, 58, 0.3);
+        color: #ff6961;
+      }
+      .side-blue {
+        background: rgba(10, 132, 255, 0.15);
+        border-color: rgba(10, 132, 255, 0.3);
+        color: #4facfe;
+      }
+      .score-big {
+        font-size: 4rem;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .name-big {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 10px;
+        text-align: center;
+        padding: 0 5px;
+      }
+      .team-member-badge {
+        font-size: 0.8rem;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 5px 10px;
+        border-radius: 8px;
+        margin: 4px 2px;
+        display: inline-block;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #dbModal,
+      #taskModal,
+      #attModal {
+        display: none;
+      }
+      .chip-btn {
+        padding: 10px 14px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #eee;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin: 4px;
+        display: inline-block;
+      }
+      .chip-btn.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+        font-weight: bold;
+      }
+      #attTbody td,
+      #attThead th {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        background: transparent !important;
+        color: #ddd;
+        vertical-align: middle;
+      }
+      .lb-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        margin-bottom: 8px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .chat-box {
+        height: 400px;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 16px;
+        padding: 10px;
+        margin-bottom: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        scroll-behavior: smooth;
+      }
+      .msg {
+        max-width: 85%;
+        padding: 10px 14px;
+        border-radius: 18px;
+        font-size: 14.5px;
+        text-align: left;
+        position: relative;
+        line-height: 1.4;
+        word-wrap: break-word;
+      }
+      .msg-T {
+        background: #30d158;
+        color: white;
+        align-self: flex-end;
+        border-bottom-right-radius: 4px;
+        border: 1px solid #fff;
+      }
+      .msg-S {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .msg-A {
+        background: linear-gradient(135deg, #8a2be2, #4facfe);
+        color: white;
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+      .msg-sender-name {
+        font-size: 11px;
+        font-weight: 800;
+        margin-bottom: 3px;
+        display: block;
+        text-transform: uppercase;
+        opacity: 0.8;
+      }
+      .msg-time {
+        font-size: 10px;
+        opacity: 0.6;
+        display: flex;
+        justify-content: space-between;
+        margin-top: 6px;
+        align-items: center;
+      }
+      .chat-input-row {
+        display: flex;
+        gap: 8px;
+      }
+      .msg-actions {
+        display: flex;
+        gap: 8px;
+        cursor: pointer;
+        opacity: 0.8;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loginOverlay" class="modal-overlay">
+      <div style="width: 90%; max-width: 350px">
+        <h2 class="mb-4 fw-bold text-center">🔒 Kirish</h2>
+        <input
+          type="text"
+          id="loginUser"
+          class="ios-input"
+          placeholder="Login"
+        /><input
+          type="password"
+          id="loginPass"
+          class="ios-input"
+          placeholder="Parol"
+        /><button class="btn-ios mt-3" onclick="doLogin()">KIRISH</button>
+      </div>
+    </div>
+    <div id="dbModal" class="modal-overlay">
+      <div
+        class="glass-panel"
+        style="max-height: 80vh; display: flex; flex-direction: column"
+      >
+        <h4 class="mb-3">Bazadan tanlash</h4>
+        <div
+          id="dbList"
+          style="
+            overflow-y: auto;
+            flex: 1;
+            margin-bottom: 15px;
+            text-align: left;
+          "
+        >
+          Loading...
+        </div>
+        <div class="d-flex gap-2">
+          <button
+            class="btn-ios btn-glass text-danger"
+            onclick="document.getElementById('dbModal').style.display = 'none'"
+          >
+            Yopish</button
+          ><button class="btn-ios" onclick="addFromDb()">Qo'shish</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="taskModal" class="modal-overlay">
+      <div class="glass-panel">
+        <h4 class="mb-3" id="taskModalTitle">Vazifa belgilash</h4>
+        <div
+          id="bookChips"
+          class="d-flex flex-wrap justify-content-center gap-2 mb-3"
+        ></div>
+        <input
+          type="text"
+          id="topicInput"
+          class="ios-input text-center"
+          placeholder="Mavzular (1-10)"
+        />
+        <div class="d-flex gap-2 mt-3">
+          <button
+            class="btn-ios btn-glass text-danger"
+            onclick="closeTaskModal()"
+          >
+            Bekor</button
+          ><button class="btn-ios" onclick="saveTask()">Saqlash</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="attModal" class="modal-overlay">
+      <div
+        class="glass-panel text-start"
+        style="max-height: 80vh; overflow-y: auto; width: 90%"
+      >
+        <h4 class="mb-2 text-warning fw-bold">⚠️ Davomat tekshiruvi</h4>
+        <div id="attList" class="mb-4"></div>
+        <button class="btn-ios btn-success mb-2" onclick="confirmAttendance()">
+          Tasdiqlash va Natijalar</button
+        ><button
+          class="btn-ios btn-glass text-danger"
+          onclick="document.getElementById('attModal').style.display = 'none'"
+        >
+          Bekor qilish
+        </button>
+      </div>
+    </div>
+
+    <div id="page1" class="glass-panel page active">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold m-0">History Pro</h4>
+        <small class="text-white-50" id="teacherDisplay">...</small>
+      </div>
+      <div class="mode-selector">
+        <button
+          class="mode-btn active-mode"
+          id="btn-mode-standard"
+          onclick="window.setMode('standard')"
+        >
+          Standard
+        </button>
+        <button
+          class="mode-btn"
+          id="btn-mode-duel"
+          onclick="window.setMode('Duel')"
+        >
+          Duel ⚔️
+        </button>
+        <button
+          class="mode-btn"
+          id="btn-mode-jamoa"
+          onclick="window.setMode('Jamoalar')"
+        >
+          Jamoalar 👥
+        </button>
+      </div>
+
+      <div id="setup-standard" class="setup-section">
+        <button
+          class="btn-ios btn-glass text-info btn-sm mb-3 d-flex justify-content-between align-items-center px-3"
+          onclick="openTaskModal(-1)"
+        >
+          <span>📚 Umumiy vazifa:</span>
+          <span id="globalTaskDisplay" class="fw-bold text-white"
+            >Tanlanmagan</span
+          >
+        </button>
+        <div class="d-flex gap-2 mb-2">
+          <input
+            type="text"
+            id="stName"
+            class="ios-input m-0"
+            placeholder="Ism qo'shish..."
+          /><button class="btn-ios m-0" style="width: 60px" onclick="addSt()">
+            +
+          </button>
+        </div>
+        <button
+          class="btn-ios btn-glass text-warning btn-sm mb-3"
+          onclick="
+            window.currentTeamAdd = 'standard';
+            openDb();
+          "
+        >
+          👥 Bazadan Guruhlarni chaqirish
+        </button>
+        <div
+          id="stList"
+          class="text-start mb-3"
+          style="max-height: 250px; overflow-y: auto; padding-right: 5px"
+        ></div>
+      </div>
+
+      <div id="setup-team" class="setup-section hidden">
+        <div class="mb-3 p-2 border border-white border-opacity-10 rounded">
+          <input
+            type="text"
+            id="team1Name"
+            class="ios-input mb-1 text-center"
+            value="🔴 Qizillar Jamoasi"
+            style="font-weight: 800; font-size: 16px"
+          />
+          <button
+            class="btn-sm btn-ios btn-glass py-2"
+            onclick="
+              window.currentTeamAdd = 'A';
+              openDb();
+            "
+          >
+            + Qizillarga Qo'shish
+          </button>
+          <div id="team1Members" class="text-start mt-1"></div>
+        </div>
+        <div class="mb-3 p-2 border border-white border-opacity-10 rounded">
+          <input
+            type="text"
+            id="team2Name"
+            class="ios-input mb-1 text-center"
+            value="🔵 Ko'klar Jamoasi"
+            style="font-weight: 800; font-size: 16px"
+          />
+          <button
+            class="btn-sm btn-ios btn-glass py-2"
+            onclick="
+              window.currentTeamAdd = 'B';
+              openDb();
+            "
+          >
+            + Ko'klarga Qo'shish
+          </button>
+          <div id="team2Members" class="text-start mt-1"></div>
+        </div>
+      </div>
+
+      <div id="setup-duel" class="setup-section hidden">
+        <button
+          class="btn-ios btn-glass text-warning btn-sm mb-3"
+          onclick="
+            window.currentTeamAdd = 'Duel';
+            openDb();
+          "
+        >
+          👥 Bazadan 2 kishini tanlash
+        </button>
+        <div
+          id="duelList"
+          class="text-start mb-3"
+          style="max-height: 200px; overflow-y: auto"
+        ></div>
+      </div>
+
+      <button
+        class="btn-ios"
+        style="background: #30d158; height: 60px; font-size: 1.2rem"
+        onclick="startGame()"
+      >
+        Boshlash 🚀
+      </button>
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <button
+            class="btn-ios btn-glass m-0 text-info"
+            style="font-size: 0.9rem"
+            onclick="showAttendance()"
+          >
+            📅 Davomat
+          </button>
+        </div>
+        <div class="col-6">
+          <button
+            class="btn-ios btn-glass m-0 text-warning"
+            style="font-size: 0.9rem"
+            onclick="showLeaderboard()"
+          >
+            🏆 Reyting
+          </button>
+        </div>
+        <div class="col-6">
+          <button
+            class="btn-ios btn-glass m-0"
+            style="font-size: 0.9rem"
+            onclick="stats()"
+          >
+            📊 Statistika
+          </button>
+        </div>
+        <div class="col-6">
+          <button
+            class="btn-ios btn-glass m-0 text-success"
+            style="font-size: 0.9rem"
+            onclick="manageMarket()"
+          >
+            🛒 Do'kon
+          </button>
+        </div>
+        <div class="col-12 mt-2">
+          <button
+            class="btn-ios btn-glass m-0 text-primary"
+            style="font-size: 0.9rem; border: 1px solid rgba(10, 132, 255, 0.4)"
+            onclick="window.openTeacherChat()"
+          >
+            💬 Sinf Chati
+          </button>
+        </div>
+      </div>
+      <button class="btn text-white-50 btn-sm" onclick="logout()">
+        Chiqish
+      </button>
+    </div>
+
+    <div id="page2" class="glass-panel page">
+      <button
+        class="btn-ios btn-glass"
+        style="
+          width: 40px;
+          height: 40px;
+          position: absolute;
+          top: 15px;
+          left: 15px;
+          padding: 0;
+        "
+        onclick="undo()"
+      >
+        ↩️
+      </button>
+      <button
+        class="btn-ios btn-glass"
+        style="
+          width: 40px;
+          height: 40px;
+          position: absolute;
+          top: 15px;
+          right: 15px;
+          padding: 0;
+        "
+        onclick="goPage('page1')"
+      >
+        🏠
+      </button>
+
+      <div
+        class="d-flex justify-content-center align-items-center mb-2 gap-2"
+        style="margin-top: 20px"
+      >
+        <div
+          id="timer"
+          style="
+            font-family: monospace;
+            font-size: 2rem;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 15px;
+            border-radius: 10px;
+          "
+        >
+          00:00
+        </div>
+        <button
+          id="pauseBtn"
+          class="btn-ios w-auto py-1 px-3 m-0"
+          onclick="togglePause()"
+        >
+          ⏸
+        </button>
+      </div>
+
+      <div id="game-standard" class="hidden">
+        <div
+          class="d-flex justify-content-between px-2 mt-2 text-white-50 small"
+        >
+          <span>Jami: <b id="qTotal" class="text-white">0</b></span>
+          <span>Urinish: <b id="qUser" class="text-white">0</b></span>
+        </div>
+        <h2 id="gName" class="my-2 fw-bold" style="font-size: 2.2rem">...</h2>
+        <div id="gTask" class="mb-3 text-info small fw-bold"></div>
+        <div class="row g-2 mb-3">
+          <div class="col-12">
+            <button class="game-btn btn-bonus" onclick="ansStandard('bonus')">
+              🌟
+            </button>
+          </div>
+          <div class="col-6">
+            <button class="game-btn btn-correct" onclick="ansStandard(true)">
+              ✅
+            </button>
+          </div>
+          <div class="col-6">
+            <button class="game-btn btn-false" onclick="ansStandard(false)">
+              ❌
+            </button>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <button class="btn-ios btn-glass" onclick="nav(-1)">←</button>
+          </div>
+          <div class="col-6">
+            <button class="btn-ios btn-glass" onclick="nav(1)">→</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="game-split" class="hidden">
+        <div class="split-container">
+          <div class="split-side side-red" onclick="window.ansSplit(0)">
+            <div class="name-big" id="splitName1">Team A</div>
+            <div class="score-big" id="splitScore1">0</div>
+            <small>Bosish = +1 Ball</small>
+          </div>
+          <div class="split-side side-blue" onclick="window.ansSplit(1)">
+            <div class="name-big" id="splitName2">Team B</div>
+            <div class="score-big" id="splitScore2">0</div>
+            <small>Bosish = +1 Ball</small>
+          </div>
+        </div>
+        <div class="text-center mt-3">
+          <button
+            class="btn-ios btn-glass text-warning w-auto px-4 py-2 m-0"
+            onclick="window.skipSplit()"
+          >
+            Hech kim topolmadi (Skip)
+          </button>
+        </div>
+      </div>
+
+      <button class="btn-ios mt-4 btn-danger" onclick="finishCheck()">
+        Yakunlash va Davomat
+      </button>
+    </div>
+
+    <div id="page3" class="glass-panel page">
+      <h3 class="mb-3">Natijalar</h3>
+      <div
+        id="resList"
+        class="mb-3 text-start p-2"
+        style="
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 15px;
+          max-height: 300px;
+          overflow-y: auto;
+        "
+      ></div>
+      <button id="tgBtn" class="btn-ios mb-2" onclick="sendTg()">
+        Telegramga yuborish
+      </button>
+      <button
+        class="btn-ios btn-glass text-primary mb-2"
+        onclick="goPage('page2')"
+      >
+        ⬅️ O'yinga qaytish
+      </button>
+      <button class="btn-ios btn-glass text-danger mt-2" onclick="reset()">
+        Yangi darsga o'tish
+      </button>
+    </div>
+
+    <div id="page4" class="glass-panel page">
+      <h3>Statistika</h3>
+      <select
+        id="statSel"
+        class="ios-input"
+        style="background: #333"
+        onchange="draw()"
+      >
+        <option>Yuklanmoqda...</option>
+      </select>
+      <div
+        style="
+          position: relative;
+          height: 250px;
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 15px;
+          padding: 10px;
+          width: 100%;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          overflow: hidden;
+        "
+      >
+        <canvas
+          id="chart"
+          style="
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            height: 100% !important;
+          "
+        ></canvas>
+      </div>
+      <button class="btn-ios btn-glass mt-3" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+    <div id="page5" class="glass-panel page">
+      <h3 class="mb-3 fw-bold">🏆 Sinf Reytingi</h3>
+      <div class="mode-selector mb-3" style="background: transparent">
+        <button
+          class="mode-btn active-mode"
+          id="btnAdminLbCoin"
+          onclick="renderAdminLb('coin')"
+        >
+          🪙</button
+        ><button
+          class="mode-btn"
+          id="btnAdminLbStrike"
+          onclick="renderAdminLb('strike')"
+        >
+          ⭐</button
+        ><button
+          class="mode-btn"
+          id="btnAdminLbPenalty"
+          onclick="renderAdminLb('penalty')"
+        >
+          ⚠️
+        </button>
+      </div>
+      <div
+        id="adminLbList"
+        class="text-start"
+        style="max-height: 400px; overflow-y: auto; padding-right: 5px"
+      ></div>
+      <button class="btn-ios btn-glass mt-4" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+    <div id="page6" class="glass-panel page">
+      <h3 class="mb-3 fw-bold text-success">🛒 Do'kon</h3>
+      <div
+        class="mb-4 p-3 border border-white border-opacity-10 rounded text-start"
+        style="background: rgba(0, 0, 0, 0.3)"
+      >
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small">1 Strike (UZS):</span
+          ><input
+            type="number"
+            id="setPenaltyUzs"
+            class="ios-input m-0 p-1 text-center"
+            style="width: 90px; font-size: 14px"
+          />
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span class="small">Qalqon (Coin):</span
+          ><input
+            type="number"
+            id="setShieldCoin"
+            class="ios-input m-0 p-1 text-center"
+            style="width: 90px; font-size: 14px"
+          />
+        </div>
+        <button
+          id="btnSaveSet"
+          class="btn-ios btn-sm w-100 m-0 py-2"
+          onclick="saveSettings()"
+        >
+          Saqlash
+        </button>
+      </div>
+      <div
+        class="mb-4 p-3 border border-danger border-opacity-50 rounded text-start"
+        style="background: rgba(255, 69, 58, 0.1)"
+      >
+        <button
+          id="btnResetCoins"
+          class="btn-ios btn-sm w-100 m-0 py-2 btn-danger"
+          onclick="resetAllCoins()"
+        >
+          Tangalarni Nollashtirish
+        </button>
+      </div>
+      <div class="d-flex gap-2 mb-3">
+        <input
+          type="text"
+          id="newItemIcon"
+          class="ios-input m-0"
+          style="width: 70px; text-align: center; font-size: 20px"
+          placeholder="🎁"
+        /><input
+          type="text"
+          id="newItemName"
+          class="ios-input m-0"
+          placeholder="Nomi"
+        /><input
+          type="number"
+          id="newItemPrice"
+          class="ios-input m-0"
+          style="width: 90px"
+          placeholder="Narxi"
+        /><button
+          class="btn-ios m-0 w-auto px-4"
+          style="background: #30d158"
+          onclick="addMarketItem()"
+        >
+          +
+        </button>
+      </div>
+      <div
+        id="adminMarketList"
+        class="text-start"
+        style="max-height: 250px; overflow-y: auto"
+      ></div>
+      <button class="btn-ios btn-glass mt-4" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+
+    <div id="page7" class="glass-panel page">
+      <h3 class="mb-3 text-info fw-bold">📅 Davomat</h3>
+      <select
+        id="attGroupFilter"
+        class="ios-input mb-3"
+        style="
+          text-align: center;
+          font-weight: bold;
+          background: rgba(0, 0, 0, 0.6);
+        "
+        onchange="window.filterAttendance()"
+      >
+        <option value="all">Barcha guruhlar</option>
+      </select>
+      <div
+        style="
+          overflow-x: auto;
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 10px;
+          padding: 10px;
+          margin-bottom: 15px;
+        "
+      >
+        <table
+          class="table table-dark table-sm table-bordered text-center m-0"
+          style="font-size: 13px; white-space: nowrap"
+        >
+          <thead id="attThead">
+            <tr>
+              <th>Yuklanmoqda...</th>
+            </tr>
+          </thead>
+          <tbody id="attTbody"></tbody>
+        </table>
+      </div>
+      <button
+        id="btnClearAtt"
+        class="btn-ios btn-danger mb-3"
+        onclick="window.clearAttendance()"
+      >
+        Davomatni tozalash (Nollashtirish)
+      </button>
+      <button class="btn-ios btn-glass" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+
+    <div id="page8" class="glass-panel page">
+      <h3 class="mb-3 fw-bold text-primary">💬 Umumiy Guruh</h3>
+      <div id="teacherChatArea" class="chat-box"></div>
+      <div
+        id="tTypingIndicator"
+        style="
+          font-size: 12px;
+          color: #ffd60a;
+          text-align: left;
+          height: 18px;
+          font-style: italic;
+          margin-bottom: 8px;
+        "
+      ></div>
+      <div class="chat-input-row">
+        <input
+          type="text"
+          id="teacherChatInput"
+          class="ios-input m-0"
+          placeholder="Xabar..."
+          onkeypress="if (event.key === 'Enter') window.sendTeacherMsg();"
+        /><button
+          class="btn-ios"
+          style="width: 60px; margin: 0"
+          onclick="window.sendTeacherMsg()"
+        >
+          ➤
+        </button>
+      </div>
+      <button
+        class="btn-ios btn-glass mt-4"
+        onclick="window.closeTeacherChat()"
+      >
+        Ortga qaytish
+      </button>
+    </div>
+
+    <audio
+      id="sY"
+      src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/3/success.mp3"
+    ></audio>
+    <audio
+      id="sN"
+      src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/3/error.mp3"
+    ></audio>
+
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+      import {
+        getDatabase,
+        ref,
+        push,
+        onChildAdded,
+        onChildChanged,
+        onChildRemoved,
+        update,
+        remove,
+      } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyB-zBR8EWgHvvA8KdOC-A9qeM9Oz1XaOIg",
+        authDomain: "login-firebase-70e2c.firebaseapp.com",
+        databaseURL: "https://login-firebase-70e2c-default-rtdb.firebaseio.com",
+        projectId: "login-firebase-70e2c",
+        storageBucket: "login-firebase-70e2c.firebasestorage.app",
+        messagingSenderId: "190606723992",
+        appId: "1:190606723992:web:8ed92e68cf87f54d51f9ed",
+      };
+      const app = initializeApp(firebaseConfig);
+      const db = getDatabase(app);
+
+      const API =
+        "https://script.google.com/macros/s/AKfycbxy9LM-CgFbb7BgH3DslK6IRIj16WU6e8t5AL_Y2h8Hjj-iw_-kAcM3XB_gaqU9jRLU/exec";
+
+      window.currentMode = "standard";
+      window.currentTeamAdd = "standard";
+      window.students = JSON.parse(localStorage.getItem("st")) || [];
+      let totalQ = 0,
+        curIdx = 0,
+        timer = 0,
+        int = null,
+        actionHistory = [],
+        zeroScorers = [],
+        adminLbData = [];
+      const bookList = [
+        "6-Tarix",
+        "7-O'zT",
+        "7-Jahon",
+        "8-O'zT",
+        "8-Jahon",
+        "9-O'zT",
+        "9-Jahon",
+        "10-O'zT",
+        "10-Jahon",
+        "11-O'zT",
+        "11-Jahon",
+      ];
+      let globalBook = "",
+        globalTopic = "",
+        editingTaskIndex = -1;
+
+      let teacher = localStorage.getItem("teacherName");
+      if (teacher) {
+        document.getElementById("loginOverlay").style.display = "none";
+        document.getElementById("teacherDisplay").innerText = "👨‍🏫 " + teacher;
+        initBookChips();
+        renderList();
+      }
+
+      window.setMode = function (mode) {
+        window.currentMode = mode;
+        document
+          .querySelectorAll(".mode-btn")
+          .forEach((btn) => btn.classList.remove("active-mode"));
+        document
+          .querySelectorAll(".setup-section")
+          .forEach((sec) => sec.classList.add("hidden"));
+
+        if (mode === "standard") {
+          document
+            .getElementById("btn-mode-standard")
+            .classList.add("active-mode");
+          document.getElementById("setup-standard").classList.remove("hidden");
+        }
+        if (mode === "Duel") {
+          document.getElementById("btn-mode-duel").classList.add("active-mode");
+          document.getElementById("setup-duel").classList.remove("hidden");
+        }
+        if (mode === "Jamoalar") {
+          document
+            .getElementById("btn-mode-jamoa")
+            .classList.add("active-mode");
+          document.getElementById("setup-team").classList.remove("hidden");
+        }
+        renderList();
+      };
+
+      window.goPage = function (id) {
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+      };
+      window.doLogin = async function () {
+        let l = document.getElementById("loginUser").value,
+          p = document.getElementById("loginPass").value;
+        let res = await fetch(API, {
+          method: "POST",
+          body: JSON.stringify({ action: "login", login: l, password: p }),
+        });
+        let data = await res.json();
+        if (data.status === "success") {
+          localStorage.setItem("teacherName", data.name);
+          location.reload();
+        }
+      };
+      window.logout = function () {
+        localStorage.removeItem("teacherName");
+        location.reload();
+      };
+
+      function initBookChips() {
+        document.getElementById("bookChips").innerHTML = bookList
+          .map(
+            (b, i) =>
+              `<button class="chip-btn" onclick="selectChip(this, ${i})">${b}</button>`,
+          )
+          .join("");
+      }
+      window.selectChip = function (el, i) {
+        document
+          .querySelectorAll(".chip-btn")
+          .forEach((btn) => btn.classList.remove("active"));
+        el.classList.add("active");
+        el.dataset.selected = bookList[i];
+      };
+
+      window.openTaskModal = function (i) {
+        editingTaskIndex = i;
+        document.getElementById("taskModal").style.display = "flex";
+      };
+      window.closeTaskModal = function () {
+        document.getElementById("taskModal").style.display = "none";
+      };
+      window.saveTask = function () {
+        let active = document.querySelector(".chip-btn.active"),
+          b = active ? active.dataset.selected : "",
+          t = document.getElementById("topicInput").value.trim();
+        if (editingTaskIndex === -1) {
+          globalBook = b;
+          globalTopic = t;
+          document.getElementById("globalTaskDisplay").innerText =
+            b || t ? `${b} | ${t}` : "Tanlanmagan";
+          window.students.forEach((s) => {
+            s.book = b;
+            s.topic = t;
+          });
+        } else {
+          window.students[editingTaskIndex].book = b;
+          window.students[editingTaskIndex].topic = t;
+        }
+        save();
+        renderList();
+        closeTaskModal();
+      };
+
+      window.openDb = async function () {
+        document.getElementById("dbModal").style.display = "flex";
+        document.getElementById("dbList").innerHTML = "Yuklanmoqda...";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_student_list" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            let html = "",
+              gIdx = 0,
+              arxivHtml = "";
+            for (let group in data.groups) {
+              let members = data.groups[group];
+              let safeId = "gList_" + ++gIdx;
+              if (group === "Arxiv") {
+                arxivHtml =
+                  `<div class="mb-3 p-2 border border-danger rounded" style="background: rgba(255,69,58,0.1)"><div class="fw-bold text-danger mb-2">📦 Arxivlanganlar <span class="badge bg-danger">${members.length}</span></div><div style="padding-left: 5px;">` +
+                  members
+                    .map(
+                      (n) =>
+                        `<div class="d-flex justify-content-between py-2 border-bottom border-danger align-items-center"><span class="text-white-50"><del>${n}</del></span><button class="btn-ios btn-sm w-auto px-3 py-1 m-0 bg-danger" onclick="window.restoreSt('${n}')">Tiklash</button></div>`,
+                    )
+                    .join("") +
+                  `</div></div>`;
+                continue;
+              }
+              html += `<div class="mb-3 p-2 border rounded" style="background: rgba(0,0,0,0.3)"><div class="d-flex justify-content-between mb-1"><span class="fw-bold text-warning">${group} <span class="badge bg-secondary">${members.length}</span></span><div><button class="btn-sm btn-ios py-1 px-2 text-white bg-secondary" style="width:auto; display:inline-block;" onclick="document.getElementById('${safeId}').style.display=document.getElementById('${safeId}').style.display==='none'?'block':'none'">👁</button> <button class="btn-sm btn-ios py-1 px-2 text-success bg-dark" style="width:auto; display:inline-block;" onclick="let el=document.getElementById('${safeId}'); let chk=el.querySelectorAll('.st-chk'); let all=Array.from(chk).every(c=>c.checked); chk.forEach(c=>c.checked=!all)">✅</button></div></div><div id="${safeId}" style="display:none; padding-left: 5px;">${members.map((n) => `<div class="d-flex justify-content-between py-2 border-bottom"><span>${n}</span><input type="checkbox" class="st-chk" value="${n}" style="transform:scale(1.3)"></div>`).join("")}</div></div>`;
+            }
+            document.getElementById("dbList").innerHTML = html + arxivHtml;
+          }
+        } catch (e) {}
+      };
+
+      window.addFromDb = function () {
+        document.querySelectorAll(".st-chk:checked").forEach((c) => {
+          if (!window.students.some((s) => s.name === c.value)) {
+            let t = window.currentTeamAdd || "standard";
+            window.students.push({
+              name: c.value,
+              correct: 0,
+              total: 0,
+              sess: 0,
+              strikes: 0,
+              penalties: 0,
+              bonus: 0,
+              book: globalBook,
+              topic: globalTopic,
+              attStatus: "",
+              team: t,
+            });
+          }
+        });
+        save();
+        renderList();
+        document.getElementById("dbModal").style.display = "none";
+      };
+      window.addSt = function () {
+        let n = document.getElementById("stName").value.trim();
+        if (!n) return;
+        window.students.push({
+          name: n,
+          correct: 0,
+          total: 0,
+          sess: 0,
+          strikes: 0,
+          penalties: 0,
+          bonus: 0,
+          book: globalBook,
+          topic: globalTopic,
+          attStatus: "",
+          team: "standard",
+        });
+        document.getElementById("stName").value = "";
+        save();
+        renderList();
+      };
+
+      window.removeStudent = function (index) {
+        window.students.splice(index, 1);
+        save();
+        renderList();
+      };
+
+      window.archiveSt = async function (idx) {
+        let sName = window.students[idx].name;
+        if (!confirm(sName + " arxivga o'tkazilsinmi? (U boshqa ko'rinmaydi)"))
+          return;
+        window.students.splice(idx, 1);
+        save();
+        renderList();
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "archive_student", name: sName }),
+          });
+        } catch (e) {}
+      };
+
+      window.restoreSt = async function (name) {
+        if (!confirm(name + " arxivdan tiklansinmi? (Eski ballari qaytadi)"))
+          return;
+        document.getElementById("dbList").innerHTML = "Tiklanmoqda...";
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "restore_student", name: name }),
+          });
+          window.openDb();
+        } catch (e) {}
+      };
+
+      function renderList() {
+        document.getElementById("stList").innerHTML = window.students
+          .map((s, idx) => {
+            if (s.team && s.team !== "standard") return "";
+            let taskTxt =
+              s.book || s.topic
+                ? `<small class="text-info d-block" style="font-size:10px">${s.book} ${s.topic}</small>`
+                : "";
+            return `<div class="d-flex justify-content-between p-2 mb-2 bg-dark rounded border align-items-center">
+                  <div><span class="fw-bold">${idx + 1}. ${s.name}</span>${taskTxt}</div>
+                  <div>
+                      <button class="btn btn-sm btn-outline-secondary h-100 py-0 px-2 me-1" onclick="window.archiveSt(${idx})" title="Arxivlash">📦</button>
+                      <button class="btn btn-sm btn-outline-warning h-100 py-0 px-2 me-1" onclick="openTaskModal(${idx})">✏️</button>
+                      <button class="btn btn-sm btn-outline-danger h-100 py-0 px-2" onclick="window.removeStudent(${idx})">×</button>
+                  </div>
+              </div>`;
+          })
+          .join("");
+
+        let tA = window.students.filter((s) => s.team === "A");
+        let tB = window.students.filter((s) => s.team === "B");
+        document.getElementById("team1Members").innerHTML = window.students
+          .map((s, idx) => {
+            if (s.team !== "A") return "";
+            return `<span class="team-member-badge">${s.name} <b class="text-danger ms-1" style="cursor:pointer" onclick="window.removeStudent(${idx})">×</b></span>`;
+          })
+          .join("");
+        document.getElementById("team2Members").innerHTML = window.students
+          .map((s, idx) => {
+            if (s.team !== "B") return "";
+            return `<span class="team-member-badge">${s.name} <b class="text-danger ms-1" style="cursor:pointer" onclick="window.removeStudent(${idx})">×</b></span>`;
+          })
+          .join("");
+        document.getElementById("duelList").innerHTML = window.students
+          .map((s, idx) => {
+            if (s.team !== "Duel") return "";
+            return `<div class="d-flex justify-content-between p-2 mb-2 bg-dark rounded border align-items-center"><div><span class="fw-bold">${s.name}</span></div><button class="btn btn-sm btn-outline-danger h-100" onclick="window.removeStudent(${idx})">×</button></div>`;
+          })
+          .join("");
+      }
+
+      window.startGame = function () {
+        let currentPlayers = window.students.filter((s) => {
+          if (window.currentMode === "standard")
+            return !s.team || s.team === "standard";
+          if (window.currentMode === "Duel") return s.team === "Duel";
+          return s.team === "A" || s.team === "B";
+        });
+        if (currentPlayers.length === 0 && window.currentMode === "standard")
+          return alert("O'quvchi qo'shing!");
+
+        document.getElementById("game-standard").classList.add("hidden");
+        document.getElementById("game-split").classList.add("hidden");
+
+        if (window.currentMode === "Duel") {
+          let duels = window.students.filter((s) => s.team === "Duel");
+          if (duels.length !== 2)
+            return alert("Duel rejimida aniq 2 ta o'quvchi bo'lishi shart!");
+          document.getElementById("game-split").classList.remove("hidden");
+          document.getElementById("splitName1").innerText = duels[0].name;
+          document.getElementById("splitName2").innerText = duels[1].name;
+          updateSplitUI();
+        } else if (window.currentMode === "Jamoalar") {
+          let tA = window.students.filter((s) => s.team === "A");
+          let tB = window.students.filter((s) => s.team === "B");
+          if (tA.length === 0 || tB.length === 0)
+            return alert("Ikkala jamoaga ham o'quvchi qo'shing!");
+          document.getElementById("game-split").classList.remove("hidden");
+          document.getElementById("splitName1").innerText =
+            document.getElementById("team1Name").value || "Team A";
+          document.getElementById("splitName2").innerText =
+            document.getElementById("team2Name").value || "Team B";
+          updateSplitUI();
+        } else {
+          document.getElementById("game-standard").classList.remove("hidden");
+          loadQStandard();
+        }
+        goPage("page2");
+        startT();
+      };
+
+      function loadQStandard() {
+        let stds = window.students.filter(
+          (s) => !s.team || s.team === "standard",
+        );
+        if (stds.length === 0) return;
+        if (!stds[curIdx]) curIdx = 0;
+        let s = stds[curIdx];
+        document.getElementById("gName").innerText = s.name;
+        document.getElementById("qTotal").innerText = totalQ;
+        document.getElementById("qUser").innerText = s.sess || 0;
+        document.getElementById("gTask").innerText =
+          s.book || s.topic ? `📖 ${s.book} (${s.topic})` : "";
+      }
+      window.ansStandard = function (type) {
+        pushHistory();
+        let stds = window.students.filter(
+          (s) => !s.team || s.team === "standard",
+        );
+        let s = stds[curIdx];
+        s.attStatus = "Keldi";
+        if (type === "bonus") {
+          document.getElementById("sY").play();
+          confetti();
+          s.total++;
+          s.sess++;
+          s.correct++;
+          s.bonus++;
+          totalQ++;
+        } else if (type === true) {
+          document.getElementById("sY").play();
+          confetti();
+          s.total++;
+          s.sess++;
+          s.correct++;
+          totalQ++;
+        } else {
+          document.getElementById("sN").play();
+          s.total++;
+          s.sess++;
+          totalQ++;
+        }
+        save();
+        loadQStandard();
+      };
+      window.nav = function (d) {
+        let stds = window.students.filter(
+          (s) => !s.team || s.team === "standard",
+        );
+        curIdx = (curIdx + d + stds.length) % stds.length;
+        loadQStandard();
+      };
+
+      function updateSplitUI() {
+        if (window.currentMode === "Duel") {
+          let duels = window.students.filter((s) => s.team === "Duel");
+          document.getElementById("splitScore1").innerText = duels[0]
+            ? duels[0].correct
+            : 0;
+          document.getElementById("splitScore2").innerText = duels[1]
+            ? duels[1].correct
+            : 0;
+        } else if (window.currentMode === "Jamoalar") {
+          let tA = window.students.filter((s) => s.team === "A");
+          let tB = window.students.filter((s) => s.team === "B");
+          let sA = tA.reduce((sum, s) => sum + s.correct, 0);
+          let sB = tB.reduce((sum, s) => sum + s.correct, 0);
+          document.getElementById("splitScore1").innerText = sA;
+          document.getElementById("splitScore2").innerText = sB;
+        }
+      }
+
+      window.ansSplit = function (side) {
+        pushHistory();
+        totalQ++;
+        if (window.currentMode === "Duel") {
+          let duels = window.students.filter((s) => s.team === "Duel");
+          duels.forEach((s) => {
+            s.attStatus = "Keldi";
+            s.total++;
+            s.sess++;
+          });
+          let target = duels[side];
+          if (target) {
+            target.correct++;
+            confetti();
+            document.getElementById("sY").play();
+          }
+        } else if (window.currentMode === "Jamoalar") {
+          let teamId = side === 0 ? "A" : "B";
+          window.students
+            .filter((s) => s.team === "A" || s.team === "B")
+            .forEach((s) => {
+              s.attStatus = "Keldi";
+              s.total++;
+              s.sess++;
+              if (s.team === teamId) s.correct++;
+            });
+          confetti();
+          document.getElementById("sY").play();
+        }
+        save();
+        updateSplitUI();
+      };
+
+      window.skipSplit = function () {
+        pushHistory();
+        totalQ++;
+        document.getElementById("sN").play();
+        if (window.currentMode === "Duel") {
+          window.students
+            .filter((s) => s.team === "Duel")
+            .forEach((s) => {
+              s.attStatus = "Keldi";
+              s.total++;
+              s.sess++;
+            });
+        } else if (window.currentMode === "Jamoalar") {
+          window.students
+            .filter((s) => s.team === "A" || s.team === "B")
+            .forEach((s) => {
+              s.attStatus = "Keldi";
+              s.total++;
+              s.sess++;
+            });
+        }
+        save();
+        updateSplitUI();
+      };
+
+      function pushHistory() {
+        actionHistory.push(
+          JSON.stringify({ s: window.students, t: totalQ, i: curIdx }),
+        );
+      }
+      window.undo = function () {
+        if (actionHistory.length === 0) return;
+        let last = JSON.parse(actionHistory.pop());
+        window.students = last.s;
+        totalQ = last.t;
+        curIdx = last.i;
+        save();
+        if (window.currentMode === "standard") loadQStandard();
+        else updateSplitUI();
+      };
+
+      window.finishCheck = function () {
+        stopT();
+        let currentPlayers = window.students.filter((s) => {
+          if (window.currentMode === "standard")
+            return !s.team || s.team === "standard";
+          if (window.currentMode === "Duel") return s.team === "Duel";
+          return s.team === "A" || s.team === "B";
+        });
+        zeroScorers = currentPlayers.filter((s) => s.total === 0);
+        if (zeroScorers.length > 0) {
+          let html = "";
+          zeroScorers.forEach((s, i) => {
+            html += `<div class="mb-3 p-2 border rounded bg-dark"><div class="fw-bold mb-1">${s.name}</div><select id="att_sel_${i}" class="ios-input p-2 m-0"><option value="Sababsiz" selected>❌ Sababsiz kelmadi</option><option value="Keldi">✅ Darsda bor</option><option value="Sababli">🟡 Ruxsat so'ragan</option></select></div>`;
+          });
+          document.getElementById("attList").innerHTML = html;
+          document.getElementById("attModal").style.display = "flex";
+        } else {
+          finalizeResults();
+        }
+      };
+      window.confirmAttendance = function () {
+        zeroScorers.forEach((s, i) => {
+          s.attStatus = document.getElementById(`att_sel_${i}`).value;
+        });
+        document.getElementById("attModal").style.display = "none";
+        finalizeResults();
+      };
+
+      function calcPercent(s) {
+        if (!s.total || s.total === 0) return 0;
+        let p = (s.correct / s.total) * 100 + (s.bonus || 0) * 5;
+        return p > 100 ? 100 : Math.round(p);
+      }
+      function finalizeResults() {
+        goPage("page3");
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        let currentPlayers = window.students.filter((s) => {
+          if (window.currentMode === "standard")
+            return !s.team || s.team === "standard";
+          if (window.currentMode === "Duel") return s.team === "Duel";
+          return s.team === "A" || s.team === "B";
+        });
+
+        currentPlayers.forEach((s) => {
+          let p = calcPercent(s);
+          if (s.attStatus === "Sababsiz" || s.attStatus === "Sababli") return;
+          if (p >= 90 && s.total > 0 && !s.strikeAdded) {
+            s.strikes = (s.strikes || 0) + 1;
+            s.strikeAdded = true;
+          }
+          if (p < 50 && s.total > 0 && !s.penaltyAdded) {
+            s.penalties = (s.penalties || 0) + 1;
+            s.penaltyAdded = true;
+          }
+        });
+        save();
+        currentPlayers.sort((a, b) => calcPercent(b) - calcPercent(a));
+        document.getElementById("resList").innerHTML = currentPlayers
+          .map((s, i) => {
+            if (s.attStatus === "Sababsiz")
+              return `<div class="p-2 border-bottom text-danger">❌ ${s.name}</div>`;
+            if (s.attStatus === "Sababli")
+              return `<div class="p-2 border-bottom text-warning">🟡 ${s.name}</div>`;
+            let p = calcPercent(s),
+              str = s.strikes > 0 ? ` ⭐${s.strikes}` : "",
+              pen = s.penalties > 0 ? ` ⚠️${s.penalties}` : "";
+            let col =
+              p >= 80
+                ? "text-success"
+                : p < 50
+                  ? "text-danger"
+                  : "text-warning";
+            return `<div class="d-flex justify-content-between p-2 border-bottom"><div>${i + 1}. ${s.name}${str}${pen}</div><span class="${col} fw-bold">${p}%</span></div>`;
+          })
+          .join("");
+      }
+
+      window.stats = async function () {
+        goPage("page4");
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_history" }),
+          });
+          let d = await res.json(),
+            gHist = d.history,
+            names = [...new Set(gHist.map((h) => h.name))].sort();
+          document.getElementById("statSel").innerHTML =
+            "<option value='all'>📊 Umumiy Sinf</option>" +
+            names.map((n) => `<option value="${n}">${n}</option>`).join("");
+          window.draw = function () {
+            let n = document.getElementById("statSel").value;
+            if (!n) return;
+            let chartData = [];
+            if (n === "all") {
+              let datesObj = {};
+              gHist.forEach((h) => {
+                if (!datesObj[h.date]) datesObj[h.date] = { sum: 0, count: 0 };
+                datesObj[h.date].sum += parseFloat(h.percent);
+                datesObj[h.date].count++;
+              });
+              chartData = Object.keys(datesObj).map((date) => {
+                return {
+                  date: date,
+                  p: Math.round(datesObj[date].sum / datesObj[date].count),
+                };
+              });
+            } else {
+              chartData = gHist
+                .filter((h) => h.name === n)
+                .map((h) => ({ date: h.date, p: h.percent }));
+            }
+            let ctx = document.getElementById("chart").getContext("2d");
+            if (window.myChart) window.myChart.destroy();
+            window.myChart = new Chart(ctx, {
+              type: "line",
+              data: {
+                labels: chartData.map((x) => x.date),
+                datasets: [
+                  {
+                    data: chartData.map((x) => x.p),
+                    borderColor: "#0a84ff",
+                    backgroundColor: "rgba(10, 132, 255, 0.15)",
+                    borderWidth: 3,
+                    pointBackgroundColor: "#fff",
+                    fill: true,
+                    tension: 0.3,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: { beginAtZero: true, max: 100 },
+                  x: { grid: { display: false } },
+                },
+                plugins: { legend: { display: false } },
+              },
+            });
+          };
+          document.getElementById("statSel").value = "all";
+          window.draw();
+        } catch (e) {}
+      };
+      window.showLeaderboard = async function () {
+        goPage("page5");
+        document.getElementById("adminLbList").innerHTML = "Yuklanmoqda...";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_leaderboard" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            adminLbData = data.leaderboard;
+            window.renderAdminLb("coin");
+          }
+        } catch (e) {}
+      };
+      window.renderAdminLb = function (type) {
+        document
+          .querySelectorAll(".mode-selector .mode-btn")
+          .forEach((b) => b.classList.remove("active-mode"));
+        let sortedData = [...adminLbData],
+          listHTML = "";
+        if (type === "coin") {
+          document
+            .getElementById("btnAdminLbCoin")
+            .classList.add("active-mode");
+          sortedData.sort((a, b) => b.coin - a.coin);
+          sortedData.forEach((u, i) => {
+            if (u.coin === 0) return;
+            listHTML += `<div class="lb-item"><div><span class="lb-rank">${i + 1}</span> <span class="lb-name">${u.name}</span></div><div class="lb-score text-warning">${u.coin} 🪙</div></div>`;
+          });
+        } else if (type === "strike") {
+          document
+            .getElementById("btnAdminLbStrike")
+            .classList.add("active-mode");
+          sortedData.sort((a, b) => b.strike - a.strike);
+          sortedData.forEach((u, i) => {
+            if (u.strike === 0) return;
+            listHTML += `<div class="lb-item"><div><span class="lb-rank">${i + 1}</span> <span class="lb-name">${u.name}</span></div><div class="lb-score" style="color: #ffd60a;">${u.strike} ⭐</div></div>`;
+          });
+        } else {
+          document
+            .getElementById("btnAdminLbPenalty")
+            .classList.add("active-mode");
+          sortedData.sort((a, b) => b.penalty - a.penalty);
+          sortedData.forEach((u, i) => {
+            if (u.penalty === 0) return;
+            listHTML += `<div class="lb-item"><div><span class="lb-rank">${i + 1}</span> <span class="lb-name">${u.name}</span></div><div class="lb-score" style="color: #ff453a;">${u.penalty} ⚠️</div></div>`;
+          });
+        }
+        document.getElementById("adminLbList").innerHTML =
+          listHTML || "Ro'yxat bo'sh";
+      };
+      window.manageMarket = async function () {
+        goPage("page6");
+        loadMarketAdmin();
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_settings" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            document.getElementById("setPenaltyUzs").value =
+              data.settings.strike_penalty_uzs;
+            document.getElementById("setShieldCoin").value =
+              data.settings.strike_price_coin;
+          }
+        } catch (e) {}
+      };
+      window.saveSettings = async function () {
+        let p = parseInt(document.getElementById("setPenaltyUzs").value),
+          c = parseInt(document.getElementById("setShieldCoin").value);
+        if (isNaN(p) || isNaN(c)) return;
+        let btn = document.getElementById("btnSaveSet");
+        btn.innerText = "Saqlanmoqda...";
+        btn.disabled = true;
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({
+              action: "update_settings",
+              penalty_uzs: p,
+              price_coin: c,
+            }),
+          });
+          btn.innerText = "Saqlandi ✅";
+          setTimeout(() => {
+            btn.innerText = "Saqlash";
+            btn.disabled = false;
+          }, 2000);
+        } catch (e) {
+          btn.disabled = false;
+        }
+      };
+      async function loadMarketAdmin() {
+        document.getElementById("adminMarketList").innerHTML = "Yuklanmoqda...";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_market_items" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            document.getElementById("adminMarketList").innerHTML =
+              data.items
+                .map(
+                  (item) =>
+                    `<div class="market-admin-item"><div class="d-flex align-items-center"><span class="market-admin-icon">${item.icon}</span><div><div class="fw-bold">${item.name}</div><div class="text-warning small">${item.price} 🪙</div></div></div>${item.id === "shield_special" ? "" : `<button class="btn btn-sm btn-outline-danger" onclick="deleteMarketItem('${item.id}')">O'chirish</button>`}</div>`,
+                )
+                .join("") || "Bo'sh";
+          }
+        } catch (e) {}
+      }
+      window.addMarketItem = async function () {
+        let i = document.getElementById("newItemIcon").value || "🎁",
+          n = document.getElementById("newItemName").value,
+          p = parseInt(document.getElementById("newItemPrice").value);
+        if (!n || isNaN(p)) return;
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({
+              action: "add_market_item",
+              icon: i,
+              name: n,
+              price: p,
+            }),
+          });
+          loadMarketAdmin();
+        } catch (e) {}
+      };
+      window.deleteMarketItem = async function (id) {
+        if (!confirm("O'chirasizmi?")) return;
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "delete_market_item", id: id }),
+          });
+          loadMarketAdmin();
+        } catch (e) {}
+      };
+
+      window.resetAllCoins = async function () {
+        if (!confirm("Barcha tangalar nollashtirilsinmi?")) return;
+        let btn = document.getElementById("btnResetCoins");
+        btn.disabled = true;
+        btn.innerText = "Bajarilmoqda...";
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "reset_coins" }),
+          });
+          alert("Muvaffaqiyatli!");
+        } catch (e) {
+          alert("Xatolik!");
+        }
+        btn.disabled = false;
+        btn.innerText = "Tangalarni Nollashtirish";
+      };
+
+      window.attendanceDataCache = [];
+      window.showAttendance = async function () {
+        goPage("page7");
+        document.getElementById("attThead").innerHTML =
+          "<tr><th>Yuklanmoqda...</th></tr>";
+        document.getElementById("attTbody").innerHTML = "";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_attendance" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            window.attendanceDataCache = data.attendance;
+            populateAttFilter();
+            renderAttendanceGrid();
+          }
+        } catch (e) {}
+      };
+      function populateAttFilter() {
+        let groups = [
+          ...new Set(
+            window.attendanceDataCache.map((l) => l.group || "Boshqa"),
+          ),
+        ].sort();
+        let html = `<option value="all">Barcha guruhlar</option>`;
+        groups.forEach((g) => (html += `<option value="${g}">${g}</option>`));
+        document.getElementById("attGroupFilter").innerHTML = html;
+      }
+      window.filterAttendance = function () {
+        renderAttendanceGrid();
+      };
+      function renderAttendanceGrid() {
+        let logs = window.attendanceDataCache;
+        let filterGroup = document.getElementById("attGroupFilter").value;
+        if (filterGroup !== "all") {
+          logs = logs.filter((l) => (l.group || "Boshqa") === filterGroup);
+        }
+        if (logs.length === 0) {
+          document.getElementById("attThead").innerHTML =
+            "<tr><th>Hozircha davomat yo'q</th></tr>";
+          document.getElementById("attTbody").innerHTML = "";
+          return;
+        }
+        let dates = [...new Set(logs.map((l) => l.date))].sort();
+        let grouped = {};
+        logs.forEach((l) => {
+          let g = l.group || "Boshqa";
+          if (!grouped[g]) grouped[g] = {};
+          if (!grouped[g][l.name]) grouped[g][l.name] = { totalQ: 0 };
+          grouped[g][l.name][l.date] = l.status;
+          if (l.status === "Sababsiz") grouped[g][l.name].totalQ++;
+        });
+
+        let headHtml = `<tr><th class="text-start" style="position:sticky; left:0; background:rgba(0,0,0,0.8); z-index:10">F.I.O</th>`;
+        dates.forEach((d) => (headHtml += `<th>${d}</th>`));
+        headHtml += `<th class="text-danger">Q</th></tr>`;
+        document.getElementById("attThead").innerHTML = headHtml;
+        let bodyHtml = "";
+        let colCount = dates.length + 2;
+
+        for (let groupName in grouped) {
+          bodyHtml += `<tr><td colspan="${colCount}" class="text-start text-warning" style="background:rgba(255,255,255,0.1); font-weight:800; padding:10px !important;">📘 ${groupName}</td></tr>`;
+          let names = Object.keys(grouped[groupName]).sort();
+          names.forEach((n) => {
+            let m = grouped[groupName][n];
+            bodyHtml += `<tr><td class="text-start fw-bold" style="position:sticky; left:0; background:rgba(0,0,0,0.8); z-index:10">${n}</td>`;
+            dates.forEach((d) => {
+              let st = m[d],
+                icon = "-";
+              if (st === "Keldi") icon = "✅";
+              else if (st === "Sababsiz") icon = "❌";
+              else if (st === "Sababli") icon = "🟡";
+              bodyHtml += `<td>${icon}</td>`;
+            });
+            bodyHtml += `<td class="text-danger fw-bold">${m.totalQ}</td></tr>`;
+          });
+        }
+        document.getElementById("attTbody").innerHTML = bodyHtml;
+      }
+
+      window.clearAttendance = async function () {
+        if (
+          !confirm(
+            "Rostdan ham barcha davomatlarni o'chirib tashlaysizmi? Bu amalni ortga qaytarib bo'lmaydi!",
+          )
+        )
+          return;
+        document.getElementById("btnClearAtt").innerText = "Tozalanmoqda...";
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "clear_attendance" }),
+          });
+          alert("Davomat tozalandi!");
+          window.showAttendance();
+        } catch (e) {
+          alert("Xatolik!");
+        }
+        document.getElementById("btnClearAtt").innerText =
+          "Davomatni tozalash (Nollashtirish)";
+      };
+
+      // TELEGRAMGA MUKAMMAL HISOBOT JO'NATISH (YANGILANGAN MANTIQ)
+      window.sendTg = async function () {
+        let currentPlayers = window.students.filter((s) => {
+          if (window.currentMode === "standard")
+            return !s.team || s.team === "standard";
+          if (window.currentMode === "Duel") return s.team === "Duel";
+          return s.team === "A" || s.team === "B";
+        });
+
+        let present = [],
+          absent = [],
+          excused = [];
+        currentPlayers.forEach((s) => {
+          if (s.attStatus === "Sababsiz") absent.push(s.name);
+          else if (s.attStatus === "Sababli") excused.push(s.name);
+          else present.push(s);
+        });
+
+        let msg = `📊 <b>NATIJALAR (${window.currentMode})</b>\n\n`;
+        present.forEach((s) => {
+          let p = calcPercent(s),
+            st = s.strikes > 0 ? `⭐` : "",
+            pn = s.penalties > 0 ? `⚠️` : "";
+          msg += `👤 ${s.name} ${st}${pn}: ${p}% (${s.correct}/${s.total})\n`;
+        });
+
+        if (absent.length > 0 || excused.length > 0) {
+          msg += `\n📅 <b>DAVOMAT (Kelmadi):</b>\n`;
+          if (absent.length > 0) msg += `❌ Sababsiz: ${absent.join(", ")}\n`;
+          if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
+        }
+
+        document.getElementById("tgBtn").innerText = "Yuborilmoqda...";
+        await fetch(API, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "save",
+            text: msg,
+            teacher: teacher,
+            mode: window.currentMode,
+            students: currentPlayers,
+          }),
+        });
+        document.getElementById("tgBtn").innerText = "Yuborildi ✅";
+      };
+
+      function save() {
+        localStorage.setItem("st", JSON.stringify(window.students));
+      }
+      window.reset = function () {
+        if (confirm("Yangi darsga o'tamizmi?")) {
+          let currentPlayers = window.students.filter((s) => {
+            if (window.currentMode === "standard")
+              return !s.team || s.team === "standard";
+            if (window.currentMode === "Duel") return s.team === "Duel";
+            return s.team === "A" || s.team === "B";
+          });
+          currentPlayers.forEach((s) => {
+            s.correct = 0;
+            s.total = 0;
+            s.sess = 0;
+            s.bonus = 0;
+            s.strikes = 0;
+            s.penalties = 0;
+            s.strikeAdded = false;
+            s.penaltyAdded = false;
+            s.attStatus = "";
+          });
+          save();
+          goPage("page1");
+        }
+      };
+      function tick() {
+        timer++;
+        let m = Math.floor(timer / 60),
+          s = timer % 60;
+        document.getElementById("timer").innerText =
+          (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+      }
+      function startT() {
+        stopT();
+        timer = 0;
+        int = setInterval(tick, 1000);
+      }
+      function stopT() {
+        clearInterval(int);
+        int = null;
+      }
+      window.togglePause = function () {
+        if (int) {
+          stopT();
+          document.getElementById("pauseBtn").innerText = "▶️";
+        } else {
+          int = setInterval(tick, 1000);
+          document.getElementById("pauseBtn").innerText = "⏸";
+        }
+      };
+
+      let chatRef = ref(db, "chats/umumiy");
+      window.openTeacherChat = function () {
+        goPage("page8");
+        document.getElementById("teacherChatArea").innerHTML = "";
+        onChildAdded(chatRef, (snapshot) => {
+          renderMsgUI(snapshot.key, snapshot.val());
+        });
+        onChildChanged(chatRef, (snapshot) => {
+          let msgDiv = document.getElementById("msg-" + snapshot.key);
+          if (msgDiv) {
+            let textDiv = msgDiv.querySelector(".msg-text-content");
+            if (textDiv) textDiv.innerText = snapshot.val().text;
+          }
+        });
+        onChildRemoved(chatRef, (snapshot) => {
+          let msgDiv = document.getElementById("msg-" + snapshot.key);
+          if (msgDiv) msgDiv.remove();
+        });
+      };
+      window.closeTeacherChat = function () {
+        goPage("page1");
+      };
+      function renderMsgUI(key, m) {
+        let isMe = m.senderType === "T" && m.senderName === teacher;
+        let isStudent = m.senderType === "S";
+        let isAi = m.senderType === "A";
+        let boxClass = isMe ? "msg-T" : isAi ? "msg-A" : "msg-S";
+        let senderHTML = "";
+        if (isStudent)
+          senderHTML = `<span class="msg-sender-name" style="color: #0a84ff;">${m.senderName}</span>`;
+        if (isMe)
+          senderHTML = `<span class="msg-sender-name" style="color: #fff;">Siz (Ustoz)</span>`;
+        if (!isMe && m.senderType === "T")
+          senderHTML = `<span class="msg-sender-name" style="color: #30d158;">👨‍🏫 ${m.senderName}</span>`;
+        if (isAi)
+          senderHTML = `<span class="msg-sender-name" style="color: #ffd60a;">${m.senderName}</span>`;
+        let actionsHTML = "";
+        if (isMe) {
+          actionsHTML = `<div class="msg-actions"><span onclick="window.editMsg('${key}', '${m.text.replace(/'/g, "\\'")}')">✏️</span><span onclick="window.delMsg('${key}')">🗑️</span></div>`;
+        }
+        let html = `<div class="msg ${boxClass}" id="msg-${key}">${senderHTML}<div class="msg-text-content">${m.text}</div><div class="msg-time"><span>${m.time}</span> ${actionsHTML}</div></div>`;
+        let chatArea = document.getElementById("teacherChatArea");
+        chatArea.insertAdjacentHTML("beforeend", html);
+        setTimeout(() => {
+          chatArea.scrollTop = chatArea.scrollHeight;
+        }, 50);
+      }
+      window.sendTeacherMsg = async function () {
+        let input = document.getElementById("teacherChatInput");
+        let text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        push(chatRef, {
+          time: new Date().toLocaleTimeString("uz-UZ", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          senderName: teacher,
+          senderType: "T",
+          text: text,
+          timestamp: Date.now(),
+        });
+        if (text.includes("@")) {
+          document.getElementById("tTypingIndicator").innerText =
+            "Suhbatdosh xabar yozmoqda... ⏳";
+          try {
+            let res = await fetch(API, {
+              method: "POST",
+              body: JSON.stringify({
+                action: "ask_ai",
+                persona: "Umumiy Guruh",
+                text: text,
+              }),
+            });
+            let data = await res.json();
+            if (data.status === "success") {
+              push(chatRef, {
+                time: new Date().toLocaleTimeString("uz-UZ", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                senderName: data.aiName,
+                senderType: "A",
+                text: data.aiText,
+                timestamp: Date.now(),
+              });
+            }
+          } catch (e) {}
+          document.getElementById("tTypingIndicator").innerText = "";
+        }
+      };
+      window.editMsg = function (key, oldText) {
+        let newText = prompt("Xabarni tahrirlash:", oldText);
+        if (newText !== null && newText.trim() !== "") {
+          update(ref(db, "chats/umumiy/" + key), {
+            text: newText.trim() + " (tahrirlandi)",
+          });
+        }
+      };
+      window.delMsg = function (key) {
+        if (confirm("Xabar o'chirilsinmi?")) {
+          remove(ref(db, "chats/umumiy/" + key));
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <title>History Arena Pro</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+      :root {
+        --glass-bg: rgba(20, 20, 30, 0.95);
+        --primary: #0a84ff;
+        --text: #fff;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background: url("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop")
+          center fixed;
+        background-size: cover;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        color: var(--text);
+      }
+      .glass-panel {
+        background: var(--glass-bg);
+        border-radius: 32px;
+        padding: 25px;
+        width: 95%;
+        max-width: 600px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        position: relative;
+      }
+      .page {
+        display: none;
+      }
+      .active {
+        display: block;
+        animation: slideUp 0.4s ease;
+      }
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .ios-input {
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 15px;
+        color: #fff;
+        width: 100%;
+        outline: none;
+        margin-bottom: 10px;
+      }
+      .btn-ios {
+        border: none;
+        border-radius: 16px;
+        padding: 12px;
+        font-weight: 700;
+        width: 100%;
+        cursor: pointer;
+        background: var(--primary);
+        color: #fff;
+        margin-bottom: 10px;
+        transition: 0.2s;
+      }
+      .btn-ios:active {
+        transform: scale(0.98);
+      }
+      .btn-glass {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .mode-selector {
+        display: flex;
+        gap: 5px;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 5px;
+        border-radius: 16px;
+        margin-bottom: 20px;
+      }
+      .mode-btn {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        background: transparent;
+        color: #aaa;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: 0.3s;
+      }
+      .mode-btn.active-mode {
+        background: var(--primary);
+        color: white;
+        box-shadow: 0 4px 10px rgba(10, 132, 255, 0.3);
+      }
+
+      .lb-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        margin-bottom: 8px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .lb-rank {
+        font-weight: 800;
+        font-size: 18px;
+        width: 30px;
+        display: inline-block;
+        color: #888;
+      }
+      .lb-rank.top-1 {
+        color: #ffd60a;
+      }
+      .lb-rank.top-2 {
+        color: #e5e4e2;
+      }
+      .lb-rank.top-3 {
+        color: #cd7f32;
+      }
+      .lb-name {
+        font-weight: 600;
+        font-size: 16px;
+      }
+      .lb-score {
+        font-weight: 800;
+        font-size: 18px;
+      }
+
+      .game-btn {
+        height: 90px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
+        font-size: 1.8rem;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .game-btn:active {
+        transform: scale(0.95);
+      }
+      .btn-correct {
+        background: rgba(48, 209, 88, 0.2);
+        color: #86efac;
+      }
+      .btn-false {
+        background: rgba(255, 69, 58, 0.2);
+        color: #fca5a5;
+      }
+      .btn-bonus {
+        background: rgba(255, 214, 10, 0.2);
+        color: #ffd60a;
+        height: 60px;
+        font-size: 1.2rem;
+        font-weight: bold;
+      }
+
+      .split-container {
+        display: flex;
+        gap: 10px;
+        height: 300px;
+        margin-bottom: 10px;
+      }
+      .split-side {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        border-radius: 20px;
+        cursor: pointer;
+        position: relative;
+        border: 2px solid transparent;
+        transition: 0.2s;
+      }
+      .split-side:active {
+        transform: scale(0.98);
+      }
+      .side-red {
+        background: rgba(255, 69, 58, 0.15);
+        border-color: rgba(255, 69, 58, 0.3);
+        color: #ff6961;
+      }
+      .side-blue {
+        background: rgba(10, 132, 255, 0.15);
+        border-color: rgba(10, 132, 255, 0.3);
+        color: #4facfe;
+      }
+      .score-big {
+        font-size: 4rem;
+        font-weight: 800;
+        line-height: 1;
+      }
+      .name-big {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+
+      .btn-undo {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        font-size: 20px;
+        cursor: pointer;
+        z-index: 10;
+      }
+      .strike-badge {
+        background: #ff453a;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        margin-left: 5px;
+      }
+      .team-member-badge {
+        font-size: 0.8rem;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 3px 8px;
+        border-radius: 8px;
+        margin: 2px;
+        display: inline-block;
+      }
+
+      #loginOverlay,
+      #dbModal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #dbModal {
+        background: rgba(0, 0, 0, 0.8);
+        display: none;
+        z-index: 2000;
+      }
+      .db-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loginOverlay">
+      <div style="width: 90%; max-width: 350px">
+        <h2 class="mb-4 fw-bold">🔒 Kirish</h2>
+        <input
+          type="text"
+          id="loginUser"
+          class="ios-input"
+          placeholder="Login"
+        />
+        <input
+          type="password"
+          id="loginPass"
+          class="ios-input"
+          placeholder="Parol"
+        />
+        <button class="btn-ios mt-3" onclick="doLogin()">KIRISH</button>
+        <div id="loginError" class="text-danger mt-2 small"></div>
+      </div>
+    </div>
+
+    <div id="dbModal">
+      <div
+        class="glass-panel"
+        style="max-height: 80vh; display: flex; flex-direction: column"
+      >
+        <h4 class="mb-3">Bazadan tanlash</h4>
+        <div id="dbList" style="overflow-y: auto; flex: 1; margin-bottom: 15px">
+          Loading...
+        </div>
+        <div class="d-flex gap-2">
+          <button
+            class="btn-ios btn-glass text-danger"
+            onclick="document.getElementById('dbModal').style.display = 'none'"
+          >
+            Yopish
+          </button>
+          <button class="btn-ios" onclick="addFromDb()">Qo'shish</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="page1" class="glass-panel page active">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold m-0">History Pro</h4>
+        <small class="text-white-50" id="teacherDisplay">...</small>
+      </div>
+
+      <div class="mode-selector">
+        <button class="mode-btn active-mode" onclick="setMode('standard')">
+          Oddiy
+        </button>
+        <button class="mode-btn" onclick="setMode('team')">Jamoalar</button>
+        <button class="mode-btn" onclick="setMode('duel')">Duel (1x1)</button>
+      </div>
+
+      <div id="setup-standard">
+        <div class="d-flex gap-2 mb-2">
+          <input
+            type="text"
+            id="stName"
+            class="ios-input"
+            placeholder="O'quvchi ismi..."
+          />
+          <button class="btn-ios" style="width: auto" onclick="addSt()">
+            +
+          </button>
+        </div>
+        <button
+          class="btn-ios btn-glass text-warning btn-sm mb-3"
+          onclick="openDb('standard')"
+        >
+          👥 Bazadan tanlash
+        </button>
+        <div
+          id="stList"
+          class="text-start mb-3"
+          style="max-height: 200px; overflow-y: auto"
+        ></div>
+      </div>
+
+      <div id="setup-team" style="display: none">
+        <div class="mb-3 p-2 border border-white border-opacity-10 rounded">
+          <input
+            type="text"
+            id="team1Name"
+            class="ios-input mb-1"
+            value="🔴 Qizillar"
+          />
+          <button
+            class="btn-sm btn-ios btn-glass w-auto py-1 px-3"
+            onclick="openDb('team', 0)"
+          >
+            + Tarkib
+          </button>
+          <div id="team1Members" class="text-start mt-1"></div>
+        </div>
+        <div class="mb-3 p-2 border border-white border-opacity-10 rounded">
+          <input
+            type="text"
+            id="team2Name"
+            class="ios-input mb-1"
+            value="🔵 Ko'klar"
+          />
+          <button
+            class="btn-sm btn-ios btn-glass w-auto py-1 px-3"
+            onclick="openDb('team', 1)"
+          >
+            + Tarkib
+          </button>
+          <div id="team2Members" class="text-start mt-1"></div>
+        </div>
+      </div>
+
+      <div id="setup-duel" style="display: none">
+        <p class="text-white-50 small">
+          Duel uchun ro'yxatga faqat 2 ta o'quvchi qo'shing.
+        </p>
+        <button
+          class="btn-ios btn-glass text-warning btn-sm mb-3"
+          onclick="openDb('duel')"
+        >
+          👥 Bazadan 2 kishini tanlash
+        </button>
+        <div id="duelList" class="text-start mb-3"></div>
+      </div>
+
+      <button
+        class="btn-ios"
+        style="background: #30d158; height: 60px; font-size: 1.2rem"
+        onclick="startGame()"
+      >
+        Boshlash 🚀
+      </button>
+      <div class="d-flex gap-2 mb-3">
+        <button class="btn-ios btn-glass m-0" style="flex: 1" onclick="stats()">
+          📊 Statistika
+        </button>
+        <button
+          class="btn-ios btn-glass m-0 text-warning"
+          style="flex: 1"
+          onclick="showLeaderboard()"
+        >
+          🏆 Reyting
+        </button>
+      </div>
+      <button class="btn text-white-50 btn-sm" onclick="logout()">
+        Chiqish
+      </button>
+    </div>
+
+    <div id="page2" class="glass-panel page">
+      <button class="btn-undo" onclick="undo()" title="Ctrl+Z">↩️</button>
+      <div
+        class="d-flex justify-content-center align-items-center mb-2 gap-2"
+        style="margin-top: 20px"
+      >
+        <div
+          id="timer"
+          style="
+            font-family: monospace;
+            font-size: 2rem;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 15px;
+            border-radius: 10px;
+          "
+        >
+          00:00
+        </div>
+        <button
+          id="pauseBtn"
+          class="btn-ios"
+          style="width: auto; padding: 5px 15px; margin: 0"
+          onclick="togglePause()"
+        >
+          ⏸
+        </button>
+      </div>
+
+      <div id="game-standard" style="display: none">
+        <div
+          class="d-flex justify-content-between px-2 mt-2 text-white-50 small"
+        >
+          <span>Jami: <b id="qTotal" class="text-white">0</b></span>
+          <span>User: <b id="qUser" class="text-white">0</b></span>
+        </div>
+        <h2 id="gName" class="my-3 fw-bold" style="font-size: 2.5rem">
+          Student
+        </h2>
+        <div class="row g-2 mb-3">
+          <div class="col-12">
+            <button class="game-btn btn-bonus" onclick="ansStandard('bonus')">
+              🌟 Qiyin (+5%)
+            </button>
+          </div>
+          <div class="col-6">
+            <button class="game-btn btn-correct" onclick="ansStandard(true)">
+              ✅
+            </button>
+          </div>
+          <div class="col-6">
+            <button class="game-btn btn-false" onclick="ansStandard(false)">
+              ❌
+            </button>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <button class="btn-ios btn-glass" onclick="nav(-1)">
+              ← Oldingi
+            </button>
+          </div>
+          <div class="col-6">
+            <button class="btn-ios btn-glass" onclick="nav(1)">
+              Keyingi →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="game-split" style="display: none">
+        <div class="split-container">
+          <div class="split-side side-red" onclick="ansSplit(0)">
+            <div class="name-big" id="splitName1">Team A</div>
+            <div class="score-big" id="splitScore1">0</div>
+            <small>Bosish = +1 Ball</small>
+          </div>
+          <div class="split-side side-blue" onclick="ansSplit(1)">
+            <div class="name-big" id="splitName2">Team B</div>
+            <div class="score-big" id="splitScore2">0</div>
+            <small>Bosish = +1 Ball</small>
+          </div>
+        </div>
+        <p class="small text-white-50">Javob bergan tomonni bosing</p>
+      </div>
+      <button class="btn-ios mt-3" onclick="finish()">Natijalar</button>
+    </div>
+
+    <div id="page3" class="glass-panel page">
+      <h3 class="mb-3">Natijalar</h3>
+      <h4 id="winnerDisplay" class="text-warning mb-3"></h4>
+      <div
+        id="resList"
+        class="mb-3 text-start p-2"
+        style="
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 15px;
+          max-height: 300px;
+          overflow-y: auto;
+        "
+      ></div>
+      <button id="tgBtn" class="btn-ios" onclick="sendTg()">
+        Telegramga yuborish
+      </button>
+      <button class="btn-ios btn-glass" onclick="goPage('page1')">
+        Bosh sahifa
+      </button>
+      <button class="btn-ios btn-glass text-danger" onclick="reset()">
+        Yangi dars
+      </button>
+    </div>
+
+    <div id="page4" class="glass-panel page">
+      <h3>Statistika</h3>
+      <select
+        id="statSel"
+        class="ios-input"
+        style="background: #333"
+        onchange="draw()"
+      >
+        <option>Yuklanmoqda...</option>
+      </select>
+      <div id="strikeDisplay" class="mb-2 text-warning fw-bold"></div>
+
+      <div
+        style="
+          position: relative;
+          height: 250px;
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 15px;
+          padding: 10px;
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          overflow: hidden;
+        "
+      >
+        <canvas
+          id="chart"
+          style="
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            height: 100% !important;
+          "
+        ></canvas>
+      </div>
+
+      <button class="btn-ios btn-glass mt-3" onclick="goPage('page1')">
+        Ortga
+      </button>
+    </div>
+
+    <div id="page5" class="glass-panel page">
+      <h3 class="mb-3 fw-bold">🏆 Sinf Reytingi</h3>
+      <div class="mode-selector mb-3">
+        <button
+          class="mode-btn active-mode"
+          id="btnAdminLbCoin"
+          onclick="renderAdminLb('coin')"
+        >
+          🪙 Coinlar
+        </button>
+        <button
+          class="mode-btn"
+          id="btnAdminLbStrike"
+          onclick="renderAdminLb('strike')"
+        >
+          🔥 Strikelar
+        </button>
+      </div>
+      <div
+        id="adminLbList"
+        class="text-start"
+        style="max-height: 400px; overflow-y: auto; padding-right: 5px"
+      >
+        <div class="text-center text-white-50 mt-4">Yuklanmoqda...</div>
+      </div>
+      <button class="btn-ios btn-glass mt-4" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+
+    <audio
+      id="sY"
+      src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/3/success.mp3"
+    ></audio>
+    <audio
+      id="sN"
+      src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/3/error.mp3"
+    ></audio>
+    <audio
+      id="sF"
+      src="https://www.myinstants.com/media/sounds/tada-fanfare-a.mp3"
+    ></audio>
+
+    <script>
+      const API =
+        "https://script.google.com/macros/s/AKfycbwxRJGn7UQyjaXk2BFJA-YQmGWf9ktat1dx95crnQsKTYTvkPd-qcDVM6fUFsYUaSph/exec";
+      let currentMode = "standard",
+        students = JSON.parse(localStorage.getItem("st")) || [];
+      let teams = [
+        { name: "Qizillar", score: 0, members: [] },
+        { name: "Ko'klar", score: 0, members: [] },
+      ];
+      let totalQ = 0,
+        curIdx = 0,
+        timer = 0,
+        int = null,
+        actionHistory = [],
+        tempTeamSelectIdx = 0,
+        adminLbData = [];
+
+      let teacher = localStorage.getItem("teacherName");
+      if (teacher) {
+        document.getElementById("loginOverlay").style.display = "none";
+        document.getElementById("teacherDisplay").innerText = "👤 " + teacher;
+      }
+
+      document.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key === "z") {
+          if (document.getElementById("page2").classList.contains("active"))
+            undo();
+        }
+      });
+
+      function setMode(mode) {
+        currentMode = mode;
+        document
+          .querySelectorAll(".mode-btn")
+          .forEach((b) => b.classList.remove("active-mode"));
+        event.target.classList.add("active-mode");
+        document.getElementById("setup-standard").style.display = "none";
+        document.getElementById("setup-team").style.display = "none";
+        document.getElementById("setup-duel").style.display = "none";
+        if (mode === "standard") {
+          document.getElementById("setup-standard").style.display = "block";
+          renderList();
+        } else if (mode === "team") {
+          document.getElementById("setup-team").style.display = "block";
+          renderTeamMembers();
+        } else if (mode === "duel") {
+          document.getElementById("setup-duel").style.display = "block";
+          renderList();
+        }
+      }
+
+      async function doLogin() {
+        let l = document.getElementById("loginUser").value,
+          p = document.getElementById("loginPass").value;
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "login", login: l, password: p }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            localStorage.setItem("teacherName", data.name);
+            location.reload();
+          } else alert("Xato login!");
+        } catch (e) {
+          alert("Internet xatosi!");
+        }
+      }
+      function logout() {
+        localStorage.removeItem("teacherName");
+        location.reload();
+      }
+
+      async function openDb(context, teamIdx = 0) {
+        tempTeamSelectIdx = teamIdx;
+        document.getElementById("dbModal").style.display = "flex";
+        const listDiv = document.getElementById("dbList");
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_student_list" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            listDiv.innerHTML = data.list
+              .map(
+                (n) =>
+                  `<div class="db-item"><span class="fw-bold">${n}</span><input type="checkbox" value="${n}" style="transform:scale(1.5)"></div>`,
+              )
+              .join("");
+          }
+        } catch (e) {
+          listDiv.innerHTML = "Error loading DB";
+        }
+      }
+
+      function addFromDb() {
+        let selected = [];
+        document
+          .querySelectorAll("#dbList input:checked")
+          .forEach((c) => selected.push(c.value));
+        if (currentMode === "team") {
+          selected.forEach((name) => {
+            if (!teams[tempTeamSelectIdx].members.includes(name))
+              teams[tempTeamSelectIdx].members.push(name);
+          });
+          renderTeamMembers();
+        } else {
+          selected.forEach((name) => {
+            if (!students.some((s) => s.name === name)) {
+              if (currentMode === "duel" && students.length >= 2) return;
+              students.push({
+                name: name,
+                correct: 0,
+                total: 0,
+                sess: 0,
+                strikes: 0,
+                bonus: 0,
+                strikeAdded: false,
+              });
+            }
+          });
+          renderList();
+        }
+        save();
+        document.getElementById("dbModal").style.display = "none";
+      }
+
+      function addSt() {
+        let n = document.getElementById("stName").value.trim();
+        if (!n) return;
+        students.push({
+          name: n,
+          correct: 0,
+          total: 0,
+          sess: 0,
+          strikes: 0,
+          bonus: 0,
+          strikeAdded: false,
+        });
+        document.getElementById("stName").value = "";
+        save();
+        renderList();
+      }
+      function renderList() {
+        let container =
+          currentMode === "duel"
+            ? document.getElementById("duelList")
+            : document.getElementById("stList");
+        container.innerHTML = students
+          .map(
+            (s, i) =>
+              `<div class="d-flex justify-content-between p-2 mb-1 bg-dark bg-opacity-25 rounded border border-white border-opacity-10"><span class="fw-bold">${i + 1}. ${s.name} ${s.strikes > 0 ? "🔥" + s.strikes : ""}</span><button class="btn btn-sm btn-outline-danger" onclick="students.splice(${i},1);save();renderList()">×</button></div>`,
+          )
+          .join("");
+      }
+      function renderTeamMembers() {
+        [0, 1].forEach((i) => {
+          document.getElementById(`team${i + 1}Members`).innerHTML = teams[
+            i
+          ].members
+            .map(
+              (m, midx) =>
+                `<span class="team-member-badge">${m} <span style="cursor:pointer;color:#ff6961" onclick="removeTeamMember(${i}, ${midx})">×</span></span>`,
+            )
+            .join("");
+        });
+      }
+      function removeTeamMember(teamIdx, memberIdx) {
+        teams[teamIdx].members.splice(memberIdx, 1);
+        renderTeamMembers();
+      }
+
+      function startGame() {
+        if (currentMode === "standard" && students.length === 0)
+          return alert("O'quvchi qo'shing!");
+        if (currentMode === "duel" && students.length !== 2)
+          return alert("Duel uchun roppa-rosa 2 ta o'quvchi kerak!");
+        if (currentMode === "team") {
+          teams[0].name =
+            document.getElementById("team1Name").value || "Qizillar";
+          teams[1].name =
+            document.getElementById("team2Name").value || "Ko'klar";
+          teams[0].score = 0;
+          teams[1].score = 0;
+        }
+        goPage("page2");
+        document.getElementById("game-standard").style.display = "none";
+        document.getElementById("game-split").style.display = "none";
+        if (currentMode === "standard") {
+          document.getElementById("game-standard").style.display = "block";
+          loadQStandard();
+        } else {
+          document.getElementById("game-split").style.display = "block";
+          updateSplitUI();
+        }
+        startT();
+      }
+
+      function loadQStandard() {
+        if (!students[curIdx]) curIdx = 0;
+        let s = students[curIdx];
+        document.getElementById("gName").innerText = s.name;
+        document.getElementById("qTotal").innerText = totalQ;
+        document.getElementById("qUser").innerText = s.sess || 0;
+      }
+      function ansStandard(type) {
+        pushHistory();
+        let s = students[curIdx];
+        if (type === "bonus") {
+          document
+            .getElementById("sY")
+            .play()
+            .catch(() => {});
+          s.total++;
+          s.sess++;
+          s.correct++;
+          s.bonus++;
+          totalQ++;
+        } else if (type === true) {
+          document
+            .getElementById("sY")
+            .play()
+            .catch(() => {});
+          s.total++;
+          s.sess++;
+          s.correct++;
+          totalQ++;
+        } else {
+          document
+            .getElementById("sN")
+            .play()
+            .catch(() => {});
+          s.total++;
+          s.sess++;
+          totalQ++;
+        }
+        save();
+        loadQStandard();
+      }
+      function updateSplitUI() {
+        if (currentMode === "team") {
+          document.getElementById("splitName1").innerText = teams[0].name;
+          document.getElementById("splitScore1").innerText = teams[0].score;
+          document.getElementById("splitName2").innerText = teams[1].name;
+          document.getElementById("splitScore2").innerText = teams[1].score;
+        } else {
+          document.getElementById("splitName1").innerText = students[0].name;
+          document.getElementById("splitScore1").innerText =
+            students[0].correct;
+          document.getElementById("splitName2").innerText = students[1].name;
+          document.getElementById("splitScore2").innerText =
+            students[1].correct;
+        }
+      }
+      function ansSplit(sideIndex) {
+        pushHistory();
+        document
+          .getElementById("sY")
+          .play()
+          .catch(() => {});
+        if (currentMode === "team") {
+          teams[sideIndex].score++;
+        } else {
+          let s = students[sideIndex];
+          s.correct++;
+        }
+        updateSplitUI();
+      }
+      function nav(d) {
+        curIdx = (curIdx + d + students.length) % students.length;
+        loadQStandard();
+      }
+      function pushHistory() {
+        let state = {
+          mode: currentMode,
+          students: JSON.parse(JSON.stringify(students)),
+          teams: JSON.parse(JSON.stringify(teams)),
+          totalQ: totalQ,
+          curIdx: curIdx,
+        };
+        actionHistory.push(state);
+        if (actionHistory.length > 50) actionHistory.shift();
+      }
+      function undo() {
+        if (actionHistory.length === 0) return;
+        let last = actionHistory.pop();
+        students = last.students;
+        teams = last.teams;
+        totalQ = last.totalQ;
+        curIdx = last.curIdx;
+        save();
+        if (currentMode === "standard") loadQStandard();
+        else updateSplitUI();
+      }
+      function calcPercent(s) {
+        if (!s.total || s.total === 0) return 0;
+        let p = (s.correct / s.total) * 100 + (s.bonus || 0) * 5;
+        return p > 100 ? 100 : Math.round(p);
+      }
+
+      function finish() {
+        stopT();
+        document
+          .getElementById("sF")
+          .play()
+          .catch(() => {});
+        confetti({ particleCount: 150, spread: 100 });
+        goPage("page3");
+        let resHTML = "",
+          winnerText = "";
+        if (currentMode === "team") {
+          let t1 = teams[0],
+            t2 = teams[1];
+          if (t1.score > t2.score)
+            winnerText = `🏆 ${t1.name} G'alaba qozondi!`;
+          else if (t2.score > t1.score)
+            winnerText = `🏆 ${t2.name} G'alaba qozondi!`;
+          else winnerText = "🤝 Durrang!";
+          resHTML = `<div class="d-flex justify-content-between border-bottom border-white border-opacity-10 p-2"><span>🔴 ${t1.name}</span> <span class="fw-bold fs-4">${t1.score}</span></div><div class="text-white-50 small mb-3 ps-2">👥 ${t1.members.join(", ")}</div><div class="d-flex justify-content-between border-bottom border-white border-opacity-10 p-2"><span>🔵 ${t2.name}</span> <span class="fw-bold fs-4">${t2.score}</span></div><div class="text-white-50 small mb-3 ps-2">👥 ${t2.members.join(", ")}</div>`;
+        } else if (currentMode === "duel") {
+          students.sort((a, b) => b.correct - a.correct);
+          let w = students[0];
+          if (students[0].correct > students[1].correct)
+            winnerText = `🏆 ${w.name} yutdi!`;
+          else if (students[1].correct > students[0].correct)
+            winnerText = `🏆 ${students[1].name} yutdi!`;
+          else winnerText = "🤝 Durrang!";
+          resHTML = students
+            .map(
+              (s, i) =>
+                `<div class="d-flex justify-content-between border-bottom border-white border-opacity-10 p-2"><span>${i === 0 ? "🥇" : "🥈"} ${s.name}</span><span class="fw-bold fs-4">${s.correct}</span></div>`,
+            )
+            .join("");
+        } else {
+          students.forEach((s) => {
+            if (calcPercent(s) >= 90 && s.total > 0 && !s.strikeAdded) {
+              if (!s.strikes) s.strikes = 0;
+              s.strikes++;
+              s.strikeAdded = true;
+            }
+          });
+          save();
+          students.sort((a, b) => calcPercent(b) - calcPercent(a));
+          resHTML = students
+            .map((s, i) => {
+              let p = calcPercent(s),
+                strike =
+                  s.strikes > 0
+                    ? ` <span class="strike-badge">🔥${s.strikes}</span>`
+                    : "";
+              return `<div class="d-flex justify-content-between border-bottom border-white border-opacity-10 p-2"><span>${i + 1}. ${s.name} ${strike}</span><span class="${p >= 80 ? "text-success" : "text-warning"} fw-bold">${p}% (${s.correct}/${s.total}) ${s.bonus ? "<small>+🌟</small>" : ""}</span></div>`;
+            })
+            .join("");
+        }
+        document.getElementById("winnerDisplay").innerText = winnerText;
+        document.getElementById("resList").innerHTML = resHTML;
+      }
+
+      async function sendTg() {
+        let btn = document.getElementById("tgBtn");
+        btn.disabled = true;
+        btn.innerText = "Yuborilmoqda...";
+        const now = new Date();
+        let dateStr = `${now.getDate()}/${now.getMonth() + 1}`;
+        let msg = "";
+        if (currentMode === "team") {
+          msg = `⚔️ <b>JAMOALAR JANGI</b> (${dateStr})\n\n🔴 ${teams[0].name}: <b>${teams[0].score}</b>\n👥: ${teams[0].members.join(", ")}\n\n🔵 ${teams[1].name}: <b>${teams[1].score}</b>\n👥: ${teams[1].members.join(", ")}\n\n`;
+          if (teams[0].score > teams[1].score)
+            msg += `🏆 G'olib: ${teams[0].name}`;
+          else if (teams[1].score > teams[0].score)
+            msg += `🏆 G'olib: ${teams[1].name}`;
+          else msg += "🤝 Durrang";
+        } else if (currentMode === "duel") {
+          msg = `⚔️ <b>DUEL NATIJALARI</b> (${dateStr})\n\n`;
+          students.forEach((s, i) => {
+            let medal = i === 0 ? "🥇" : "🥈";
+            msg += `${medal} ${s.name}: <b>${s.correct}</b> ball\n`;
+          });
+          if (students[0].correct > students[1].correct)
+            msg += `\n🏆 G'olib: ${students[0].name}`;
+        } else {
+          msg = `📊 <b>DARS NATIJALARI</b> (${dateStr})\n\n`;
+          students.forEach((s, i) => {
+            let p = calcPercent(s),
+              medal =
+                i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`,
+              strike = s.strikes > 0 ? `🔥(${s.strikes})` : "";
+            msg += `${medal} ${s.name}${strike}: ${p}% (${s.correct}/${s.total})\n`;
+          });
+        }
+        try {
+          let dataToSend = {
+            action: "save",
+            text: msg,
+            teacher: localStorage.getItem("teacherName"),
+            mode:
+              currentMode === "team"
+                ? "team_battle"
+                : currentMode === "duel"
+                  ? "duel"
+                  : "standard",
+          };
+          if (currentMode !== "team") dataToSend.students = students;
+          else dataToSend.students = [];
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify(dataToSend),
+          });
+          alert("Yuborildi!");
+          btn.innerText = "Muvaffaqiyatli";
+        } catch (e) {
+          alert("Xato");
+          btn.disabled = false;
+          btn.innerText = "Qayta urinish";
+        }
+      }
+
+      function goPage(id) {
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+      }
+      function save() {
+        localStorage.setItem("st", JSON.stringify(students));
+      }
+      function reset() {
+        if (confirm("Yangi dars?")) {
+          students.forEach((s) => {
+            s.correct = 0;
+            s.total = 0;
+            s.sess = 0;
+            s.bonus = 0;
+            s.strikeAdded = false;
+          });
+          teams.forEach((t) => (t.score = 0));
+          save();
+          goPage("page1");
+        }
+      }
+      function tick() {
+        timer++;
+        let m = Math.floor(timer / 60),
+          s = timer % 60;
+        document.getElementById("timer").innerText =
+          (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+      }
+      function startT() {
+        stopT();
+        timer = 0;
+        document.getElementById("timer").innerText = "00:00";
+        int = setInterval(tick, 1000);
+      }
+      function stopT() {
+        clearInterval(int);
+        int = null;
+      }
+      function togglePause() {
+        if (int) {
+          stopT();
+          document.getElementById("pauseBtn").innerText = "▶️";
+        } else {
+          int = setInterval(tick, 1000);
+          document.getElementById("pauseBtn").innerText = "⏸";
+        }
+      }
+
+      // 🌟 YANGILANGAN STATISTIKA (1 Dars = 1 Nuqta)
+      async function stats() {
+        goPage("page4");
+        document.getElementById("statSel").innerHTML =
+          "<option>Yuklanmoqda...</option>";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_history" }),
+          });
+          let d = await res.json();
+          let gHist = d.history;
+
+          let names = [...new Set(gHist.map((h) => h.name))].sort();
+
+          // O'qituvchi butun sinf o'rtachasini 1 ta chiziqda (1 kunda 1 ta) qilib ko'ra oladi
+          document.getElementById("statSel").innerHTML =
+            "<option value='all'>📊 Umumiy Sinf (O'rtacha)</option>" +
+            names.map((n) => `<option value="${n}">${n}</option>`).join("");
+
+          window.draw = function () {
+            let n = document.getElementById("statSel").value;
+            if (!n) return;
+
+            let chartData = [];
+
+            if (n === "all") {
+              // SINF BO'YICHA GURUHLASH
+              document.getElementById("strikeDisplay").innerText =
+                "Sinfning umumiy o'zlashtirish dinamikasi";
+
+              let datesObj = {};
+              gHist.forEach((h) => {
+                if (!datesObj[h.date]) datesObj[h.date] = { sum: 0, count: 0 };
+                datesObj[h.date].sum += parseFloat(h.percent);
+                datesObj[h.date].count++;
+              });
+
+              chartData = Object.keys(datesObj).map((date) => {
+                return {
+                  date: date,
+                  p: Math.round(datesObj[date].sum / datesObj[date].count),
+                };
+              });
+
+              // Hozirgi dars natijalarini qo'shish
+              let activeSum = 0;
+              let activeCount = 0;
+              students.forEach((s) => {
+                if (s.total > 0) {
+                  activeSum += calcPercent(s);
+                  activeCount++;
+                }
+              });
+              if (activeCount > 0) {
+                chartData.push({
+                  date: "Bugun (Live)",
+                  p: Math.round(activeSum / activeCount),
+                });
+              }
+            } else {
+              // BITTA O'QUVCHI BO'YICHA GURUHLASH
+              let curS = students.find((s) => s.name === n);
+              let sCount = curS ? curS.strikes || 0 : 0;
+              document.getElementById("strikeDisplay").innerText =
+                sCount > 0 ? `🔥 Strike: ${sCount}` : "";
+
+              chartData = gHist
+                .filter((h) => h.name === n)
+                .map((h) => ({ date: h.date, p: h.percent }));
+              if (curS && curS.total > 0)
+                chartData.push({ date: "Bugun (Live)", p: calcPercent(curS) });
+            }
+
+            // 🌟 GRAFIK DIZAYNI O'QUVCHI PORTALI BILAN BIR XIL QILINDI
+            let ctx = document.getElementById("chart").getContext("2d");
+            if (window.myChart) window.myChart.destroy();
+            window.myChart = new Chart(ctx, {
+              type: "line",
+              data: {
+                labels: chartData.map((x) => x.date),
+                datasets: [
+                  {
+                    label: "O'rtacha natija (%)",
+                    data: chartData.map((x) => x.p),
+                    borderColor: "#0a84ff",
+                    backgroundColor: "rgba(10, 132, 255, 0.15)",
+                    borderWidth: 3,
+                    pointBackgroundColor: "#fff",
+                    pointBorderColor: "#0a84ff",
+                    pointRadius: 4,
+                    tension: 0.3,
+                    fill: true,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: { color: "rgba(255, 255, 255, 0.1)" },
+                    ticks: { color: "#aaa", stepSize: 25 },
+                  },
+                  x: { grid: { display: false }, ticks: { color: "#aaa" } },
+                },
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { callbacks: { label: (c) => c.parsed.y + "%" } },
+                },
+              },
+            });
+          };
+
+          document.getElementById("statSel").value = "all";
+          window.draw();
+        } catch (e) {
+          document.getElementById("statSel").innerHTML =
+            "<option>Xatolik yuz berdi</option>";
+        }
+      }
+
+      async function showLeaderboard() {
+        goPage("page5");
+        document.getElementById("adminLbList").innerHTML =
+          "<div class='text-center text-white-50 mt-4'>Yuklanmoqda...</div>";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_leaderboard" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            adminLbData = data.leaderboard;
+            renderAdminLb("coin");
+          }
+        } catch (e) {
+          document.getElementById("adminLbList").innerHTML =
+            "<div class='text-danger text-center'>Xatolik yuz berdi!</div>";
+        }
+      }
+
+      function renderAdminLb(type) {
+        document
+          .getElementById("btnAdminLbCoin")
+          .classList.remove("active-mode");
+        document
+          .getElementById("btnAdminLbStrike")
+          .classList.remove("active-mode");
+        let sortedData = [...adminLbData];
+        let listHTML = "";
+        if (type === "coin") {
+          document
+            .getElementById("btnAdminLbCoin")
+            .classList.add("active-mode");
+          sortedData.sort((a, b) => b.coin - a.coin);
+          sortedData.forEach((u, i) => {
+            if (u.coin === 0 && u.strike === 0) return;
+            let rClass =
+              i === 0 ? "top-1" : i === 1 ? "top-2" : i === 2 ? "top-3" : "";
+            listHTML += `<div class="lb-item"><div><span class="lb-rank ${rClass}">${i + 1}</span> <span class="lb-name">${u.name}</span></div><div class="lb-score text-warning">${u.coin} 🪙</div></div>`;
+          });
+        } else {
+          document
+            .getElementById("btnAdminLbStrike")
+            .classList.add("active-mode");
+          sortedData.sort((a, b) => b.strike - a.strike);
+          sortedData.forEach((u, i) => {
+            if (u.coin === 0 && u.strike === 0) return;
+            let rClass =
+              i === 0 ? "top-1" : i === 1 ? "top-2" : i === 2 ? "top-3" : "";
+            listHTML += `<div class="lb-item"><div><span class="lb-rank ${rClass}">${i + 1}</span> <span class="lb-name">${u.name}</span></div><div class="lb-score" style="color: #ff453a;">${u.strike} 🔥</div></div>`;
+          });
+        }
+        if (listHTML === "")
+          listHTML =
+            "<div class='text-center text-white-50 mt-4'>Ro'yxat bo'sh</div>";
+        document.getElementById("adminLbList").innerHTML = listHTML;
+      }
+    </script>
+  </body>
+</html>

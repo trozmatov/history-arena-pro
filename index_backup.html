@@ -1,0 +1,1626 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="UTF-8" />
+    <title>History Arena Pro - O'qituvchi</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+      :root {
+        --glass-bg: rgba(20, 20, 30, 0.95);
+        --primary: #0a84ff;
+        --text: #fff;
+      }
+      body {
+        font-family: "Inter", sans-serif;
+        background: url("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop")
+          center fixed;
+        background-size: cover;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        color: var(--text);
+      }
+      .glass-panel {
+        background: var(--glass-bg);
+        border-radius: 32px;
+        padding: 25px;
+        width: 95%;
+        max-width: 600px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        position: relative;
+      }
+      .page {
+        display: none;
+      }
+      .active {
+        display: block;
+        animation: slideUp 0.4s ease;
+      }
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .ios-input {
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 15px;
+        color: #fff;
+        width: 100%;
+        outline: none;
+        margin-bottom: 10px;
+      }
+      .btn-ios {
+        border: none;
+        border-radius: 16px;
+        padding: 12px;
+        font-weight: 700;
+        width: 100%;
+        cursor: pointer;
+        background: var(--primary);
+        color: #fff;
+        margin-bottom: 10px;
+        transition: 0.2s;
+      }
+      .btn-ios:active {
+        transform: scale(0.98);
+      }
+      .btn-glass {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .mode-selector {
+        display: flex;
+        gap: 5px;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 5px;
+        border-radius: 16px;
+        margin-bottom: 20px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .mode-btn {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        background: transparent;
+        color: #aaa;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .mode-btn.active-mode {
+        background: var(--primary);
+        color: white;
+        box-shadow: 0 4px 10px rgba(10, 132, 255, 0.3);
+      }
+
+      .game-btn {
+        height: 90px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        width: 100%;
+        font-size: 1.8rem;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .btn-correct {
+        background: rgba(48, 209, 88, 0.2);
+        color: #86efac;
+      }
+      .btn-false {
+        background: rgba(255, 69, 58, 0.2);
+        color: #fca5a5;
+      }
+      .btn-bonus {
+        background: rgba(255, 214, 10, 0.2);
+        color: #ffd60a;
+        height: 60px;
+        font-size: 1.2rem;
+        font-weight: bold;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #dbModal,
+      #taskModal,
+      #attModal {
+        display: none;
+      }
+
+      .chip-btn {
+        padding: 10px 14px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #eee;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin: 4px;
+        display: inline-block;
+      }
+      .chip-btn.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+        font-weight: bold;
+      }
+
+      #attTbody td,
+      #attThead th {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        background: transparent !important;
+        color: #ddd;
+        vertical-align: middle;
+      }
+      .lb-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        margin-bottom: 8px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .lb-rank {
+        font-weight: 800;
+        font-size: 18px;
+        width: 30px;
+        display: inline-block;
+        color: #888;
+      }
+      .lb-rank.top-1 {
+        color: #ffd60a;
+      }
+      .lb-rank.top-2 {
+        color: #e5e4e2;
+      }
+      .lb-rank.top-3 {
+        color: #cd7f32;
+      }
+      .lb-name {
+        font-weight: 600;
+        font-size: 16px;
+      }
+      .lb-score {
+        font-weight: 800;
+        font-size: 18px;
+      }
+      .market-admin-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 10px 15px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .market-admin-icon {
+        font-size: 24px;
+        margin-right: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        width: 40px;
+        height: 40px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 50%;
+      }
+
+      /* CHAT CSS UCHUN O'QITUVCHI */
+      .chat-box {
+        height: 400px;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 16px;
+        padding: 10px;
+        margin-bottom: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .msg {
+        max-width: 85%;
+        padding: 10px 14px;
+        border-radius: 18px;
+        font-size: 14.5px;
+        text-align: left;
+        position: relative;
+        line-height: 1.4;
+        word-wrap: break-word;
+      }
+      .msg-T {
+        background: #30d158;
+        color: white;
+        align-self: flex-end;
+        border-bottom-right-radius: 4px;
+        box-shadow: 0 4px 10px rgba(48, 209, 88, 0.2);
+        border: 1px solid #fff;
+      }
+      .msg-S {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .msg-A {
+        background: linear-gradient(135deg, #8a2be2, #4facfe);
+        color: white;
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 4px 15px rgba(138, 43, 226, 0.3);
+      }
+      .msg-sender-name {
+        font-size: 11px;
+        font-weight: 800;
+        margin-bottom: 3px;
+        display: block;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .msg-time {
+        font-size: 10px;
+        opacity: 0.6;
+        display: flex;
+        justify-content: space-between;
+        margin-top: 6px;
+        align-items: center;
+      }
+      .chat-input-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      /* Edit/Delete icons */
+      .msg-actions {
+        display: flex;
+        gap: 8px;
+        cursor: pointer;
+        opacity: 0.8;
+        font-size: 12px;
+      }
+      .msg-actions span:hover {
+        opacity: 1;
+        transform: scale(1.2);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loginOverlay" class="modal-overlay">
+      <div style="width: 90%; max-width: 350px">
+        <h2 class="mb-4 fw-bold text-center">🔒 Kirish</h2>
+        <input
+          type="text"
+          id="loginUser"
+          class="ios-input"
+          placeholder="Login"
+        />
+        <input
+          type="password"
+          id="loginPass"
+          class="ios-input"
+          placeholder="Parol"
+        />
+        <button class="btn-ios mt-3" onclick="doLogin()">KIRISH</button>
+      </div>
+    </div>
+    <div id="dbModal" class="modal-overlay">
+      <div
+        class="glass-panel"
+        style="max-height: 80vh; display: flex; flex-direction: column"
+      >
+        <h4 class="mb-3">Bazadan tanlash</h4>
+        <div
+          id="dbList"
+          style="
+            overflow-y: auto;
+            flex: 1;
+            margin-bottom: 15px;
+            text-align: left;
+          "
+        >
+          Loading...
+        </div>
+        <div class="d-flex gap-2">
+          <button
+            class="btn-ios btn-glass text-danger"
+            onclick="document.getElementById('dbModal').style.display = 'none'"
+          >
+            Yopish</button
+          ><button class="btn-ios" onclick="addFromDb()">Qo'shish</button>
+        </div>
+      </div>
+    </div>
+    <div id="taskModal" class="modal-overlay">
+      <div class="glass-panel">
+        <h4 class="mb-3" id="taskModalTitle">Vazifa belgilash</h4>
+        <div
+          id="bookChips"
+          class="d-flex flex-wrap justify-content-center gap-2 mb-3"
+        ></div>
+        <input
+          type="text"
+          id="topicInput"
+          class="ios-input text-center"
+          placeholder="Mavzular (1-10)"
+        />
+        <div class="d-flex gap-2 mt-3">
+          <button
+            class="btn-ios btn-glass text-danger"
+            onclick="closeTaskModal()"
+          >
+            Bekor</button
+          ><button class="btn-ios" onclick="saveTask()">Saqlash</button>
+        </div>
+      </div>
+    </div>
+    <div id="attModal" class="modal-overlay">
+      <div
+        class="glass-panel text-start"
+        style="max-height: 80vh; overflow-y: auto; width: 90%"
+      >
+        <h4 class="mb-2 text-warning fw-bold">⚠️ Davomat tekshiruvi</h4>
+        <div id="attList" class="mb-4"></div>
+        <button class="btn-ios btn-success" onclick="confirmAttendance()">
+          Tasdiqlash va Natijalar
+        </button>
+      </div>
+    </div>
+
+    <div id="page1" class="glass-panel page active">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold m-0">History Pro</h4>
+        <small class="text-white-50" id="teacherDisplay">...</small>
+      </div>
+      <div id="setup-standard">
+        <button
+          class="btn-ios btn-glass text-info btn-sm mb-3 d-flex justify-content-between align-items-center px-3"
+          onclick="openTaskModal(-1)"
+        >
+          <span>📚 Umumiy vazifa:</span>
+          <span id="globalTaskDisplay" class="fw-bold text-white"
+            >Tanlanmagan</span
+          >
+        </button>
+        <div class="d-flex gap-2 mb-2">
+          <input
+            type="text"
+            id="stName"
+            class="ios-input m-0"
+            placeholder="Ism qo'shish..."
+          /><button class="btn-ios m-0" style="width: 60px" onclick="addSt()">
+            +
+          </button>
+        </div>
+        <button
+          class="btn-ios btn-glass text-warning btn-sm mb-3"
+          onclick="openDb('standard')"
+        >
+          👥 Bazadan Guruhlarni chaqirish
+        </button>
+        <div
+          id="stList"
+          class="text-start mb-3"
+          style="max-height: 250px; overflow-y: auto; padding-right: 5px"
+        ></div>
+      </div>
+      <button
+        class="btn-ios"
+        style="background: #30d158; height: 60px; font-size: 1.2rem"
+        onclick="startGame()"
+      >
+        Boshlash 🚀
+      </button>
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <button
+            class="btn-ios btn-glass m-0 text-info"
+            style="font-size: 0.9rem"
+            onclick="showAttendance()"
+          >
+            📅 Davomat
+          </button>
+        </div>
+        <div class="col-6">
+          <button
+            class="btn-ios btn-glass m-0 text-warning"
+            style="font-size: 0.9rem"
+            onclick="showLeaderboard()"
+          >
+            🏆 Reyting
+          </button>
+        </div>
+        <div class="col-6">
+          <button
+            class="btn-ios btn-glass m-0"
+            style="font-size: 0.9rem"
+            onclick="stats()"
+          >
+            📊 Statistika
+          </button>
+        </div>
+        <div class="col-6">
+          <button
+            class="btn-ios btn-glass m-0 text-success"
+            style="font-size: 0.9rem"
+            onclick="manageMarket()"
+          >
+            🛒 Do'kon
+          </button>
+        </div>
+        <div class="col-12 mt-2">
+          <button
+            class="btn-ios btn-glass m-0 text-primary"
+            style="font-size: 0.9rem; border: 1px solid rgba(10, 132, 255, 0.4)"
+            onclick="window.openTeacherChat()"
+          >
+            💬 Sinf Chati (Umumiy Guruh)
+          </button>
+        </div>
+      </div>
+      <button class="btn text-white-50 btn-sm" onclick="logout()">
+        Chiqish
+      </button>
+    </div>
+
+    <div id="page2" class="glass-panel page">
+      <button
+        class="btn-ios btn-glass"
+        style="
+          width: 40px;
+          height: 40px;
+          position: absolute;
+          top: 15px;
+          left: 15px;
+          padding: 0;
+        "
+        onclick="undo()"
+      >
+        ↩️
+      </button>
+      <div
+        class="d-flex justify-content-center align-items-center mb-2 gap-2"
+        style="margin-top: 20px"
+      >
+        <div
+          id="timer"
+          style="
+            font-family: monospace;
+            font-size: 2rem;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 15px;
+            border-radius: 10px;
+          "
+        >
+          00:00
+        </div>
+        <button
+          id="pauseBtn"
+          class="btn-ios w-auto py-1 px-3 m-0"
+          onclick="togglePause()"
+        >
+          ⏸
+        </button>
+      </div>
+      <div id="game-standard">
+        <div
+          class="d-flex justify-content-between px-2 mt-2 text-white-50 small"
+        >
+          <span>Jami: <b id="qTotal" class="text-white">0</b></span>
+          <span>Urinish: <b id="qUser" class="text-white">0</b></span>
+        </div>
+        <h2 id="gName" class="my-2 fw-bold" style="font-size: 2.2rem">...</h2>
+        <div id="gTask" class="mb-3 text-info small fw-bold"></div>
+        <div class="row g-2 mb-3">
+          <div class="col-12">
+            <button class="game-btn btn-bonus" onclick="ansStandard('bonus')">
+              🌟 Qiyin (+5%)
+            </button>
+          </div>
+          <div class="col-6">
+            <button class="game-btn btn-correct" onclick="ansStandard(true)">
+              ✅ To'g'ri
+            </button>
+          </div>
+          <div class="col-6">
+            <button class="game-btn btn-false" onclick="ansStandard(false)">
+              ❌ Noto'g'ri
+            </button>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-6">
+            <button class="btn-ios btn-glass" onclick="nav(-1)">
+              ← Oldingi
+            </button>
+          </div>
+          <div class="col-6">
+            <button class="btn-ios btn-glass" onclick="nav(1)">
+              Keyingi →
+            </button>
+          </div>
+        </div>
+      </div>
+      <button class="btn-ios mt-3 btn-danger" onclick="finishCheck()">
+        Yakunlash va Davomat
+      </button>
+    </div>
+    <div id="page3" class="glass-panel page">
+      <h3 class="mb-3">Natijalar</h3>
+      <div
+        id="resList"
+        class="mb-3 text-start p-2"
+        style="
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 15px;
+          max-height: 300px;
+          overflow-y: auto;
+        "
+      ></div>
+      <button id="tgBtn" class="btn-ios" onclick="sendTg()">
+        Telegramga yuborish</button
+      ><button class="btn-ios btn-glass text-danger mt-2" onclick="reset()">
+        Yangi darsga o'tish
+      </button>
+    </div>
+    <div id="page4" class="glass-panel page">
+      <h3>Statistika</h3>
+      <select
+        id="statSel"
+        class="ios-input"
+        style="background: #333"
+        onchange="draw()"
+      >
+        <option>Yuklanmoqda...</option>
+      </select>
+      <div
+        style="
+          position: relative;
+          height: 250px;
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 15px;
+          padding: 10px;
+          width: 100%;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          overflow: hidden;
+        "
+      >
+        <canvas
+          id="chart"
+          style="
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            height: 100% !important;
+          "
+        ></canvas>
+      </div>
+      <button class="btn-ios btn-glass mt-3" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+    <div id="page5" class="glass-panel page">
+      <h3 class="mb-3 fw-bold">🏆 Sinf Reytingi</h3>
+      <div class="mode-selector mb-3">
+        <button
+          class="mode-btn active-mode"
+          id="btnAdminLbCoin"
+          onclick="renderAdminLb('coin')"
+        >
+          🪙 Tanga</button
+        ><button
+          class="mode-btn"
+          id="btnAdminLbStrike"
+          onclick="renderAdminLb('strike')"
+        >
+          ⭐ Rag'bat</button
+        ><button
+          class="mode-btn"
+          id="btnAdminLbPenalty"
+          onclick="renderAdminLb('penalty')"
+        >
+          ⚠️ Jarima
+        </button>
+      </div>
+      <div
+        id="adminLbList"
+        class="text-start"
+        style="max-height: 400px; overflow-y: auto; padding-right: 5px"
+      ></div>
+      <button class="btn-ios btn-glass mt-4" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+    <div id="page6" class="glass-panel page">
+      <h3 class="mb-3 fw-bold text-success">🛒 Do'kon Boshqaruvi</h3>
+      <div
+        class="mb-4 p-3 border border-white border-opacity-10 rounded text-start"
+        style="background: rgba(0, 0, 0, 0.3)"
+      >
+        <h5 class="text-warning mb-3" style="font-size: 16px">
+          🔥 Strike Sozlamalari
+        </h5>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small">1 Strike jarimasi (UZS):</span
+          ><input
+            type="number"
+            id="setPenaltyUzs"
+            class="ios-input m-0 p-1 text-center"
+            style="width: 90px; font-size: 14px"
+          />
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span class="small">Qalqon narxi (Coin):</span
+          ><input
+            type="number"
+            id="setShieldCoin"
+            class="ios-input m-0 p-1 text-center"
+            style="width: 90px; font-size: 14px"
+          />
+        </div>
+        <button
+          id="btnSaveSet"
+          class="btn-ios btn-sm w-100 m-0 py-2"
+          onclick="saveSettings()"
+        >
+          Saqlash
+        </button>
+      </div>
+      <div
+        class="mb-4 p-3 border border-danger border-opacity-50 rounded text-start"
+        style="background: rgba(255, 69, 58, 0.1)"
+      >
+        <h5 class="text-danger mb-2" style="font-size: 16px">
+          ⚠️ Yangi Oy (Reset)
+        </h5>
+        <button
+          id="btnResetCoins"
+          class="btn-ios btn-sm w-100 m-0 py-2 btn-danger"
+          onclick="resetAllCoins()"
+        >
+          Tangalarni Nollashtirish
+        </button>
+      </div>
+      <div class="d-flex gap-2 mb-3">
+        <input
+          type="text"
+          id="newItemIcon"
+          class="ios-input m-0"
+          style="width: 70px; text-align: center; font-size: 20px"
+          placeholder="🎁"
+        /><input
+          type="text"
+          id="newItemName"
+          class="ios-input m-0"
+          placeholder="Nomi"
+        /><input
+          type="number"
+          id="newItemPrice"
+          class="ios-input m-0"
+          style="width: 90px"
+          placeholder="Narxi"
+        /><button
+          class="btn-ios m-0 w-auto px-4"
+          style="background: #30d158"
+          onclick="addMarketItem()"
+        >
+          +
+        </button>
+      </div>
+      <div
+        id="adminMarketList"
+        class="text-start"
+        style="max-height: 250px; overflow-y: auto"
+      ></div>
+      <button class="btn-ios btn-glass mt-4" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+    <div id="page7" class="glass-panel page">
+      <h3 class="mb-3 text-info fw-bold">📅 Davomat Jurnali</h3>
+      <div
+        style="
+          overflow-x: auto;
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 10px;
+          padding: 10px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        "
+      >
+        <table
+          class="table table-dark table-sm table-bordered text-center m-0"
+          style="font-size: 13px; white-space: nowrap"
+        >
+          <thead id="attThead">
+            <tr>
+              <th>Yuklanmoqda...</th>
+            </tr>
+          </thead>
+          <tbody id="attTbody"></tbody>
+        </table>
+      </div>
+      <button class="btn-ios btn-glass mt-4" onclick="goPage('page1')">
+        Ortga qaytish
+      </button>
+    </div>
+
+    <div id="page8" class="glass-panel page">
+      <h3 class="mb-3 fw-bold text-primary">💬 Sinf Umumiy Guruhi</h3>
+      <div id="teacherChatArea" class="chat-box"></div>
+      <div
+        id="tTypingIndicator"
+        style="
+          font-size: 12px;
+          color: #ffd60a;
+          text-align: left;
+          height: 18px;
+          font-style: italic;
+          margin-bottom: 8px;
+        "
+      ></div>
+      <div class="chat-input-row">
+        <input
+          type="text"
+          id="teacherChatInput"
+          class="ios-input m-0"
+          placeholder="O'quvchilarga e'lon yozing..."
+          onkeypress="if (event.key === 'Enter') window.sendTeacherMsg();"
+        />
+        <button
+          class="btn-ios"
+          style="width: 60px; margin: 0"
+          onclick="window.sendTeacherMsg()"
+        >
+          ➤
+        </button>
+      </div>
+      <button
+        class="btn-ios btn-glass mt-4"
+        onclick="window.closeTeacherChat()"
+      >
+        Ortga qaytish
+      </button>
+    </div>
+
+    <audio
+      id="sY"
+      src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/3/success.mp3"
+    ></audio>
+    <audio
+      id="sN"
+      src="https://s3-us-west-2.amazonaws.com/s.cdpn.io/3/error.mp3"
+    ></audio>
+
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+      import {
+        getDatabase,
+        ref,
+        push,
+        onChildAdded,
+        onChildChanged,
+        onChildRemoved,
+        update,
+        remove,
+      } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+      // 🌟 SIZNING FIREBASE KALITINGIZ 🌟
+      const firebaseConfig = {
+        apiKey: "AIzaSyB-zBR8EWgHvvA8KdOC-A9qeM9Oz1XaOIg",
+        authDomain: "login-firebase-70e2c.firebaseapp.com",
+        databaseURL: "https://login-firebase-70e2c-default-rtdb.firebaseio.com",
+        projectId: "login-firebase-70e2c",
+        storageBucket: "login-firebase-70e2c.firebasestorage.app",
+        messagingSenderId: "190606723992",
+        appId: "1:190606723992:web:8ed92e68cf87f54d51f9ed",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getDatabase(app);
+
+      // ⚠️ DIQQAT: O'ZINGIZNING GOOGLE APPS SCRIPT LINKINGIZNI SHU YERGA QO'YING
+      const API =
+        "https://script.google.com/macros/s/AKfycbzu2zm6yi7vqCBR0XLhDtxlHoVwWfEatSiwuOy5K0P1x_zMaiB8ZL83KkSbHtELJ1-7/exec";
+
+      let currentMode = "standard",
+        students = JSON.parse(localStorage.getItem("st")) || [];
+      let totalQ = 0,
+        curIdx = 0,
+        timer = 0,
+        int = null,
+        actionHistory = [],
+        zeroScorers = [],
+        adminLbData = [];
+      const bookList = [
+        "6-Tarix",
+        "7-O'zT",
+        "7-Jahon",
+        "8-O'zT",
+        "8-Jahon",
+        "9-O'zT",
+        "9-Jahon",
+        "10-O'zT",
+        "10-Jahon",
+        "11-O'zT",
+        "11-Jahon",
+      ];
+      let globalBook = "",
+        globalTopic = "",
+        editingTaskIndex = -1;
+
+      let teacher = localStorage.getItem("teacherName");
+      if (teacher) {
+        document.getElementById("loginOverlay").style.display = "none";
+        document.getElementById("teacherDisplay").innerText = "👨‍🏫 " + teacher;
+        initBookChips();
+        renderList();
+      }
+
+      window.goPage = function (id) {
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+      };
+      window.doLogin = async function () {
+        let l = document.getElementById("loginUser").value,
+          p = document.getElementById("loginPass").value;
+        let res = await fetch(API, {
+          method: "POST",
+          body: JSON.stringify({ action: "login", login: l, password: p }),
+        });
+        let data = await res.json();
+        if (data.status === "success") {
+          localStorage.setItem("teacherName", data.name);
+          location.reload();
+        }
+      };
+      window.logout = function () {
+        localStorage.removeItem("teacherName");
+        location.reload();
+      };
+
+      function initBookChips() {
+        document.getElementById("bookChips").innerHTML = bookList
+          .map(
+            (b, i) =>
+              `<button class="chip-btn" onclick="selectChip(this, ${i})">${b}</button>`,
+          )
+          .join("");
+      }
+      window.selectChip = function (el, i) {
+        document
+          .querySelectorAll(".chip-btn")
+          .forEach((btn) => btn.classList.remove("active"));
+        el.classList.add("active");
+        el.dataset.selected = bookList[i];
+      };
+      window.openTaskModal = function (i) {
+        editingTaskIndex = i;
+        document.getElementById("taskModal").style.display = "flex";
+      };
+      window.closeTaskModal = function () {
+        document.getElementById("taskModal").style.display = "none";
+      };
+      window.saveTask = function () {
+        let active = document.querySelector(".chip-btn.active"),
+          b = active ? active.dataset.selected : "",
+          t = document.getElementById("topicInput").value.trim();
+        if (editingTaskIndex === -1) {
+          globalBook = b;
+          globalTopic = t;
+          document.getElementById("globalTaskDisplay").innerText =
+            b || t ? `${b} | ${t}` : "Tanlanmagan";
+        } else {
+          students[editingTaskIndex].book = b;
+          students[editingTaskIndex].topic = t;
+          save();
+          renderList();
+        }
+        closeTaskModal();
+      };
+
+      window.openDb = async function () {
+        document.getElementById("dbModal").style.display = "flex";
+        document.getElementById("dbList").innerHTML = "Yuklanmoqda...";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_student_list" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            let html = "",
+              gIdx = 0;
+            for (let group in data.groups) {
+              gIdx++;
+              let members = data.groups[group],
+                safeId = "gList_" + gIdx;
+              html += `<div class="mb-3 p-2 border rounded" style="background: rgba(0,0,0,0.3)"><div class="d-flex justify-content-between mb-1"><span class="fw-bold text-warning">${group} <span class="badge bg-secondary">${members.length}</span></span><div><button class="btn-sm btn-ios py-1 px-2 text-white bg-secondary" style="width:auto; display:inline-block;" onclick="document.getElementById('${safeId}').style.display=document.getElementById('${safeId}').style.display==='none'?'block':'none'">👁</button> <button class="btn-sm btn-ios py-1 px-2 text-success bg-dark" style="width:auto; display:inline-block;" onclick="let el=document.getElementById('${safeId}'); let chk=el.querySelectorAll('.st-chk'); let all=Array.from(chk).every(c=>c.checked); chk.forEach(c=>c.checked=!all)">✅</button></div></div><div id="${safeId}" style="display:none; padding-left: 5px;">${members.map((n) => `<div class="d-flex justify-content-between py-2 border-bottom"><span>${n}</span><input type="checkbox" class="st-chk" value="${n}" style="transform:scale(1.3)"></div>`).join("")}</div></div>`;
+            }
+            document.getElementById("dbList").innerHTML = html;
+          }
+        } catch (e) {}
+      };
+      window.addFromDb = function () {
+        document.querySelectorAll(".st-chk:checked").forEach((c) => {
+          if (!students.some((s) => s.name === c.value))
+            students.push({
+              name: c.value,
+              correct: 0,
+              total: 0,
+              sess: 0,
+              strikes: 0,
+              penalties: 0,
+              bonus: 0,
+              book: globalBook,
+              topic: globalTopic,
+              attStatus: "",
+            });
+        });
+        save();
+        renderList();
+        document.getElementById("dbModal").style.display = "none";
+      };
+      window.addSt = function () {
+        let n = document.getElementById("stName").value.trim();
+        if (!n) return;
+        students.push({
+          name: n,
+          correct: 0,
+          total: 0,
+          sess: 0,
+          strikes: 0,
+          penalties: 0,
+          bonus: 0,
+          book: globalBook,
+          topic: globalTopic,
+          attStatus: "",
+        });
+        document.getElementById("stName").value = "";
+        save();
+        renderList();
+      };
+      function renderList() {
+        document.getElementById("stList").innerHTML = students
+          .map(
+            (s, i) =>
+              `<div class="d-flex justify-content-between p-2 mb-2 bg-dark rounded border align-items-center"><div><span class="fw-bold">${i + 1}. ${s.name}</span></div><button class="btn btn-sm btn-outline-danger h-100" onclick="students.splice(${i},1);save();renderList()">×</button></div>`,
+          )
+          .join("");
+      }
+
+      window.startGame = function () {
+        if (students.length === 0) return alert("O'quvchi qo'shing!");
+        goPage("page2");
+        loadQStandard();
+        startT();
+      };
+      function loadQStandard() {
+        if (!students[curIdx]) curIdx = 0;
+        let s = students[curIdx];
+        document.getElementById("gName").innerText = s.name;
+        document.getElementById("qTotal").innerText = totalQ;
+        document.getElementById("qUser").innerText = s.sess || 0;
+        document.getElementById("gTask").innerText =
+          s.book || s.topic ? `📖 ${s.book} (${s.topic})` : "";
+      }
+      window.ansStandard = function (type) {
+        pushHistory();
+        let s = students[curIdx];
+        s.attStatus = "Keldi";
+        if (type === "bonus") {
+          document.getElementById("sY").play();
+          s.total++;
+          s.sess++;
+          s.correct++;
+          s.bonus++;
+          totalQ++;
+        } else if (type === true) {
+          document.getElementById("sY").play();
+          s.total++;
+          s.sess++;
+          s.correct++;
+          totalQ++;
+        } else {
+          document.getElementById("sN").play();
+          s.total++;
+          s.sess++;
+          totalQ++;
+        }
+        save();
+        loadQStandard();
+      };
+      window.nav = function (d) {
+        curIdx = (curIdx + d + students.length) % students.length;
+        loadQStandard();
+      };
+      function pushHistory() {
+        actionHistory.push(
+          JSON.stringify({ s: students, t: totalQ, i: curIdx }),
+        );
+      }
+      window.undo = function () {
+        if (actionHistory.length === 0) return;
+        let last = JSON.parse(actionHistory.pop());
+        students = last.s;
+        totalQ = last.t;
+        curIdx = last.i;
+        save();
+        loadQStandard();
+      };
+
+      window.finishCheck = function () {
+        stopT();
+        zeroScorers = students.filter((s) => s.total === 0);
+        if (zeroScorers.length > 0) {
+          let html = "";
+          zeroScorers.forEach((s, i) => {
+            html += `<div class="mb-3 p-2 border rounded bg-dark"><div class="fw-bold mb-1">${s.name}</div><select id="att_sel_${i}" class="ios-input p-2 m-0"><option value="Sababsiz" selected>❌ Sababsiz kelmadi</option><option value="Keldi">✅ Darsda bor (Jim o'tirdi)</option><option value="Sababli">🟡 Ruxsat so'ragan</option></select></div>`;
+          });
+          document.getElementById("attList").innerHTML = html;
+          document.getElementById("attModal").style.display = "flex";
+        } else {
+          finalizeResults();
+        }
+      };
+      window.confirmAttendance = function () {
+        zeroScorers.forEach((s, i) => {
+          s.attStatus = document.getElementById(`att_sel_${i}`).value;
+        });
+        document.getElementById("attModal").style.display = "none";
+        finalizeResults();
+      };
+      function calcPercent(s) {
+        if (!s.total || s.total === 0) return 0;
+        let p = (s.correct / s.total) * 100 + (s.bonus || 0) * 5;
+        return p > 100 ? 100 : Math.round(p);
+      }
+      function finalizeResults() {
+        goPage("page3");
+        students.forEach((s) => {
+          let p = calcPercent(s);
+          if (s.attStatus === "Sababsiz" || s.attStatus === "Sababli") return;
+          if (p >= 90 && s.total > 0 && !s.strikeAdded) {
+            s.strikes = (s.strikes || 0) + 1;
+            s.strikeAdded = true;
+          }
+          if (p < 50 && s.total > 0 && !s.penaltyAdded) {
+            s.penalties = (s.penalties || 0) + 1;
+            s.penaltyAdded = true;
+          }
+        });
+        save();
+        students.sort((a, b) => calcPercent(b) - calcPercent(a));
+        document.getElementById("resList").innerHTML = students
+          .map((s, i) => {
+            if (s.attStatus === "Sababsiz")
+              return `<div class="p-2 border-bottom text-danger">❌ ${s.name}</div>`;
+            if (s.attStatus === "Sababli")
+              return `<div class="p-2 border-bottom text-warning">🟡 ${s.name}</div>`;
+            let p = calcPercent(s),
+              str = s.strikes > 0 ? ` ⭐${s.strikes}` : "",
+              pen = s.penalties > 0 ? ` ⚠️${s.penalties}` : "";
+            let col =
+              p >= 80
+                ? "text-success"
+                : p < 50
+                  ? "text-danger"
+                  : "text-warning";
+            return `<div class="d-flex justify-content-between p-2 border-bottom"><div>${i + 1}. ${s.name}${str}${pen}</div><span class="${col} fw-bold">${p}%</span></div>`;
+          })
+          .join("");
+      }
+
+      window.stats = async function () {
+        goPage("page4");
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_history" }),
+          });
+          let d = await res.json(),
+            gHist = d.history,
+            names = [...new Set(gHist.map((h) => h.name))].sort();
+          document.getElementById("statSel").innerHTML =
+            "<option value='all'>📊 Umumiy Sinf</option>" +
+            names.map((n) => `<option value="${n}">${n}</option>`).join("");
+          window.draw = function () {
+            let n = document.getElementById("statSel").value;
+            if (!n) return;
+            let chartData = [];
+            if (n === "all") {
+              let datesObj = {};
+              gHist.forEach((h) => {
+                if (!datesObj[h.date]) datesObj[h.date] = { sum: 0, count: 0 };
+                datesObj[h.date].sum += parseFloat(h.percent);
+                datesObj[h.date].count++;
+              });
+              chartData = Object.keys(datesObj).map((date) => {
+                return {
+                  date: date,
+                  p: Math.round(datesObj[date].sum / datesObj[date].count),
+                };
+              });
+            } else {
+              chartData = gHist
+                .filter((h) => h.name === n)
+                .map((h) => ({ date: h.date, p: h.percent }));
+            }
+            let ctx = document.getElementById("chart").getContext("2d");
+            if (window.myChart) window.myChart.destroy();
+            window.myChart = new Chart(ctx, {
+              type: "line",
+              data: {
+                labels: chartData.map((x) => x.date),
+                datasets: [
+                  {
+                    data: chartData.map((x) => x.p),
+                    borderColor: "#0a84ff",
+                    backgroundColor: "rgba(10, 132, 255, 0.15)",
+                    borderWidth: 3,
+                    pointBackgroundColor: "#fff",
+                    fill: true,
+                    tension: 0.3,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: { beginAtZero: true, max: 100 },
+                  x: { grid: { display: false } },
+                },
+                plugins: { legend: { display: false } },
+              },
+            });
+          };
+          document.getElementById("statSel").value = "all";
+          window.draw();
+        } catch (e) {}
+      };
+
+      window.showLeaderboard = async function () {
+        goPage("page5");
+        document.getElementById("adminLbList").innerHTML = "Yuklanmoqda...";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_leaderboard" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            adminLbData = data.leaderboard;
+            window.renderAdminLb("coin");
+          }
+        } catch (e) {}
+      };
+      window.renderAdminLb = function (type) {
+        document
+          .querySelectorAll(".mode-selector .mode-btn")
+          .forEach((b) => b.classList.remove("active-mode"));
+        let sortedData = [...adminLbData],
+          listHTML = "";
+        if (type === "coin") {
+          document
+            .getElementById("btnAdminLbCoin")
+            .classList.add("active-mode");
+          sortedData.sort((a, b) => b.coin - a.coin);
+          sortedData.forEach((u, i) => {
+            if (u.coin === 0) return;
+            listHTML += `<div class="lb-item"><div><span class="lb-rank">${i + 1}</span> <span class="lb-name">${u.name}</span></div><div class="lb-score text-warning">${u.coin} 🪙</div></div>`;
+          });
+        } else if (type === "strike") {
+          document
+            .getElementById("btnAdminLbStrike")
+            .classList.add("active-mode");
+          sortedData.sort((a, b) => b.strike - a.strike);
+          sortedData.forEach((u, i) => {
+            if (u.strike === 0) return;
+            listHTML += `<div class="lb-item"><div><span class="lb-rank">${i + 1}</span> <span class="lb-name">${u.name}</span></div><div class="lb-score" style="color: #ffd60a;">${u.strike} ⭐</div></div>`;
+          });
+        } else {
+          document
+            .getElementById("btnAdminLbPenalty")
+            .classList.add("active-mode");
+          sortedData.sort((a, b) => b.penalty - a.penalty);
+          sortedData.forEach((u, i) => {
+            if (u.penalty === 0) return;
+            listHTML += `<div class="lb-item"><div><span class="lb-rank">${i + 1}</span> <span class="lb-name">${u.name}</span></div><div class="lb-score" style="color: #ff453a;">${u.penalty} ⚠️</div></div>`;
+          });
+        }
+        document.getElementById("adminLbList").innerHTML =
+          listHTML || "Ro'yxat bo'sh";
+      };
+
+      window.manageMarket = async function () {
+        goPage("page6");
+        loadMarketAdmin();
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_settings" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            document.getElementById("setPenaltyUzs").value =
+              data.settings.strike_penalty_uzs;
+            document.getElementById("setShieldCoin").value =
+              data.settings.strike_price_coin;
+          }
+        } catch (e) {}
+      };
+      window.saveSettings = async function () {
+        let p = parseInt(document.getElementById("setPenaltyUzs").value),
+          c = parseInt(document.getElementById("setShieldCoin").value);
+        if (isNaN(p) || isNaN(c)) return;
+        let btn = document.getElementById("btnSaveSet");
+        btn.innerText = "Saqlanmoqda...";
+        btn.disabled = true;
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({
+              action: "update_settings",
+              penalty_uzs: p,
+              price_coin: c,
+            }),
+          });
+          btn.innerText = "Saqlandi ✅";
+          setTimeout(() => {
+            btn.innerText = "Saqlash";
+            btn.disabled = false;
+          }, 2000);
+        } catch (e) {
+          btn.disabled = false;
+        }
+      };
+      async function loadMarketAdmin() {
+        document.getElementById("adminMarketList").innerHTML = "Yuklanmoqda...";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_market_items" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") {
+            document.getElementById("adminMarketList").innerHTML =
+              data.items
+                .map(
+                  (item) =>
+                    `<div class="market-admin-item"><div class="d-flex align-items-center"><span class="market-admin-icon">${item.icon}</span><div><div class="fw-bold">${item.name}</div><div class="text-warning small">${item.price} 🪙</div></div></div>${item.id === "shield_special" ? "" : `<button class="btn btn-sm btn-outline-danger" onclick="deleteMarketItem('${item.id}')">O'chirish</button>`}</div>`,
+                )
+                .join("") || "Bo'sh";
+          }
+        } catch (e) {}
+      }
+      window.addMarketItem = async function () {
+        let i = document.getElementById("newItemIcon").value || "🎁",
+          n = document.getElementById("newItemName").value,
+          p = parseInt(document.getElementById("newItemPrice").value);
+        if (!n || isNaN(p)) return;
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({
+              action: "add_market_item",
+              icon: i,
+              name: n,
+              price: p,
+            }),
+          });
+          loadMarketAdmin();
+        } catch (e) {}
+      };
+      window.deleteMarketItem = async function (id) {
+        if (!confirm("O'chirasizmi?")) return;
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "delete_market_item", id: id }),
+          });
+          loadMarketAdmin();
+        } catch (e) {}
+      };
+      window.resetAllCoins = async function () {
+        if (!confirm("Barcha tangalar nollashtirilsinmi?")) return;
+        document.getElementById("btnResetCoins").disabled = true;
+        try {
+          await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "reset_coins" }),
+          });
+          alert("Muvaffaqiyatli!");
+        } catch (e) {}
+        document.getElementById("btnResetCoins").disabled = false;
+      };
+
+      window.showAttendance = async function () {
+        goPage("page7");
+        document.getElementById("attThead").innerHTML =
+          "<tr><th>Yuklanmoqda...</th></tr>";
+        document.getElementById("attTbody").innerHTML = "";
+        try {
+          let res = await fetch(API, {
+            method: "POST",
+            body: JSON.stringify({ action: "get_attendance" }),
+          });
+          let data = await res.json();
+          if (data.status === "success") renderAttendanceGrid(data.attendance);
+        } catch (e) {}
+      };
+      function renderAttendanceGrid(logs) {
+        if (logs.length === 0) {
+          document.getElementById("attThead").innerHTML =
+            "<tr><th>Hozircha davomat yo'q</th></tr>";
+          return;
+        }
+        let dates = [...new Set(logs.map((l) => l.date))].sort(),
+          names = [...new Set(logs.map((l) => l.name))].sort(),
+          matrix = {};
+        logs.forEach((l) => {
+          if (!matrix[l.name]) matrix[l.name] = { totalQ: 0 };
+          matrix[l.name][l.date] = l.status;
+          if (l.status === "Sababsiz") matrix[l.name].totalQ++;
+        });
+        let headHtml = `<tr><th class="text-start" style="position:sticky; left:0; background:rgba(0,0,0,0.8); z-index:10">F.I.O</th>`;
+        dates.forEach((d) => (headHtml += `<th>${d}</th>`));
+        headHtml += `<th class="text-danger">Q</th></tr>`;
+        document.getElementById("attThead").innerHTML = headHtml;
+        let bodyHtml = "";
+        names.forEach((n) => {
+          let m = matrix[n] || { totalQ: 0 };
+          bodyHtml += `<tr><td class="text-start fw-bold" style="position:sticky; left:0; background:rgba(0,0,0,0.8); z-index:10">${n}</td>`;
+          dates.forEach((d) => {
+            let st = m[d],
+              icon = "-";
+            if (st === "Keldi") icon = "✅";
+            else if (st === "Sababsiz") icon = "❌";
+            else if (st === "Sababli") icon = "🟡";
+            bodyHtml += `<td>${icon}</td>`;
+          });
+          bodyHtml += `<td class="text-danger fw-bold">${m.totalQ}</td></tr>`;
+        });
+        document.getElementById("attTbody").innerHTML = bodyHtml;
+      }
+
+      window.sendTg = async function () {
+        let msg = `📊 <b>NATIJALAR</b>\n\n`;
+        students.forEach((s) => {
+          if (s.attStatus === "Sababsiz" || s.attStatus === "Sababli") return;
+          let p = calcPercent(s),
+            st = s.strikes > 0 ? `⭐` : "",
+            pn = s.penalties > 0 ? `⚠️` : "";
+          msg += `👤 ${s.name} ${st}${pn}: ${p}% (${s.correct}/${s.total})\n`;
+        });
+        document.getElementById("tgBtn").innerText = "Yuborilmoqda...";
+        await fetch(API, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "save",
+            text: msg,
+            teacher: teacher,
+            mode: currentMode,
+            students: students,
+          }),
+        });
+        document.getElementById("tgBtn").innerText = "Yuborildi ✅";
+      };
+      function save() {
+        localStorage.setItem("st", JSON.stringify(students));
+      }
+      window.reset = function () {
+        if (confirm("Yangi darsga o'tamizmi?")) {
+          students.forEach((s) => {
+            s.correct = 0;
+            s.total = 0;
+            s.sess = 0;
+            s.bonus = 0;
+            s.strikes = 0;
+            s.penalties = 0;
+            s.strikeAdded = false;
+            s.penaltyAdded = false;
+            s.attStatus = "";
+          });
+          save();
+          goPage("page1");
+        }
+      };
+      function tick() {
+        timer++;
+        let m = Math.floor(timer / 60),
+          s = timer % 60;
+        document.getElementById("timer").innerText =
+          (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+      }
+      function startT() {
+        stopT();
+        timer = 0;
+        int = setInterval(tick, 1000);
+      }
+      function stopT() {
+        clearInterval(int);
+        int = null;
+      }
+      window.togglePause = function () {
+        if (int) {
+          stopT();
+          document.getElementById("pauseBtn").innerText = "▶️";
+        } else {
+          int = setInterval(tick, 1000);
+          document.getElementById("pauseBtn").innerText = "⏸";
+        }
+      };
+
+      // 🌟 FIREBASE O'QITUVCHI CHATI (TAHRIR VA O'CHIRISH BILAN)
+      let chatRef = ref(db, "chats/umumiy");
+
+      window.openTeacherChat = function () {
+        goPage("page8");
+        document.getElementById("teacherChatArea").innerHTML = "";
+
+        onChildAdded(chatRef, (snapshot) => {
+          renderMsgUI(snapshot.key, snapshot.val());
+        });
+        onChildChanged(chatRef, (snapshot) => {
+          let msgDiv = document.getElementById("msg-" + snapshot.key);
+          if (msgDiv) {
+            let textDiv = msgDiv.querySelector(".msg-text-content");
+            if (textDiv) textDiv.innerText = snapshot.val().text;
+          }
+        });
+        onChildRemoved(chatRef, (snapshot) => {
+          let msgDiv = document.getElementById("msg-" + snapshot.key);
+          if (msgDiv) msgDiv.remove();
+        });
+      };
+
+      window.closeTeacherChat = function () {
+        goPage("page1");
+      };
+
+      function renderMsgUI(key, m) {
+        let isMe = m.senderType === "T" && m.senderName === teacher;
+        let isStudent = m.senderType === "S";
+        let isAi = m.senderType === "A";
+
+        let boxClass = isMe ? "msg-T" : isAi ? "msg-A" : "msg-S";
+        let senderHTML = "";
+
+        if (isStudent)
+          senderHTML = `<span class="msg-sender-name" style="color: #0a84ff;">👤 ${m.senderName}</span>`;
+        if (isMe)
+          senderHTML = `<span class="msg-sender-name" style="color: #fff;">👨‍🏫 ${m.senderName} (Siz)</span>`;
+        if (!isMe && m.senderType === "T")
+          senderHTML = `<span class="msg-sender-name" style="color: #30d158;">👨‍🏫 ${m.senderName}</span>`;
+        if (isAi)
+          senderHTML = `<span class="msg-sender-name" style="color: #ffd60a;">${m.senderName}</span>`;
+
+        let actionsHTML = "";
+        if (isMe) {
+          actionsHTML = `<div class="msg-actions">
+                                <span onclick="window.editMsg('${key}', '${m.text.replace(/'/g, "\\'")}')">✏️</span>
+                                <span onclick="window.delMsg('${key}')">🗑️</span>
+                             </div>`;
+        }
+
+        let html = `<div class="msg ${boxClass}" id="msg-${key}">
+                          ${senderHTML}
+                          <div class="msg-text-content">${m.text}</div>
+                          <div class="msg-time"><span>${m.time}</span> ${actionsHTML}</div>
+                      </div>`;
+
+        let chatArea = document.getElementById("teacherChatArea");
+        let isScrolledToBottom =
+          chatArea.scrollHeight - chatArea.clientHeight <=
+          chatArea.scrollTop + 50;
+        chatArea.insertAdjacentHTML("beforeend", html);
+        if (isScrolledToBottom) chatArea.scrollTop = chatArea.scrollHeight;
+      }
+
+      window.sendTeacherMsg = async function () {
+        let input = document.getElementById("teacherChatInput");
+        let text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+
+        push(chatRef, {
+          time: new Date().toLocaleTimeString("uz-UZ", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          senderName: teacher,
+          senderType: "T",
+          text: text,
+          timestamp: Date.now(),
+        });
+
+        if (text.includes("@")) {
+          document.getElementById("tTypingIndicator").innerText =
+            "Suhbatdosh xabar yozmoqda... ⏳";
+          try {
+            let res = await fetch(API, {
+              method: "POST",
+              body: JSON.stringify({
+                action: "ask_ai",
+                persona: "Umumiy Guruh",
+                text: text,
+              }),
+            });
+            let data = await res.json();
+            if (data.status === "success") {
+              push(chatRef, {
+                time: new Date().toLocaleTimeString("uz-UZ", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                senderName: data.aiName,
+                senderType: "A",
+                text: data.aiText,
+                timestamp: Date.now(),
+              });
+            }
+          } catch (e) {}
+          document.getElementById("tTypingIndicator").innerText = "";
+        }
+      };
+
+      window.editMsg = function (key, oldText) {
+        let newText = prompt("Xabarni tahrirlash:", oldText);
+        if (newText !== null && newText.trim() !== "") {
+          update(ref(db, "chats/umumiy/" + key), {
+            text: newText.trim() + " (tahrirlandi)",
+          });
+        }
+      };
+
+      window.delMsg = function (key) {
+        if (confirm("Xabar o'chirilsinmi?")) {
+          remove(ref(db, "chats/umumiy/" + key));
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+// --- SOZLAMALAR ---
+const BOT_TOKEN = "7686180552:AAE1qOcFbuoPypIT_SD5T44YUg1R0YnQ8ug"; 
+const SPREADSHEET_ID = "1thvp2a6m9sL4eVshnItcF7AEwW9zc4Xs9Q1A1H54dqU"; 
+
+// BU YERGA GURUH ID SINI YOZING (Reyting shu yerga boradi)
+const GROUP_CHAT_ID = "-1003235272020";
+
+
+https://script.google.com/macros/s/AKfycbzMW6x_LMLRw45lwUYdr5cPlXKSB4wlkBBMkuyc3ISI3I_k41SfdoD6l9HjOzb9k2ps6g/exec
