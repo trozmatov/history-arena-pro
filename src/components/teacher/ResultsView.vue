@@ -161,9 +161,14 @@ async function sendTelegram() {
   const excused: string[] = [];
 
   players.forEach((s) => {
-    if (s.attStatus === "Sababsiz") absent.push(s.name);
-    else if (s.attStatus === "Sababli") excused.push(s.name);
-    else present.push(s);
+    if (s.attStatus === "Sababsiz") {
+      absent.push(s.name);
+    } else if (s.attStatus === "Sababli") {
+      excused.push(s.name);
+    } else {
+      if (!s.attStatus) s.attStatus = "Keldi";
+      present.push(s);
+    }
   });
 
   let msg = `📊 <b>NATIJALAR (${teacherStore.currentMode.value})</b>\n\n`;
@@ -179,6 +184,9 @@ async function sendTelegram() {
     if (absent.length > 0) msg += `❌ Sababsiz: ${absent.join(", ")}\n`;
     if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
   }
+
+  // Ensure attendance stats and logs are committed
+  teacherStore.finalizeResults();
 
   sendingTg.value = true;
   try {

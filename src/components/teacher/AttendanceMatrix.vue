@@ -610,19 +610,31 @@ async function fetchAttendance(forceRefresh = false) {
   loading.value = true;
   try {
     const res = await callApi("get_attendance", {}, { forceRefresh });
-    if (res.status === "success" && res.attendance) {
-      rawLogs.value = res.attendance;
+    const serverLogs: AttendanceLog[] = (res && res.status === "success" && Array.isArray(res.attendance)) ? res.attendance : [];
 
-      // Auto pick the latest available month
-      const months = allAvailableMonths.value;
-      if (months.length > 0) {
-        if (!months.includes(selectedMonth.value)) {
-          selectedMonth.value = months[months.length - 1];
-        }
-      }
+    // Merge server logs and local logs seamlessly
+    const mergedMap = new Map<string, AttendanceLog>();
+    serverLogs.forEach((l) => {
+      mergedMap.set(`${l.name}_${l.date}`, l);
+    });
+    teacherStore.localAttendanceLogs.value.forEach((l) => {
+      mergedMap.set(`${l.name}_${l.date}`, l);
+    });
+
+    rawLogs.value = Array.from(mergedMap.values());
+
+    // Auto pick current month or latest available month
+    const now = new Date();
+    const curMonth = ("0" + (now.getMonth() + 1)).slice(-2);
+    const months = allAvailableMonths.value;
+    if (months.includes(curMonth)) {
+      selectedMonth.value = curMonth;
+    } else if (months.length > 0 && !months.includes(selectedMonth.value)) {
+      selectedMonth.value = months[months.length - 1];
     }
   } catch (e) {
     console.error("fetchAttendance error:", e);
+    rawLogs.value = [...teacherStore.localAttendanceLogs.value];
   } finally {
     loading.value = false;
   }
@@ -802,6 +814,7 @@ function saveStatusEdit() {
   if (!editTarget.value || editReason.value.trim().length < 4) return;
   const { name, date, status } = editTarget.value;
   const reasonText = editReason.value.trim();
+  const group = selectedGroup.value === "all" ? "Boshqa" : selectedGroup.value;
 
   // Find and update or insert in rawLogs
   const item = rawLogs.value.find((l) => l.name === name && l.date === date);
@@ -814,7 +827,22 @@ function saveStatusEdit() {
       date,
       status,
       reason: reasonText,
-      group: selectedGroup.value === "all" ? "Boshqa" : selectedGroup.value,
+      group,
+    });
+  }
+
+  // Update in localAttendanceLogs
+  const localItem = teacherStore.localAttendanceLogs.value.find((l) => l.name === name && l.date === date);
+  if (localItem) {
+    localItem.status = status;
+    localItem.reason = reasonText;
+  } else {
+    teacherStore.localAttendanceLogs.value.push({
+      name,
+      date,
+      status,
+      reason: reasonText,
+      group,
     });
   }
 
@@ -873,7 +901,7 @@ async function saveManualAttendance() {
   const dateStr = manualDate.value.trim();
   const group = manualGroup.value;
 
-  // Insert or update entries in local rawLogs
+  // Insert or update entries in local rawLogs and localAttendanceLogs
   manualStudentsList.value.forEach((name) => {
     const status = manualStatuses.value[name] || "Keldi";
     const existing = rawLogs.value.find((l) => l.name === name && l.date === dateStr);
@@ -888,6 +916,29 @@ async function saveManualAttendance() {
         group,
         reason: "Offline darsda qo'lda kiritildi",
       });
+    }
+
+    const localExisting = teacherStore.localAttendanceLogs.value.find((l) => l.name === name && l.date === dateStr);
+    if (localExisting) {
+      localExisting.status = status;
+      localExisting.group = group;
+    } else {
+      teacherStore.localAttendanceLogs.value.push({
+        date: dateStr,
+        name,
+        status,
+        group,
+        reason: "Offline darsda qo'lda kiritildi",
+      });
+    }
+
+    // Also update allStudentsRegistry stats
+    const reg = teacherStore.allStudentsRegistry.value.find((s) => s.name === name);
+    if (reg) {
+      if (!reg.attendanceStats) reg.attendanceStats = { present: 0, excused: 0, unexcused: 0 };
+      if (status === "Keldi") reg.attendanceStats.present++;
+      else if (status === "Sababli") reg.attendanceStats.excused++;
+      else if (status === "Sababsiz") reg.attendanceStats.unexcused++;
     }
   });
 

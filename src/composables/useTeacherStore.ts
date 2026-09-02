@@ -144,13 +144,32 @@ let timerInterval: any = null;
 const actionHistory = ref<string[]>([]);
 const zeroScorers = ref<Student[]>([]);
 const activeDuels = ref<Record<string, any>>({});
-const suggestedLiveDuel = ref<any>(null);
+export interface AttendanceLog {
+  date: string; // "DD.MM" e.g. "02.09" or "YYYY-MM-DD"
+  name: string;
+  status: "Keldi" | "Sababsiz" | "Sababli";
+  group?: string;
+  reason?: string;
+}
+
+const savedAttendanceLogs = localStorage.getItem("ha_attendance_logs");
+const localAttendanceLogs = ref<AttendanceLog[]>(
+  savedAttendanceLogs ? JSON.parse(savedAttendanceLogs) : []
+);
 
 // Watch & persist session students
 watch(
   students,
   (newVal) => {
     localStorage.setItem("st", JSON.stringify(newVal));
+  },
+  { deep: true }
+);
+
+watch(
+  localAttendanceLogs,
+  (newVal) => {
+    localStorage.setItem("ha_attendance_logs", JSON.stringify(newVal));
   },
   { deep: true }
 );
@@ -641,38 +660,88 @@ export function useTeacherStore() {
     stopTimer();
     fireVictoryConfetti();
     const players = getActivePlayers();
+    const now = new Date();
+    const todayDate = `${String(now.getDate()).padStart(2, "0")}.${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}`;
 
     players.forEach((s) => {
-      const p = calcPercent(s);
-      if (s.attStatus === "Sababsiz" || s.attStatus === "Sababli") return;
-      if (p >= 90 && s.total > 0 && !s.strikeAdded) {
-        s.strikes = (s.strikes || 0) + 1;
-        s.strikeAdded = true;
-      }
-      if (p < 50 && s.total > 0 && !s.penaltyAdded) {
-        s.penalties = (s.penalties || 0) + 1;
-        s.penaltyAdded = true;
+      // 1. Ensure attendance status is resolved
+      if (!s.attStatus) {
+        s.attStatus = "Keldi";
       }
 
-      // Also update master student statistics
+      const status: "Keldi" | "Sababsiz" | "Sababli" =
+        s.attStatus === "Sababsiz"
+          ? "Sababsiz"
+          : s.attStatus === "Sababli"
+          ? "Sababli"
+          : "Keldi";
+      const isAbsent = status === "Sababsiz";
+      const isExcused = status === "Sababli";
+      const p = calcPercent(s);
+
+      // 2. Add strike/penalties for attendees
+      if (!isAbsent && !isExcused) {
+        if (p >= 90 && s.total > 0 && !s.strikeAdded) {
+          s.strikes = (s.strikes || 0) + 1;
+          s.strikeAdded = true;
+        }
+        if (p < 50 && s.total > 0 && !s.penaltyAdded) {
+          s.penalties = (s.penalties || 0) + 1;
+          s.penaltyAdded = true;
+        }
+      }
+
+      // 3. Update Master CRM Student Statistics in allStudentsRegistry
       const reg = allStudentsRegistry.value.find(
         (item) => item.name === s.name
       );
       if (reg) {
-        reg.totalTests = (reg.totalTests || 0) + 1;
-        reg.strikes = (reg.strikes || 0) + (s.strikes || 0);
-        reg.penalties = (reg.penalties || 0) + (s.penalties || 0);
-        if (p >= 80) {
-          reg.coins = (reg.coins || 0) + 20;
-        } else {
-          reg.coins = (reg.coins || 0) + 5;
-        }
         if (!reg.attendanceStats) {
           reg.attendanceStats = { present: 0, excused: 0, unexcused: 0 };
         }
-        if (s.attStatus === "Sababsiz") reg.attendanceStats.unexcused++;
-        else if (s.attStatus === "Sababli") reg.attendanceStats.excused++;
-        else reg.attendanceStats.present++;
+
+        if (isAbsent) {
+          reg.attendanceStats.unexcused++;
+        } else if (isExcused) {
+          reg.attendanceStats.excused++;
+        } else {
+          reg.attendanceStats.present++;
+          reg.totalTests = (reg.totalTests || 0) + 1;
+          reg.strikes = (reg.strikes || 0) + (s.strikes || 0);
+          reg.penalties = (reg.penalties || 0) + (s.penalties || 0);
+          if (p >= 80) {
+            reg.coins = (reg.coins || 0) + 20;
+          } else {
+            reg.coins = (reg.coins || 0) + 5;
+          }
+        }
+      }
+
+      // 4. Record entry into local attendance logs
+      const existingLog = localAttendanceLogs.value.find(
+        (l) => l.name === s.name && l.date === todayDate
+      );
+      const groupName = s.group || reg?.group || "Umumiy";
+      const reasonText = isAbsent
+        ? "Darsda qatnashmadi"
+        : isExcused
+        ? "Sababli kelmadi"
+        : "Savol-javob darsida qatnashdi";
+
+      if (existingLog) {
+        existingLog.status = status;
+        existingLog.group = groupName;
+        existingLog.reason = reasonText;
+      } else {
+        localAttendanceLogs.value.push({
+          date: todayDate,
+          name: s.name,
+          status,
+          group: groupName,
+          reason: reasonText,
+        });
       }
     });
   }
@@ -700,6 +769,7 @@ export function useTeacherStore() {
     teacherName,
     students,
     allStudentsRegistry,
+    localAttendanceLogs,
     reminders,
     activeRemindersCount,
     dueReminders,
