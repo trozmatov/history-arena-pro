@@ -144,6 +144,8 @@ let timerInterval: any = null;
 const actionHistory = ref<string[]>([]);
 const zeroScorers = ref<Student[]>([]);
 const activeDuels = ref<Record<string, any>>({});
+const suggestedLiveDuel = ref<any>(null);
+
 export interface AttendanceLog {
   date: string; // "DD.MM" e.g. "02.09" or "YYYY-MM-DD"
   name: string;
