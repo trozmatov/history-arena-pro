@@ -8,8 +8,11 @@
       @toggle-notifs="showNotifModal = true"
     />
 
-    <!-- Main Container -->
-    <main class="flex-1 max-w-xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-center">
+    <!-- Main Container: Dynamically scales to max-w-7xl on desktop for CRM tables and analytics -->
+    <main
+      class="flex-1 w-full mx-auto p-4 sm:p-6 flex flex-col transition-all duration-300"
+      :class="isWideView ? 'max-w-7xl' : 'max-w-xl justify-center'"
+    >
       <!-- 👨‍🏫 TEACHER PORTAL -->
       <template v-if="activeRole === 'teacher'">
         <Transition name="fade" mode="out-in">
@@ -92,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import Navbar from "./components/common/Navbar.vue";
 import BaseModal from "./components/common/BaseModal.vue";
 
@@ -125,6 +128,11 @@ const activeRole = ref<"teacher" | "student">("teacher");
 const teacherSubview = ref<
   "setup" | "game" | "results" | "attendance" | "leaderboard" | "stats" | "market" | "chat"
 >("setup");
+
+const isWideView = computed(() => {
+  if (activeRole.value === "student") return false;
+  return ["attendance", "leaderboard", "stats", "market", "chat"].includes(teacherSubview.value);
+});
 
 const showNotifModal = ref(false);
 const teacherUnreadCount = ref(0);
