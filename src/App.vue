@@ -56,6 +56,11 @@
               v-else-if="teacherSubview === 'chat'"
               @back="teacherSubview = 'setup'"
             />
+            <StudentManager
+              v-else-if="teacherSubview === 'students'"
+              @back="teacherSubview = 'setup'"
+              @nav="teacherSubview = $event"
+            />
           </div>
         </Transition>
       </template>
@@ -109,6 +114,7 @@ import LeaderboardView from "./components/teacher/LeaderboardView.vue";
 import StatsAnalytics from "./components/teacher/StatsAnalytics.vue";
 import MarketManager from "./components/teacher/MarketManager.vue";
 import LiveChat from "./components/teacher/LiveChat.vue";
+import StudentManager from "./components/teacher/StudentManager.vue";
 
 // Student components
 import StudentLogin from "./components/student/StudentLogin.vue";
@@ -126,21 +132,33 @@ const studentStore = useStudentStore();
 
 const activeRole = ref<"teacher" | "student">("teacher");
 const teacherSubview = ref<
-  "setup" | "game" | "results" | "attendance" | "leaderboard" | "stats" | "market" | "chat"
+  "setup" | "game" | "results" | "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students"
 >("setup");
 
 const isWideView = computed(() => {
   if (activeRole.value === "student") return false;
-  return ["attendance", "leaderboard", "stats", "market", "chat"].includes(teacherSubview.value);
+  return ["attendance", "leaderboard", "stats", "market", "chat", "students"].includes(teacherSubview.value);
 });
 
 const showNotifModal = ref(false);
-const teacherUnreadCount = ref(0);
+const teacherUnreadCount = computed(() => {
+  return rawUnreadCount.value + teacherStore.dueReminders.value.length;
+});
+const rawUnreadCount = ref(0);
 const notificationsList = ref<{ title: string; message: string; time: string }[]>([]);
 
 onMounted(() => {
   // Pre-fetch common data in background
   prefetchCommonData();
+
+  // Populate any due teacher reminders into notification list
+  teacherStore.dueReminders.value.forEach((r) => {
+    notificationsList.value.push({
+      title: `⏰ Eslatma: ${r.title}`,
+      message: `${r.date} ${r.time} — ${r.studentName ? r.studentName + ' (' + r.group + ')' : ''} ${r.note || ''}`,
+      time: r.time,
+    });
+  });
 
   // Listen for teacher notifications from Firebase
   const notifRef = fbRef(db, "notifications/teacher");
@@ -148,7 +166,7 @@ onMounted(() => {
     const val = snap.val();
     if (val) {
       notificationsList.value.unshift(val);
-      teacherUnreadCount.value++;
+      rawUnreadCount.value++;
     }
   });
 

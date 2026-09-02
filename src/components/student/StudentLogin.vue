@@ -57,9 +57,9 @@ async function submitLogin() {
   loading.value = true;
   errorMsg.value = "";
   try {
-    const success = await studentStore.loginStudent(loginUser.value.trim(), loginPass.value.trim());
-    if (!success) {
-      errorMsg.value = "Ism yoki parol xato kiritildi!";
+    const res = await studentStore.loginStudent(loginUser.value.trim(), loginPass.value.trim());
+    if (!res.success) {
+      errorMsg.value = res.message || "Ism yoki parol xato kiritildi!";
     }
   } catch (e: any) {
     errorMsg.value = "Tizimga ulanishda xatolik yuz berdi.";

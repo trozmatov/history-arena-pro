@@ -285,7 +285,7 @@
       Darsni Boshlash 🚀
     </button>
 
-    <!-- 4 SHORTCUT ACTIONS GRID -->
+    <!-- 4+1 SHORTCUT ACTIONS GRID -->
     <div class="grid grid-cols-2 gap-2.5 pt-1">
       <button
         type="button"
@@ -317,10 +317,10 @@
       </button>
       <button
         type="button"
-        @click="$emit('nav', 'chat')"
-        class="col-span-2 glass-card glass-card-hover flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold text-blue-300 border-blue-500/30"
+        @click="$emit('nav', 'students')"
+        class="col-span-2 glass-card glass-card-hover flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold text-indigo-300 border-indigo-500/30"
       >
-        <span class="text-lg">💬</span> <span>Umumiy Sinf Chati & AI</span>
+        <span class="text-lg">👨‍🎓</span> <span>O'quvchilar Boshqaruvi & CRM</span>
       </button>
     </div>
 
@@ -346,7 +346,7 @@ import DbImportModal from "./DbImportModal.vue";
 
 const emit = defineEmits<{
   (e: "startGame"): void;
-  (e: "nav", view: "attendance" | "leaderboard" | "stats" | "market" | "chat"): void;
+  (e: "nav", view: "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students"): void;
 }>();
 
 const teacherStore = useTeacherStore();

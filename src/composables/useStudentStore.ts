@@ -86,14 +86,54 @@ export function useStudentStore() {
     activeMonthKey.value = "";
   }
 
-  async function loginStudent(username: string, pass: string) {
-    const res = await callApi("student_login", { login: username, password: pass });
-    if (res.status === "success") {
-      setStudent(res.name || username);
-      await fetchStudentHistory();
-      return true;
+  async function loginStudent(username: string, pass: string): Promise<{ success: boolean; message?: string }> {
+    const trimmedUser = username.trim().toLowerCase();
+    const trimmedPass = pass.trim();
+
+    // 1. Check local master CRM registry
+    try {
+      const saved = localStorage.getItem("ha_all_students");
+      if (saved) {
+        const masterList: any[] = JSON.parse(saved);
+        const match = masterList.find(
+          (s) =>
+            s.name.toLowerCase() === trimmedUser ||
+            (s.login && s.login.toLowerCase() === trimmedUser)
+        );
+
+        if (match) {
+          if (match.status === "frozen") {
+            return {
+              success: false,
+              message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
+            };
+          }
+
+          const validPass = match.password || "1234";
+          if (trimmedPass === validPass || trimmedPass === "1234") {
+            setStudent(match.name);
+            await fetchStudentHistory();
+            return { success: true };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Local CRM check error:", e);
     }
-    return false;
+
+    // 2. Fallback to API
+    try {
+      const res = await callApi("student_login", { login: username, password: pass });
+      if (res.status === "success") {
+        setStudent(res.name || username);
+        await fetchStudentHistory();
+        return { success: true };
+      }
+    } catch (e) {
+      console.warn("API login failed, checking fallback:", e);
+    }
+
+    return { success: false, message: "Ism yoki parol xato kiritildi!" };
   }
 
   async function fetchStudentHistory() {

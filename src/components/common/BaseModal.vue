@@ -42,13 +42,19 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
-  modelValue: boolean;
-  title?: string;
-  showClose?: boolean;
-  closeOnBackdrop?: boolean;
-  customClass?: string;
-}>();
+withDefaults(
+  defineProps<{
+    modelValue: boolean;
+    title?: string;
+    showClose?: boolean;
+    closeOnBackdrop?: boolean;
+    customClass?: string;
+  }>(),
+  {
+    showClose: true,
+    closeOnBackdrop: true,
+  }
+);
 
 defineEmits<{
   (e: "update:modelValue", value: boolean): void;
