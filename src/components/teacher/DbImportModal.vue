@@ -7,7 +7,7 @@
     <div class="py-2 space-y-3">
       <!-- Quick Sync Bar -->
       <div class="flex items-center justify-between px-1">
-        <span class="text-[11px] text-slate-400">⚡️ Keshdan bir zumda o'qildi</span>
+        <span class="text-[11px] text-slate-400">⚡️ Faol guruhlar ro'yxati</span>
         <button
           type="button"
           @click="loadData(true)"
@@ -30,6 +30,16 @@
         <button @click="loadData(true)" class="block mx-auto mt-2 underline font-bold">Qayta urinish</button>
       </div>
 
+      <!-- Empty State -->
+      <div
+        v-else-if="Object.keys(normalGroups).length === 0"
+        class="py-8 text-center rounded-2xl border border-white/5 bg-black/20 space-y-2"
+      >
+        <div class="text-3xl">👥</div>
+        <div class="text-xs font-bold text-slate-300">Faol guruhlar topilmadi</div>
+        <p class="text-[11px] text-slate-500">Mavjud barcha guruhlar muzlatilgan yoki arxivlangan</p>
+      </div>
+
       <!-- Groups List -->
       <div v-else class="space-y-3">
         <div
@@ -41,7 +51,7 @@
             <div class="flex items-center gap-2">
               <span class="text-sm font-bold text-amber-400">{{ groupName }}</span>
               <span class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-slate-300">
-                {{ members.length }} ta
+                {{ members.length }} ta faol
               </span>
             </div>
             <div class="flex items-center gap-1.5">
@@ -77,30 +87,6 @@
                 class="h-4 w-4 rounded accent-blue-600 cursor-pointer"
               />
             </label>
-          </div>
-        </div>
-
-        <!-- Archive Section -->
-        <div v-if="archiveMembers.length > 0" class="rounded-2xl border border-red-500/30 bg-red-500/10 p-3">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-bold text-red-400 flex items-center gap-1">
-              📦 Arxivlanganlar ({{ archiveMembers.length }})
-            </span>
-          </div>
-          <div class="space-y-1">
-            <div
-              v-for="name in archiveMembers"
-              :key="name"
-              class="flex items-center justify-between py-1.5 border-b border-red-500/20 text-xs"
-            >
-              <span class="text-slate-400 line-through">{{ name }}</span>
-              <button
-                @click="restore(name)"
-                class="rounded-lg bg-red-500/20 border border-red-500/30 px-2 py-0.5 text-[11px] font-bold text-red-300 hover:bg-red-500/40"
-              >
-                Tiklash
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -139,6 +125,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "update:modelValue", val: boolean): void;
+  (e: "imported", count: number): void;
 }>();
 
 const teacherStore = useTeacherStore();
@@ -149,17 +136,57 @@ const groupsData = ref<Record<string, string[]>>({});
 const selectedNames = ref<string[]>([]);
 const openGroups = ref<Record<string, boolean>>({});
 
+// Filter out archive groups, completely frozen groups, and frozen individual students
 const normalGroups = computed(() => {
   const result: Record<string, string[]> = {};
+
+  // 1. Build lookup of frozen students from registry
+  const frozenStudentNames = new Set(
+    teacherStore.allStudentsRegistry.value
+      .filter((s) => s.status === "frozen")
+      .map((s) => s.name.toLowerCase().trim())
+  );
+
+  // 2. Build group freeze stats from registry
+  const groupStats: Record<string, { total: number; frozen: number }> = {};
+  teacherStore.allStudentsRegistry.value.forEach((s) => {
+    const g = (s.group || "").toLowerCase().trim();
+    if (g) {
+      if (!groupStats[g]) groupStats[g] = { total: 0, frozen: 0 };
+      groupStats[g].total++;
+      if (s.status === "frozen") groupStats[g].frozen++;
+    }
+  });
+
   for (const g in groupsData.value) {
-    if (g !== "Arxiv") {
-      result[g] = groupsData.value[g];
+    const gTrimmed = g.trim();
+    const gLower = gTrimmed.toLowerCase();
+
+    // Skip archive groups
+    if (gLower === "arxiv" || gLower === "archive" || gLower.includes("arxiv")) {
+      continue;
+    }
+
+    // Skip groups where all registered students are frozen
+    const stat = groupStats[gLower];
+    if (stat && stat.total > 0 && stat.frozen === stat.total) {
+      continue;
+    }
+
+    const members = groupsData.value[g] || [];
+    // Exclude frozen students
+    const activeMembers = members.filter(
+      (m) => !frozenStudentNames.has(m.toLowerCase().trim())
+    );
+
+    // Only include group if it has active students
+    if (activeMembers.length > 0) {
+      result[gTrimmed] = activeMembers;
     }
   }
+
   return result;
 });
-
-const archiveMembers = computed(() => groupsData.value["Arxiv"] || []);
 
 watch(
   () => props.modelValue,
@@ -180,7 +207,7 @@ async function loadData(force = false) {
     const res = await callApi("get_student_list", {}, { forceRefresh: force });
     if (res.status === "success") {
       groupsData.value = res.groups || {};
-      const first = Object.keys(groupsData.value)[0];
+      const first = Object.keys(normalGroups.value)[0];
       if (first && Object.keys(openGroups.value).length === 0) {
         openGroups.value[first] = true;
       }
@@ -215,18 +242,9 @@ function toggleSelectAllGroup(members: string[]) {
   }
 }
 
-async function restore(name: string) {
-  if (!confirm(`${name} arxivdan tiklansinmi?`)) return;
-  try {
-    await callApi("restore_student", { name });
-    await loadData();
-  } catch (e) {
-    alert("Tiklashda xatolik!");
-  }
-}
-
 function confirmAdd() {
   teacherStore.addFromDb(selectedNames.value, props.targetTeam || "standard");
+  emit("imported", selectedNames.value.length);
   emit("update:modelValue", false);
 }
 </script>

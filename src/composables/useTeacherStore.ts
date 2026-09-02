@@ -281,10 +281,12 @@ export function useTeacherStore() {
 
   function addFromDb(names: string[], targetTeam: string = "standard") {
     names.forEach((name) => {
-      const existing = students.value.find((s) => s.name === name);
       const reg = allStudentsRegistry.value.find((s) => s.name === name);
       const status = reg?.status || "active";
+      if (status === "frozen") return;
+
       const group = reg?.group || "";
+      const existing = students.value.find((s) => s.name === name);
 
       if (existing) {
         existing.team = targetTeam;
