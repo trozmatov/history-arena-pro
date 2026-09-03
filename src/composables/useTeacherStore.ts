@@ -115,6 +115,20 @@ export interface TeacherReminder {
   note?: string;
 }
 
+export interface UnifiedReminder {
+  id: string;
+  source: "student" | "group";
+  title: string;
+  message: string;
+  date: string;
+  time: string;
+  group?: string;
+  studentName?: string;
+  completed: boolean;
+  isDue: boolean;
+  createdAt?: number;
+}
+
 export const BOOK_LIST = [
   "6-Tarix",
   "7-O'zT",
@@ -354,24 +368,75 @@ export function useTeacherStore() {
     return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
   });
 
-  // Reminders computations
-  const activeRemindersCount = computed(
-    () => reminders.value.filter((r) => !r.completed).length
-  );
-
-  const dueReminders = computed(() => {
+  // Unified Reminders computations (Combining Individual Student + Group Reminders)
+  const allUnifiedReminders = computed<UnifiedReminder[]>(() => {
+    const list: UnifiedReminder[] = [];
     const now = new Date();
     const todayStr = now.toISOString().split("T")[0];
     const curTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(
       now.getMinutes()
     ).padStart(2, "0")}`;
 
-    return reminders.value.filter((r) => {
-      if (r.completed) return false;
-      if (r.date < todayStr) return true;
-      if (r.date === todayStr && r.time <= curTimeStr) return true;
-      return false;
+    // 1. Individual student reminders
+    reminders.value.forEach((r) => {
+      const isDue =
+        !r.completed &&
+        (r.date < todayStr || (r.date === todayStr && r.time <= curTimeStr));
+      list.push({
+        id: r.id,
+        source: "student",
+        title: r.title,
+        message: `${
+          r.studentName ? r.studentName + (r.group ? " (" + r.group + ")" : "") : ""
+        } ${r.note ? "• " + r.note : ""}`,
+        date: r.date,
+        time: r.time,
+        group: r.group,
+        studentName: r.studentName,
+        completed: !!r.completed,
+        isDue,
+        createdAt: r.createdAt || 0,
+      });
     });
+
+    // 2. Group reminders from groupsMeta
+    Object.values(groupsMeta.value).forEach((gMeta) => {
+      if (gMeta.reminders && Array.isArray(gMeta.reminders)) {
+        gMeta.reminders.forEach((gr) => {
+          const isDue =
+            !gr.completed &&
+            (gr.date < todayStr ||
+              (gr.date === todayStr && (gr.time || "14:00") <= curTimeStr));
+          list.push({
+            id: gr.id,
+            source: "group",
+            title: `«${gMeta.name}» Guruhi: ${gr.text}`,
+            message: `Guruh eslatmasi / Reja • ${gMeta.subject || "Tarix"}`,
+            date: gr.date,
+            time: gr.time || "14:00",
+            group: gMeta.name,
+            completed: !!gr.completed,
+            isDue,
+            createdAt: gr.createdAt || 0,
+          });
+        });
+      }
+    });
+
+    // Sort: Due first, then pending by date/time, then completed
+    return list.sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      if (a.isDue !== b.isDue) return a.isDue ? -1 : 1;
+      return (b.date + b.time).localeCompare(a.date + a.time);
+    });
+  });
+
+  const activeRemindersCount = computed(
+    () => allUnifiedReminders.value.filter((r) => !r.completed).length
+  );
+
+  const dueReminders = computed(() => {
+    return allUnifiedReminders.value.filter((r) => r.isDue);
   });
 
   function setTeacher(name: string) {
@@ -1056,6 +1121,22 @@ export function useTeacherStore() {
     saveGroupMeta(meta);
   }
 
+  function toggleCompleteUnifiedReminder(reminder: UnifiedReminder) {
+    if (reminder.source === "group" && reminder.group) {
+      toggleCompleteGroupReminder(reminder.group, reminder.id);
+    } else {
+      toggleCompleteReminder(reminder.id);
+    }
+  }
+
+  function deleteUnifiedReminder(reminder: UnifiedReminder) {
+    if (reminder.source === "group" && reminder.group) {
+      deleteGroupReminder(reminder.group, reminder.id);
+    } else {
+      deleteReminder(reminder.id);
+    }
+  }
+
   function resetSession() {
     const players = getActivePlayers();
     players.forEach((s) => {
@@ -1083,8 +1164,11 @@ export function useTeacherStore() {
     reminders,
     groupsMeta,
     lessonSessions,
+    allUnifiedReminders,
     activeRemindersCount,
     dueReminders,
+    toggleCompleteUnifiedReminder,
+    deleteUnifiedReminder,
     currentMode,
     team1Name,
     team2Name,

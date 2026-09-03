@@ -77,22 +77,134 @@
     <!-- Teacher Notifications Modal -->
     <BaseModal
       v-model="showNotifModal"
-      title="🔔 Bildirishnomalar"
+      title="🔔 Bildirishnomalar va Eslatmalar"
+      custom-class="max-w-xl w-full"
     >
-      <div class="space-y-2 py-2">
-        <div v-if="notificationsList.length === 0" class="py-8 text-center text-xs text-slate-500">
-          Yangi bildirishnomalar yo'q
+      <div class="space-y-3 py-1">
+        <!-- Filter Tabs: Barchasi, Eslatmalar, Xabarlar -->
+        <div class="flex rounded-2xl bg-black/50 p-1 border border-white/10 text-xs">
+          <button
+            type="button"
+            @click="notifTab = 'all'"
+            class="flex-1 rounded-xl py-1.5 font-bold transition text-center"
+            :class="notifTab === 'all' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+          >
+            Hammasi ({{ allCombinedNotifs.length }})
+          </button>
+          <button
+            type="button"
+            @click="notifTab = 'reminders'"
+            class="flex-1 rounded-xl py-1.5 font-bold transition text-center"
+            :class="notifTab === 'reminders' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+          >
+            ⏰ Eslatmalar ({{ teacherStore.allUnifiedReminders.value.length }})
+          </button>
+          <button
+            type="button"
+            @click="notifTab = 'system'"
+            class="flex-1 rounded-xl py-1.5 font-bold transition text-center"
+            :class="notifTab === 'system' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+          >
+            📢 Tizim ({{ firebaseNotifs.length }})
+          </button>
         </div>
-        <div
-          v-for="(n, idx) in notificationsList"
-          :key="idx"
-          class="rounded-2xl border border-white/10 bg-black/40 p-3 text-xs space-y-1"
-        >
-          <div class="font-bold text-white flex items-center justify-between">
-            <span>{{ n.title }}</span>
-            <span class="text-[10px] text-slate-400">{{ n.time }}</span>
+
+        <!-- Empty State -->
+        <div v-if="filteredCombinedNotifs.length === 0" class="py-12 text-center rounded-2xl border border-white/5 bg-black/20 space-y-2">
+          <div class="text-3xl">🔔</div>
+          <div class="text-xs font-bold text-slate-300">Yangi bildirishnoma yoki eslatmalar yo'q</div>
+          <p class="text-[11px] text-slate-500">O'quvchilar yoki guruhlarga kiritilgan barcha eslatmalar bu yerda jamlanadi</p>
+        </div>
+
+        <!-- Notifications & Reminders List -->
+        <div v-else class="space-y-2.5 max-h-[420px] overflow-y-auto pr-1 custom-scrollbar">
+          <div
+            v-for="(n, idx) in filteredCombinedNotifs"
+            :key="idx"
+            class="rounded-2xl border p-3.5 text-xs space-y-2 transition"
+            :class="
+              n.isDue
+                ? 'border-red-500/40 bg-red-950/20'
+                : n.completed
+                ? 'border-white/5 bg-black/20 opacity-60'
+                : n.source === 'group'
+                ? 'border-purple-500/30 bg-purple-950/20'
+                : n.source === 'student'
+                ? 'border-blue-500/30 bg-blue-950/20'
+                : 'border-white/10 bg-black/40'
+            "
+          >
+            <div class="flex items-start justify-between gap-2">
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <!-- Source badge -->
+                  <span
+                    v-if="n.source === 'group'"
+                    class="rounded-lg bg-purple-500/20 border border-purple-500/40 px-2 py-0.5 text-[10px] font-black text-purple-300"
+                  >
+                    👥 Guruh Eslatmasi
+                  </span>
+                  <span
+                    v-else-if="n.source === 'student'"
+                    class="rounded-lg bg-blue-500/20 border border-blue-500/40 px-2 py-0.5 text-[10px] font-black text-blue-300"
+                  >
+                    👤 O'quvchi Eslatmasi
+                  </span>
+                  <span
+                    v-else
+                    class="rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-black text-emerald-300"
+                  >
+                    📢 Tizim Xabari
+                  </span>
+
+                  <!-- Due badge -->
+                  <span v-if="n.isDue" class="rounded-lg bg-red-500/20 border border-red-500/40 px-2 py-0.5 text-[10px] font-black text-red-300 animate-pulse">
+                    ⚠️ Muddati keldi!
+                  </span>
+
+                  <!-- Title -->
+                  <span class="font-extrabold text-sm text-white" :class="{ 'line-through text-slate-400': n.completed }">
+                    {{ n.title }}
+                  </span>
+                </div>
+
+                <p v-if="n.message" class="text-xs text-slate-300 pt-0.5">
+                  {{ n.message }}
+                </p>
+              </div>
+
+              <!-- Time & Date -->
+              <div class="text-right shrink-0">
+                <div class="text-[11px] font-bold text-slate-400">📅 {{ n.date }}</div>
+                <div v-if="n.time" class="text-[10px] font-mono text-slate-500">⏰ {{ n.time }}</div>
+              </div>
+            </div>
+
+            <!-- Action buttons for reminders -->
+            <div v-if="n.isReminder" class="flex items-center justify-between border-t border-white/10 pt-2 text-xs">
+              <span class="text-[10px] text-slate-400">
+                {{ n.completed ? '✅ Bajarilgan deb belgilangan' : '⏳ Kutilmoqda' }}
+              </span>
+
+              <div class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  @click="teacherStore.toggleCompleteUnifiedReminder(n.rawReminder)"
+                  class="rounded-xl px-2.5 py-1 text-[11px] font-bold transition shadow"
+                  :class="n.completed ? 'bg-white/10 text-slate-300 hover:bg-white/20' : 'bg-emerald-600 text-white hover:bg-emerald-500'"
+                >
+                  {{ n.completed ? '↩️ Qaytarish' : '✅ Bajarildi' }}
+                </button>
+                <button
+                  type="button"
+                  @click="teacherStore.deleteUnifiedReminder(n.rawReminder)"
+                  class="rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 px-2 py-1 text-[11px] hover:bg-red-500/30"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
           </div>
-          <p class="text-slate-300">{{ n.message }}</p>
         </div>
       </div>
     </BaseModal>
@@ -121,7 +233,7 @@ import StudentLogin from "./components/student/StudentLogin.vue";
 import StudentProfile from "./components/student/StudentProfile.vue";
 
 // Stores
-import { useTeacherStore } from "./composables/useTeacherStore";
+import { useTeacherStore, UnifiedReminder } from "./composables/useTeacherStore";
 import { useStudentStore } from "./composables/useStudentStore";
 import { db, ref as fbRef, onChildAdded, onChildChanged, onChildRemoved } from "./services/firebase";
 
@@ -141,31 +253,80 @@ const isWideView = computed(() => {
 });
 
 const showNotifModal = ref(false);
-const teacherUnreadCount = computed(() => {
-  return rawUnreadCount.value + teacherStore.dueReminders.value.length;
-});
+const notifTab = ref<"all" | "reminders" | "system">("all");
 const rawUnreadCount = ref(0);
-const notificationsList = ref<{ title: string; message: string; time: string }[]>([]);
+const firebaseNotifs = ref<any[]>([]);
+
+// Combined notifications computed from Unified Reminders (Student + Group) + Firebase System Notifs
+const allCombinedNotifs = computed(() => {
+  const list: any[] = [];
+
+  // 1. Unified reminders (Both student and group)
+  teacherStore.allUnifiedReminders.value.forEach((r) => {
+    list.push({
+      id: r.id,
+      isReminder: true,
+      rawReminder: r,
+      source: r.source,
+      title: r.title,
+      message: r.message,
+      date: r.date,
+      time: r.time,
+      completed: r.completed,
+      isDue: r.isDue,
+      createdAt: r.createdAt || 0,
+    });
+  });
+
+  // 2. Firebase system notifications
+  firebaseNotifs.value.forEach((fn) => {
+    list.push({
+      id: fn.id || "fb-" + Math.random(),
+      isReminder: false,
+      source: "system",
+      title: fn.title || "Tizim Xabari",
+      message: fn.message || fn.text || "",
+      date: fn.date || new Date().toISOString().split("T")[0],
+      time: fn.time || "12:00",
+      completed: false,
+      isDue: false,
+      createdAt: fn.createdAt || 0,
+    });
+  });
+
+  return list.sort((a, b) => {
+    if (a.isDue !== b.isDue) return a.isDue ? -1 : 1;
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    return (b.date + (b.time || "")).localeCompare(a.date + (a.time || ""));
+  });
+});
+
+const filteredCombinedNotifs = computed(() => {
+  if (notifTab.value === "reminders") {
+    return allCombinedNotifs.value.filter((n) => n.isReminder);
+  }
+  if (notifTab.value === "system") {
+    return allCombinedNotifs.value.filter((n) => !n.isReminder);
+  }
+  return allCombinedNotifs.value;
+});
+
+const teacherUnreadCount = computed(() => {
+  const dueCount = teacherStore.dueReminders.value.length;
+  const activeCount = teacherStore.allUnifiedReminders.value.filter((r) => !r.completed).length;
+  return rawUnreadCount.value + (dueCount > 0 ? dueCount : activeCount);
+});
 
 onMounted(() => {
   // Pre-fetch common data in background
   prefetchCommonData();
-
-  // Populate any due teacher reminders into notification list
-  teacherStore.dueReminders.value.forEach((r) => {
-    notificationsList.value.push({
-      title: `⏰ Eslatma: ${r.title}`,
-      message: `${r.date} ${r.time} — ${r.studentName ? r.studentName + ' (' + r.group + ')' : ''} ${r.note || ''}`,
-      time: r.time,
-    });
-  });
 
   // Listen for teacher notifications from Firebase
   const notifRef = fbRef(db, "notifications/teacher");
   onChildAdded(notifRef, (snap: any) => {
     const val = snap.val();
     if (val) {
-      notificationsList.value.unshift(val);
+      firebaseNotifs.value.unshift(val);
       rawUnreadCount.value++;
     }
   });
