@@ -667,6 +667,7 @@ function navMonth(dir: number) {
 const uniqueGroups = computed(() => {
   const set = new Set<string>();
   rawLogs.value.forEach((l) => {
+    if (teacherStore.isStudentFrozen(l.name)) return;
     if (l.group && l.group !== "Arxiv") set.add(l.group);
   });
   return [...set].sort();
@@ -707,6 +708,8 @@ const allStudentRows = computed<StudentRow[]>(() => {
   const studentsMap: Record<string, { group: string; records: Record<string, any>; reasons: Record<string, any> }> = {};
 
   rawLogs.value.forEach((l) => {
+    // Exclude frozen students completely from attendance matrix
+    if (teacherStore.isStudentFrozen(l.name)) return;
     if (getMonthFromDate(l.date) !== targetM) return;
     const g = l.group || "Boshqa";
     if (selectedGroup.value !== "all" && g !== selectedGroup.value) return;
@@ -851,7 +854,12 @@ function saveStatusEdit() {
 
 // 2. Open Manual Attendance Modal
 const availableManualGroups = computed(() => {
-  const list = Object.keys(allGroupsDict.value).filter((g) => g !== "Arxiv");
+  const list = Object.keys(allGroupsDict.value).filter((g) => {
+    if (g === "Arxiv") return false;
+    const members = allGroupsDict.value[g] || [];
+    // Check if group has any non-frozen student
+    return members.some((name) => !teacherStore.isStudentFrozen(name));
+  });
   return list.length > 0 ? list : uniqueGroups.value;
 });
 
@@ -879,10 +887,11 @@ async function openManualAttendanceModal() {
 function onManualGroupChange() {
   const g = manualGroup.value;
   const list = allGroupsDict.value[g] || [];
-  manualStudentsList.value = list;
+  // Exclude frozen students from manual attendance list
+  manualStudentsList.value = list.filter((name) => !teacherStore.isStudentFrozen(name));
 
   const st: Record<string, "Keldi" | "Sababsiz" | "Sababli"> = {};
-  list.forEach((name) => {
+  manualStudentsList.value.forEach((name) => {
     st[name] = "Keldi"; // Default to present
   });
   manualStatuses.value = st;

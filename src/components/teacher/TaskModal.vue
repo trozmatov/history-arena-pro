@@ -2,7 +2,7 @@
   <BaseModal
     :model-value="modelValue"
     @update:model-value="$emit('update:modelValue', $event)"
-    :title="targetIndex === -1 ? '📚 Umumiy vazifa belgilash' : '✏️ O\'quvchiga vazifa belgilash'"
+    :title="!targetStudent ? '📚 Umumiy vazifa belgilash' : `✏️ ${targetStudent} uchun vazifa belgilash`"
   >
     <div class="space-y-4 py-2">
       <div>
@@ -66,7 +66,7 @@ import { BOOK_LIST, useTeacherStore } from "../../composables/useTeacherStore";
 
 const props = defineProps<{
   modelValue: boolean;
-  targetIndex: number; // -1 for global
+  targetStudent?: string; // empty for global
 }>();
 
 const emit = defineEmits<{
@@ -81,11 +81,13 @@ watch(
   () => props.modelValue,
   (open) => {
     if (open) {
-      if (props.targetIndex === -1) {
+      if (!props.targetStudent) {
         selectedBook.value = teacherStore.globalBook.value;
         topicInput.value = teacherStore.globalTopic.value;
       } else {
-        const s = teacherStore.students.value[props.targetIndex];
+        const s = teacherStore.students.value.find(
+          (item) => item.name.toLowerCase().trim() === props.targetStudent?.toLowerCase().trim()
+        );
         selectedBook.value = s?.book || "";
         topicInput.value = s?.topic || "";
       }
@@ -94,10 +96,10 @@ watch(
 );
 
 function save() {
-  if (props.targetIndex === -1) {
+  if (!props.targetStudent) {
     teacherStore.setGlobalTask(selectedBook.value, topicInput.value);
   } else {
-    teacherStore.setIndividualTask(props.targetIndex, selectedBook.value, topicInput.value);
+    teacherStore.setIndividualTask(props.targetStudent, selectedBook.value, topicInput.value);
   }
   emit("update:modelValue", false);
 }

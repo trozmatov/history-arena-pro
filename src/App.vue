@@ -172,20 +172,60 @@ onMounted(() => {
 
   // Listen for live duels
   const duelsRef = fbRef(db, "duels");
-  onChildAdded(duelsRef, (snap: any) => {
-    const d = snap.val();
+  const handleLiveDuel = (d: any) => {
     if (d && d.type === "live" && d.status === "accepted") {
+      if (teacherStore.isStudentFrozen(d.challenger) || teacherStore.isStudentFrozen(d.target)) {
+        return;
+      }
       teacherStore.suggestedLiveDuel.value = d;
     }
+  };
+
+  onChildAdded(duelsRef, (snap: any) => {
+    handleLiveDuel(snap.val());
   });
   onChildChanged(duelsRef, (snap: any) => {
-    const d = snap.val();
-    if (d && d.type === "live" && d.status === "accepted") {
-      teacherStore.suggestedLiveDuel.value = d;
-    }
+    handleLiveDuel(snap.val());
   });
   onChildRemoved(duelsRef, () => {
     teacherStore.suggestedLiveDuel.value = null;
+  });
+
+  // Realtime Cloud synchronization for frozen students
+  const frozenRef = fbRef(db, "frozen_students");
+  onChildAdded(frozenRef, (snap: any) => {
+    const val = snap.val();
+    if (val && val.name) {
+      const target = teacherStore.allStudentsRegistry.value.find(
+        (s) => s.name.toLowerCase().trim() === val.name.toLowerCase().trim()
+      );
+      if (target) {
+        target.status = "frozen";
+      } else {
+        teacherStore.saveStudent({
+          name: val.name,
+          group: val.group || "Umumiy",
+          status: "frozen",
+        });
+      }
+      // Eject from active game session if present
+      teacherStore.students.value = teacherStore.students.value.filter(
+        (s) => s.name.toLowerCase().trim() !== val.name.toLowerCase().trim()
+      );
+    }
+  });
+
+  onChildRemoved(frozenRef, (snap: any) => {
+    const val = snap.val();
+    const studentName = val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."));
+    if (studentName) {
+      const target = teacherStore.allStudentsRegistry.value.find(
+        (s) => s.name.toLowerCase().trim() === studentName.toLowerCase().trim()
+      );
+      if (target) {
+        target.status = "active";
+      }
+    }
   });
 });
 </script>

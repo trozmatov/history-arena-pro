@@ -45,7 +45,22 @@ const monthNames = [
 ];
 
 export function useStudentStore() {
-  const isStudentLoggedIn = computed(() => !!studentName.value);
+  const isStudentLoggedIn = computed(() => {
+    if (!studentName.value) return false;
+    try {
+      const saved = localStorage.getItem("ha_all_students");
+      if (saved) {
+        const masterList: any[] = JSON.parse(saved);
+        const match = masterList.find(
+          (s) => s.name.toLowerCase() === studentName.value.toLowerCase()
+        );
+        if (match?.status === "frozen") {
+          return false;
+        }
+      }
+    } catch (e) {}
+    return true;
+  });
 
   const activeMonthData = computed(() => {
     if (!activeMonthKey.value || !groupedMonths.value[activeMonthKey.value]) {
@@ -125,7 +140,25 @@ export function useStudentStore() {
     try {
       const res = await callApi("student_login", { login: username, password: pass });
       if (res.status === "success") {
-        setStudent(res.name || username);
+        const studentResolvedName = res.name || username;
+        // Check if student is frozen in CRM registry
+        try {
+          const saved = localStorage.getItem("ha_all_students");
+          if (saved) {
+            const masterList: any[] = JSON.parse(saved);
+            const match = masterList.find(
+              (s) => s.name.toLowerCase() === studentResolvedName.toLowerCase()
+            );
+            if (match?.status === "frozen") {
+              return {
+                success: false,
+                message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
+              };
+            }
+          }
+        } catch (e) {}
+
+        setStudent(studentResolvedName);
         await fetchStudentHistory();
         return { success: true };
       }

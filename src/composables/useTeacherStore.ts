@@ -1,6 +1,28 @@
 import { ref, computed, watch } from "vue";
 import { callApi } from "../services/api";
 import { soundManager, fireConfetti, fireVictoryConfetti } from "./useAudio";
+import { db, ref as fbRef, set as fbSet, remove as fbRemove } from "../services/firebase";
+
+export function sanitizeFbKey(name: string): string {
+  return encodeURIComponent(name.toLowerCase().trim()).replace(/\./g, "%2E");
+}
+
+export function syncFreezeToCloud(studentName: string, isFrozen: boolean, group: string = "") {
+  try {
+    const key = sanitizeFbKey(studentName);
+    if (isFrozen) {
+      fbSet(fbRef(db, `frozen_students/${key}`), {
+        name: studentName,
+        group: group || "",
+        frozenAt: Date.now(),
+      }).catch((e: any) => console.warn("Firebase sync error:", e));
+    } else {
+      fbRemove(fbRef(db, `frozen_students/${key}`)).catch((e: any) => console.warn("Firebase sync error:", e));
+    }
+  } catch (e) {
+    console.warn("syncFreezeToCloud error:", e);
+  }
+}
 
 export interface Student {
   id?: string;
@@ -31,6 +53,53 @@ export interface Student {
   totalTests?: number;
   avgAccuracy?: number;
   attendanceStats?: { present: number; excused: number; unexcused: number };
+}
+
+export interface GroupReminder {
+  id: string;
+  text: string;
+  date: string;
+  time: string;
+  completed: boolean;
+  createdAt: number;
+}
+
+export interface GroupMeta {
+  name: string;
+  days: string[]; // ["Du", "Chor", "Juma"]
+  time: string; // "14:00 - 15:30"
+  room?: string; // "3-xona"
+  subject?: string; // "O'zbekiston Tarixi"
+  note?: string; // General group notes / goals
+  paymentFee?: number; // e.g. 300000 (so'm)
+  reminders?: GroupReminder[];
+  studentPayments?: Record<string, { status: "paid" | "pending" | "debt"; month: string; paidDate?: string; amount?: number }>;
+}
+
+export interface LessonSessionStudentResult {
+  name: string;
+  correct: number;
+  total: number;
+  percent: number;
+  strikes?: number;
+  penalties?: number;
+  coins?: number;
+  attStatus?: string; // "Keldi" | "Sababsiz" | "Sababli"
+}
+
+export interface LessonSessionRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  teacher: string;
+  group: string;
+  mode: string; // "standard" | "Duel" | "Jamoalar" | "manual_test"
+  book?: string;
+  topic?: string;
+  maxQuestions?: number;
+  avgPercent: number;
+  studentResults: LessonSessionStudentResult[];
+  createdAt: number;
 }
 
 export interface TeacherReminder {
@@ -129,6 +198,69 @@ watch(
   { deep: true }
 );
 
+function loadInitialGroupsMeta(): Record<string, GroupMeta> {
+  const saved = localStorage.getItem("ha_groups_meta");
+  if (!saved) return {};
+  try {
+    return JSON.parse(saved);
+  } catch {
+    return {};
+  }
+}
+
+// Group Meta Database (Schedules, rooms, notes, reminders, fees)
+const groupsMeta = ref<Record<string, GroupMeta>>(loadInitialGroupsMeta());
+
+watch(
+  groupsMeta,
+  (newVal) => {
+    localStorage.setItem("ha_groups_meta", JSON.stringify(newVal));
+  },
+  { deep: true }
+);
+
+export function syncGroupMetaToCloud(meta: GroupMeta) {
+  try {
+    const key = sanitizeFbKey(meta.name);
+    fbSet(fbRef(db, `groups_meta/${key}`), meta).catch((e: any) =>
+      console.warn("Firebase group sync error:", e)
+    );
+  } catch (e) {
+    console.warn("syncGroupMetaToCloud error:", e);
+  }
+}
+
+function loadInitialLessonSessions(): LessonSessionRecord[] {
+  const saved = localStorage.getItem("ha_lesson_sessions");
+  if (!saved) return [];
+  try {
+    return JSON.parse(saved);
+  } catch {
+    return [];
+  }
+}
+
+// Lesson & Test History Database
+const lessonSessions = ref<LessonSessionRecord[]>(loadInitialLessonSessions());
+
+watch(
+  lessonSessions,
+  (newVal) => {
+    localStorage.setItem("ha_lesson_sessions", JSON.stringify(newVal));
+  },
+  { deep: true }
+);
+
+export function syncLessonSessionToCloud(session: LessonSessionRecord) {
+  try {
+    fbSet(fbRef(db, `lesson_sessions/${session.id}`), session).catch((e: any) =>
+      console.warn("Firebase session sync error:", e)
+    );
+  } catch (e) {
+    console.warn("syncLessonSessionToCloud error:", e);
+  }
+}
+
 const currentMode = ref<"standard" | "Duel" | "Jamoalar">("standard");
 const team1Name = ref<string>("🔴 Qizillar Jamoasi");
 const team2Name = ref<string>("🔵 Ko'klar Jamoasi");
@@ -179,19 +311,27 @@ watch(
 export function useTeacherStore() {
   const isTeacherLoggedIn = computed(() => !!teacherName.value);
 
+  const isStudentFrozen = (name: string): boolean => {
+    if (!name) return false;
+    const target = allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === name.toLowerCase().trim()
+    );
+    return target?.status === "frozen";
+  };
+
   const standardStudents = computed(() =>
     students.value.filter(
-      (s) => (!s.team || s.team === "standard") && s.status !== "frozen"
+      (s) => (!s.team || s.team === "standard") && s.status !== "frozen" && !isStudentFrozen(s.name)
     )
   );
   const teamAStudents = computed(() =>
-    students.value.filter((s) => s.team === "A" && s.status !== "frozen")
+    students.value.filter((s) => s.team === "A" && s.status !== "frozen" && !isStudentFrozen(s.name))
   );
   const teamBStudents = computed(() =>
-    students.value.filter((s) => s.team === "B" && s.status !== "frozen")
+    students.value.filter((s) => s.team === "B" && s.status !== "frozen" && !isStudentFrozen(s.name))
   );
   const duelStudents = computed(() =>
-    students.value.filter((s) => s.team === "Duel" && s.status !== "frozen")
+    students.value.filter((s) => s.team === "Duel" && s.status !== "frozen" && !isStudentFrozen(s.name))
   );
 
   const currentStandardStudent = computed(() => {
@@ -253,7 +393,10 @@ export function useTeacherStore() {
     if (!trimmed) return;
 
     // Check if in master registry to inherit group/status
-    const reg = allStudentsRegistry.value.find((s) => s.name === trimmed);
+    const reg = allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === trimmed.toLowerCase());
+    if (reg?.status === "frozen" || isStudentFrozen(trimmed)) {
+      return;
+    }
     const status = reg?.status || "active";
     const group = reg?.group || "";
 
@@ -296,13 +439,22 @@ export function useTeacherStore() {
     }
   }
 
-  function removeStudent(index: number) {
-    students.value.splice(index, 1);
+  function removeStudent(target: number | string) {
+    if (typeof target === "string") {
+      students.value = students.value.filter(
+        (s) => s.name.toLowerCase().trim() !== target.toLowerCase().trim()
+      );
+    } else {
+      students.value.splice(target, 1);
+    }
   }
 
   function addFromDb(names: string[], targetTeam: string = "standard") {
     names.forEach((name) => {
-      const reg = allStudentsRegistry.value.find((s) => s.name === name);
+      const trimmed = name.trim();
+      if (!trimmed || isStudentFrozen(trimmed)) return;
+
+      const reg = allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === trimmed.toLowerCase());
       const status = reg?.status || "active";
       if (status === "frozen") return;
 
@@ -397,14 +549,23 @@ export function useTeacherStore() {
 
   function toggleFreezeStudent(studentName: string) {
     const target = allStudentsRegistry.value.find(
-      (s) => s.name === studentName
+      (s) => s.name.toLowerCase().trim() === studentName.toLowerCase().trim()
     );
     if (target) {
       target.status = target.status === "frozen" ? "active" : "frozen";
-      // Sync session
-      const inSession = students.value.find((s) => s.name === studentName);
-      if (inSession) {
-        inSession.status = target.status;
+      const isFrozen = target.status === "frozen";
+      syncFreezeToCloud(target.name, isFrozen, target.group || "");
+
+      // If frozen, immediately eject from active game session
+      if (isFrozen) {
+        students.value = students.value.filter(
+          (s) => s.name.toLowerCase().trim() !== studentName.toLowerCase().trim()
+        );
+      } else {
+        const inSession = students.value.find(
+          (s) => s.name.toLowerCase().trim() === studentName.toLowerCase().trim()
+        );
+        if (inSession) inSession.status = "active";
       }
     }
   }
@@ -414,14 +575,19 @@ export function useTeacherStore() {
     allStudentsRegistry.value.forEach((s) => {
       if (s.group === groupName) {
         s.status = newStatus;
+        syncFreezeToCloud(s.name, freeze, s.group || "");
       }
     });
-    // Sync session
-    students.value.forEach((s) => {
-      if (s.group === groupName) {
-        s.status = newStatus;
-      }
-    });
+    // If frozen, immediately eject all group members from active game session
+    if (freeze) {
+      students.value = students.value.filter((s) => s.group !== groupName);
+    } else {
+      students.value.forEach((s) => {
+        if (s.group === groupName) {
+          s.status = "active";
+        }
+      });
+    }
   }
 
   function transferStudentGroup(studentName: string, newGroup: string) {
@@ -498,10 +664,18 @@ export function useTeacherStore() {
     });
   }
 
-  function setIndividualTask(index: number, book: string, topic: string) {
-    if (students.value[index]) {
-      students.value[index].book = book;
-      students.value[index].topic = topic;
+  function setIndividualTask(target: number | string, book: string, topic: string) {
+    let s: Student | undefined;
+    if (typeof target === "string") {
+      s = students.value.find(
+        (item) => item.name.toLowerCase().trim() === target.toLowerCase().trim()
+      );
+    } else {
+      s = students.value[target];
+    }
+    if (s) {
+      s.book = book;
+      s.topic = topic;
     }
   }
 
@@ -643,18 +817,20 @@ export function useTeacherStore() {
   }
 
   function getActivePlayers(): Student[] {
+    let list: Student[] = [];
     if (currentMode.value === "standard") {
-      return standardStudents.value;
+      list = standardStudents.value;
+    } else if (currentMode.value === "Duel") {
+      list = duelStudents.value;
+    } else {
+      list = [...teamAStudents.value, ...teamBStudents.value];
     }
-    if (currentMode.value === "Duel") {
-      return duelStudents.value;
-    }
-    return [...teamAStudents.value, ...teamBStudents.value];
+    return list.filter((s) => !isStudentFrozen(s.name));
   }
 
   function checkZeroScorers(): Student[] {
     const players = getActivePlayers();
-    zeroScorers.value = players.filter((s) => !s.total || s.total === 0);
+    zeroScorers.value = players.filter((s) => (!s.total || s.total === 0) && !isStudentFrozen(s.name));
     return zeroScorers.value;
   }
 
@@ -746,6 +922,138 @@ export function useTeacherStore() {
         });
       }
     });
+
+    // 5. Save detailed Lesson Session Record into history
+    const sessionStudentResults: LessonSessionStudentResult[] = [];
+    let sumPercent = 0;
+    let presentCount = 0;
+
+    players.forEach((s) => {
+      const p = calcPercent(s);
+      if (s.attStatus !== "Sababsiz" && s.attStatus !== "Sababli") {
+        sumPercent += p;
+        presentCount++;
+      }
+      sessionStudentResults.push({
+        name: s.name,
+        correct: s.correct,
+        total: s.total,
+        percent: p,
+        strikes: s.strikes || 0,
+        penalties: s.penalties || 0,
+        coins: p >= 80 ? 20 : 5,
+        attStatus: s.attStatus || "Keldi",
+      });
+    });
+
+    const firstPlayer = players[0];
+    const detectedGroup = firstPlayer?.group || allStudentsRegistry.value.find((item) => item.name === firstPlayer?.name)?.group || "Umumiy";
+
+    const newSession: LessonSessionRecord = {
+      id: "sess-" + Date.now(),
+      date: todayDate,
+      time: now.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
+      teacher: teacherName.value || "Ustoz",
+      group: detectedGroup,
+      mode: currentMode.value === "standard" ? "Savol-Javob" : currentMode.value,
+      book: globalBook.value || "",
+      topic: globalTopic.value || "",
+      maxQuestions: totalQ.value || 0,
+      avgPercent: presentCount > 0 ? Math.round(sumPercent / presentCount) : 0,
+      studentResults: sessionStudentResults,
+      createdAt: Date.now(),
+    };
+
+    saveLessonSession(newSession);
+  }
+
+  function saveLessonSession(session: LessonSessionRecord) {
+    const idx = lessonSessions.value.findIndex((s) => s.id === session.id);
+    if (idx > -1) {
+      lessonSessions.value[idx] = session;
+    } else {
+      lessonSessions.value.unshift(session);
+    }
+    syncLessonSessionToCloud(session);
+  }
+
+  function getGroupLessonSessions(groupName: string): LessonSessionRecord[] {
+    return lessonSessions.value.filter((s) => s.group === groupName);
+  }
+
+  // --- Group CRM Meta & Schedule Functions ---
+  function getGroupMeta(groupName: string): GroupMeta {
+    if (!groupsMeta.value[groupName]) {
+      groupsMeta.value[groupName] = {
+        name: groupName,
+        days: ["Du", "Chor", "Juma"],
+        time: "14:00 - 15:30",
+        room: "1-xona",
+        subject: "Tarix",
+        note: "",
+        paymentFee: 300000,
+        reminders: [],
+        studentPayments: {},
+      };
+    }
+    return groupsMeta.value[groupName];
+  }
+
+  function saveGroupMeta(meta: GroupMeta) {
+    groupsMeta.value[meta.name] = { ...meta };
+    syncGroupMetaToCloud(meta);
+  }
+
+  function addGroupReminder(groupName: string, text: string, date: string, time: string = "14:00") {
+    const meta = getGroupMeta(groupName);
+    if (!meta.reminders) meta.reminders = [];
+    meta.reminders.unshift({
+      id: "grem-" + Date.now(),
+      text,
+      date,
+      time,
+      completed: false,
+      createdAt: Date.now(),
+    });
+    saveGroupMeta(meta);
+  }
+
+  function toggleCompleteGroupReminder(groupName: string, reminderId: string) {
+    const meta = getGroupMeta(groupName);
+    if (meta.reminders) {
+      const r = meta.reminders.find((item) => item.id === reminderId);
+      if (r) {
+        r.completed = !r.completed;
+        saveGroupMeta(meta);
+      }
+    }
+  }
+
+  function deleteGroupReminder(groupName: string, reminderId: string) {
+    const meta = getGroupMeta(groupName);
+    if (meta.reminders) {
+      meta.reminders = meta.reminders.filter((item) => item.id !== reminderId);
+      saveGroupMeta(meta);
+    }
+  }
+
+  function setStudentPaymentStatus(
+    groupName: string,
+    studentName: string,
+    status: "paid" | "pending" | "debt",
+    amount?: number
+  ) {
+    const meta = getGroupMeta(groupName);
+    if (!meta.studentPayments) meta.studentPayments = {};
+    const now = new Date();
+    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    meta.studentPayments[studentName] = {
+      status,
+      month: curMonth,
+      paidDate: status === "paid" ? now.toISOString().split("T")[0] : undefined,
+      amount: amount || meta.paymentFee || 300000,
+    };
+    saveGroupMeta(meta);
   }
 
   function resetSession() {
@@ -773,6 +1081,8 @@ export function useTeacherStore() {
     allStudentsRegistry,
     localAttendanceLogs,
     reminders,
+    groupsMeta,
+    lessonSessions,
     activeRemindersCount,
     dueReminders,
     currentMode,
@@ -791,11 +1101,20 @@ export function useTeacherStore() {
     teamBStudents,
     duelStudents,
     currentStandardStudent,
+    isStudentFrozen,
     teamAScore,
     teamBScore,
     zeroScorers,
     activeDuels,
     suggestedLiveDuel,
+    getGroupMeta,
+    saveGroupMeta,
+    addGroupReminder,
+    toggleCompleteGroupReminder,
+    deleteGroupReminder,
+    setStudentPaymentStatus,
+    saveLessonSession,
+    getGroupLessonSessions,
     setTeacher,
     logoutTeacher,
     setMode,

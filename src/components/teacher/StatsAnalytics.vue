@@ -386,7 +386,12 @@ function getStudentGroup(name: string): string {
 const availableGroups = computed(() => {
   const set = new Set<string>();
   for (const g in groupsDict.value) {
-    if (g !== "Arxiv") set.add(g);
+    if (g !== "Arxiv") {
+      const members = groupsDict.value[g] || [];
+      if (members.some((name) => !teacherStore.isStudentFrozen(name))) {
+        set.add(g);
+      }
+    }
   }
   return [...set].sort();
 });
@@ -394,6 +399,7 @@ const availableGroups = computed(() => {
 const availableBooks = computed(() => {
   const set = new Set<string>();
   rawHistory.value.forEach((r) => {
+    if (teacherStore.isStudentFrozen(r.name)) return;
     if (r.book) set.add(r.book);
   });
   return [...set].sort();
@@ -402,6 +408,8 @@ const availableBooks = computed(() => {
 // Filtered Records
 const filteredRecords = computed(() => {
   return rawHistory.value.filter((r) => {
+    // Exclude frozen students completely from analytics
+    if (teacherStore.isStudentFrozen(r.name)) return false;
     const sGroup = r.group || getStudentGroup(r.name);
     if (selectedGroup.value !== "all" && sGroup !== selectedGroup.value) return false;
     if (selectedBook.value !== "all" && r.book !== selectedBook.value) return false;

@@ -72,7 +72,7 @@
       <!-- Global Task Banner -->
       <button
         type="button"
-        @click="openTaskModal(-1)"
+        @click="openTaskModal('')"
         class="w-full flex items-center justify-between rounded-3xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3.5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/20 transition shadow-md"
       >
         <div class="flex items-center gap-2">
@@ -156,7 +156,7 @@
           <div class="flex items-center gap-1.5">
             <button
               type="button"
-              @click="archive(idx)"
+              @click="archive(s.name)"
               class="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-slate-400 hover:bg-white/10 hover:text-white"
               title="Arxivga o'tkazish"
             >
@@ -164,7 +164,7 @@
             </button>
             <button
               type="button"
-              @click="openTaskModal(idx)"
+              @click="openTaskModal(s.name)"
               class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-400 hover:bg-amber-500/20"
               title="Vazifa belgilash"
             >
@@ -172,7 +172,7 @@
             </button>
             <button
               type="button"
-              @click="teacherStore.removeStudent(idx)"
+              @click="teacherStore.removeStudent(s.name)"
               class="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400 hover:bg-red-500/20"
               title="O'chirish"
             >
@@ -212,7 +212,7 @@
           </div>
           <button
             type="button"
-            @click="teacherStore.removeStudent(idx)"
+            @click="teacherStore.removeStudent(s.name)"
             class="rounded-xl bg-red-500/10 border border-red-500/30 p-2 text-xs text-red-400 hover:bg-red-500/20"
           >
             ✕
@@ -239,12 +239,12 @@
         </button>
         <div class="flex flex-wrap gap-1.5 pt-1">
           <span
-            v-for="(s, idx) in teacherStore.teamAStudents.value"
+            v-for="s in teacherStore.teamAStudents.value"
             :key="s.name"
             class="inline-flex items-center gap-1 rounded-xl bg-red-500/20 border border-red-500/40 px-2.5 py-1 text-xs font-bold text-red-200"
           >
             {{ s.name }}
-            <button @click="teacherStore.removeStudent(idx)" class="text-red-400 hover:text-white ml-1">✕</button>
+            <button @click="teacherStore.removeStudent(s.name)" class="text-red-400 hover:text-white ml-1">✕</button>
           </span>
         </div>
       </div>
@@ -265,12 +265,12 @@
         </button>
         <div class="flex flex-wrap gap-1.5 pt-1">
           <span
-            v-for="(s, idx) in teacherStore.teamBStudents.value"
+            v-for="s in teacherStore.teamBStudents.value"
             :key="s.name"
             class="inline-flex items-center gap-1 rounded-xl bg-blue-500/20 border border-blue-500/40 px-2.5 py-1 text-xs font-bold text-blue-200"
           >
             {{ s.name }}
-            <button @click="teacherStore.removeStudent(idx)" class="text-blue-400 hover:text-white ml-1">✕</button>
+            <button @click="teacherStore.removeStudent(s.name)" class="text-blue-400 hover:text-white ml-1">✕</button>
           </span>
         </div>
       </div>
@@ -327,7 +327,7 @@
     <!-- Modals -->
     <TaskModal
       v-model="showTaskModal"
-      :target-index="taskTargetIndex"
+      :target-student="taskTargetStudent"
     />
 
     <DbImportModal
@@ -354,7 +354,7 @@ const teacherStore = useTeacherStore();
 const newStudentName = ref("");
 const searchQuery = ref("");
 const showTaskModal = ref(false);
-const taskTargetIndex = ref(-1);
+const taskTargetStudent = ref("");
 const showDbModal = ref(false);
 const dbTargetTeam = ref("standard");
 const suggestedLiveDuel = teacherStore.suggestedLiveDuel;
@@ -366,8 +366,8 @@ const filteredStudents = computed(() => {
   return list.filter((s) => s.name.toLowerCase().includes(query));
 });
 
-function openTaskModal(index: number) {
-  taskTargetIndex.value = index;
+function openTaskModal(studentName: string = "") {
+  taskTargetStudent.value = studentName;
   showTaskModal.value = true;
 }
 
@@ -377,24 +377,32 @@ function openDbModal(team: string) {
 }
 
 function addSingleStudent() {
-  if (!newStudentName.value.trim()) return;
-  teacherStore.addStudent(newStudentName.value.trim());
+  const name = newStudentName.value.trim();
+  if (!name) return;
+  if (teacherStore.isStudentFrozen(name)) {
+    alert(`⚠️ "${name}" o'quvchisi tizimda muzlatilgan! Darsda qatnashishi uchun avval O'quvchilar Boshqaruvidan (CRM) uni faollashtiring.`);
+    return;
+  }
+  teacherStore.addStudent(name);
   newStudentName.value = "";
 }
 
-async function archive(idx: number) {
-  const s = teacherStore.students.value[idx];
-  if (!s || !confirm(`${s.name} arxivga o'tkazilsinmi?`)) return;
-  const name = s.name;
-  teacherStore.removeStudent(idx);
+async function archive(studentName: string) {
+  if (!studentName || !confirm(`${studentName} arxivga o'tkazilsinmi?`)) return;
+  teacherStore.removeStudent(studentName);
   try {
-    await callApi("archive_student", { name });
+    await callApi("archive_student", { name: studentName });
   } catch (e) {}
 }
 
 function startSuggestedDuel() {
   const d = suggestedLiveDuel.value;
   if (!d) return;
+  if (teacherStore.isStudentFrozen(d.challenger) || teacherStore.isStudentFrozen(d.target)) {
+    alert("⚠️ Duel ishtirokchilaridan biri tizimda muzlatilgan!");
+    suggestedLiveDuel.value = null;
+    return;
+  }
   teacherStore.setMode("Duel");
   teacherStore.students.value.forEach((s) => {
     if (s.team === "Duel") s.team = "standard";

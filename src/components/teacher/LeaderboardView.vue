@@ -110,10 +110,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { callApi } from "../../services/api";
+import { useTeacherStore } from "../../composables/useTeacherStore";
 
 defineEmits<{
   (e: "back"): void;
 }>();
+
+const teacherStore = useTeacherStore();
 
 interface LbItem {
   name: string;
@@ -145,7 +148,8 @@ async function loadLb() {
 }
 
 const sortedList = computed(() => {
-  const list = [...rawList.value];
+  // Exclude frozen students
+  const list = rawList.value.filter((x) => !teacherStore.isStudentFrozen(x.name));
   if (activeTab.value === "coin") {
     return list.sort((a, b) => (b.coin || 0) - (a.coin || 0)).filter((x) => (x.coin || 0) > 0);
   } else if (activeTab.value === "strike") {

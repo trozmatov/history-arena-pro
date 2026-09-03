@@ -7,8 +7,8 @@
         @click.self="closeOnBackdrop && $emit('update:modelValue', false)"
       >
         <div
-          class="relative w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-2xl backdrop-blur-2xl transition-all duration-300 transform scale-100"
-          :class="customClass"
+          class="relative w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-2xl backdrop-blur-2xl transition-all duration-300 transform scale-100"
+          :class="customClass ? customClass : 'max-w-lg'"
         >
           <!-- Header -->
           <div v-if="title || $slots.header" class="mb-4 flex items-center justify-between">

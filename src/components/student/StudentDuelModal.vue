@@ -90,7 +90,21 @@ const duelType = ref<"live" | "standard">("live");
 const sending = ref(false);
 
 async function sendDuel() {
-  if (!targetStudent.value.trim()) return;
+  const target = targetStudent.value.trim();
+  if (!target) return;
+
+  try {
+    const saved = localStorage.getItem("ha_all_students");
+    if (saved) {
+      const list = JSON.parse(saved);
+      const match = list.find((s: any) => s.name.toLowerCase().trim() === target.toLowerCase());
+      if (match?.status === "frozen") {
+        alert(`⚠️ "${target}" o'quvchisi hozirda muzlatilgan va duelga chaqirib bo'lmaydi!`);
+        return;
+      }
+    }
+  } catch (e) {}
+
   sending.value = true;
   try {
     const timeStr = new Date().toLocaleTimeString("uz-UZ", {

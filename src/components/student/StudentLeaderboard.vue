@@ -98,7 +98,23 @@ const studentStore = useStudentStore();
 const tab = ref<"coin" | "strike">("coin");
 
 const sortedData = computed(() => {
-  const list = [...studentStore.leaderboardData.value];
+  const frozenNames = new Set<string>();
+  try {
+    const saved = localStorage.getItem("ha_all_students");
+    if (saved) {
+      const list = JSON.parse(saved);
+      list.forEach((s: any) => {
+        if (s.status === "frozen" && s.name) {
+          frozenNames.add(s.name.toLowerCase().trim());
+        }
+      });
+    }
+  } catch (e) {}
+
+  const list = studentStore.leaderboardData.value.filter(
+    (u) => !frozenNames.has((u.name || "").toLowerCase().trim())
+  );
+
   if (tab.value === "coin") {
     return list.sort((a, b) => (b.coin || 0) - (a.coin || 0)).filter((u) => u.coin > 0 || u.strike > 0);
   } else {
