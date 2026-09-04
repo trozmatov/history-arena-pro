@@ -1,5 +1,24 @@
 import { ref, computed } from "vue";
 import { callApi } from "../services/api";
+import {
+  db,
+  ref as fbRef,
+  get as fbGet,
+  onChildAdded,
+  onChildChanged,
+  onChildRemoved,
+  update,
+} from "../services/firebase";
+
+export interface DuelChallenge {
+  key: string;
+  challenger: string;
+  target: string;
+  type: "live" | "standard";
+  status: "pending" | "accepted" | "declined" | "completed";
+  time: string;
+  timestamp: number;
+}
 
 export interface StudentHistoryItem {
   date: string;
@@ -8,6 +27,8 @@ export interface StudentHistoryItem {
   strike?: number | string;
   year?: number;
   month?: number;
+  book?: string;
+  topic?: string;
 }
 
 export interface LeaderboardItem {
@@ -17,16 +38,36 @@ export interface LeaderboardItem {
   penalty?: number;
 }
 
+export interface DeviceStudent {
+  name: string;
+  pin: string;
+  pattern?: string;
+}
+
+function loadDeviceStudent(): DeviceStudent | null {
+  try {
+    const raw = localStorage.getItem("ha_device_student");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+const deviceStudent = ref<DeviceStudent | null>(loadDeviceStudent());
 const studentName = ref<string>(localStorage.getItem("studentUser") || "");
 const historyData = ref<StudentHistoryItem[]>([]);
 const groupedMonths = ref<Record<string, { label: string; items: StudentHistoryItem[] }>>({});
 const activeMonthKey = ref<string>("");
 const leaderboardData = ref<LeaderboardItem[]>([]);
 const isLoading = ref<boolean>(false);
+const serverAttendanceLogs = ref<any[]>([]);
+const cloudSessions = ref<any[]>([]);
 
 const studentLevel = ref<string>("Boshlovchi 🌱");
 const studentAvatar = ref<string>("🌱");
 const studentBadges = ref<{ id: string; name: string; icon: string; special?: boolean }[]>([]);
+const incomingDuel = ref<DuelChallenge | null>(null);
+let duelListenerActive = false;
 
 const monthNames = [
   "",
@@ -169,6 +210,176 @@ export function useStudentStore() {
     return { success: false, message: "Ism yoki parol xato kiritildi!" };
   }
 
+  function findStudentByPin(pin: string): any | null {
+    const trimmed = pin.trim();
+    if (!trimmed) return null;
+    try {
+      const saved = localStorage.getItem("ha_all_students");
+      if (saved) {
+        const masterList: any[] = JSON.parse(saved);
+        return masterList.find(
+          (s) => (s.pin && s.pin.trim() === trimmed) || (s.password && s.password.trim() === trimmed)
+        ) || null;
+      }
+    } catch (e) {
+      console.warn("findStudentByPin error:", e);
+    }
+    return null;
+  }
+
+  async function loginWithPin(pin: string): Promise<{
+    success: boolean;
+    message?: string;
+    student?: any;
+    needsPattern?: boolean;
+  }> {
+    const trimmed = pin.trim();
+    if (!trimmed) {
+      return { success: false, message: "6 xonali PIN kodni kiriting!" };
+    }
+
+    try {
+      const saved = localStorage.getItem("ha_all_students");
+      if (saved) {
+        const masterList: any[] = JSON.parse(saved);
+        const match = masterList.find(
+          (s) => (s.pin && s.pin.trim() === trimmed) || (s.password && s.password.trim() === trimmed)
+        );
+
+        if (match) {
+          if (match.status === "frozen") {
+            return {
+              success: false,
+              message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
+            };
+          }
+
+          const devInfo: DeviceStudent = {
+            name: match.name,
+            pin: match.pin || trimmed,
+            pattern: match.pattern || "",
+          };
+          deviceStudent.value = devInfo;
+          localStorage.setItem("ha_device_student", JSON.stringify(devInfo));
+
+          setStudent(match.name);
+          await fetchStudentHistory();
+
+          return {
+            success: true,
+            student: match,
+            needsPattern: !match.pattern,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("loginWithPin error:", e);
+    }
+
+    return { success: false, message: "Bunday 6 xonali PIN kodli o'quvchi topilmadi!" };
+  }
+
+  async function loginWithPattern(pattern: string): Promise<{ success: boolean; message?: string }> {
+    if (!pattern || !pattern.trim()) {
+      return { success: false, message: "Grafik kalitni chizing!" };
+    }
+
+    // Attempt to sync latest from master list
+    let currentStudentName = deviceStudent.value?.name || studentName.value;
+    if (!currentStudentName) {
+      return { success: false, message: "Avval 6 xonali PIN kod bilan kiring!" };
+    }
+
+    let actualPattern = deviceStudent.value?.pattern || "";
+    try {
+      const saved = localStorage.getItem("ha_all_students");
+      if (saved) {
+        const masterList: any[] = JSON.parse(saved);
+        const match = masterList.find(
+          (s) => s.name.toLowerCase() === currentStudentName.toLowerCase()
+        );
+        if (match) {
+          if (match.status === "frozen") {
+            return {
+              success: false,
+              message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
+            };
+          }
+          actualPattern = match.pattern || "";
+          if (deviceStudent.value) {
+            deviceStudent.value.pattern = actualPattern;
+            deviceStudent.value.pin = match.pin || deviceStudent.value.pin;
+            localStorage.setItem("ha_device_student", JSON.stringify(deviceStudent.value));
+          }
+        }
+      }
+    } catch (e) {}
+
+    if (!actualPattern) {
+      return {
+        success: false,
+        message: "Siz hali grafik kalit o'rnatmagansiz. Iltimos, 6 xonali PIN kod bilan kiring.",
+      };
+    }
+
+    if (pattern.trim() === actualPattern.trim()) {
+      setStudent(currentStudentName);
+      await fetchStudentHistory();
+      return { success: true };
+    }
+
+    return { success: false, message: "Grafik kalit noto'g'ri chizildi!" };
+  }
+
+  function setStudentPattern(pattern: string, targetStudentName?: string): boolean {
+    const sName = targetStudentName || studentName.value || deviceStudent.value?.name;
+    if (!sName) return false;
+
+    try {
+      const saved = localStorage.getItem("ha_all_students");
+      if (saved) {
+        const masterList: any[] = JSON.parse(saved);
+        const match = masterList.find(
+          (s) => s.name.toLowerCase() === sName.toLowerCase()
+        );
+        if (match) {
+          match.pattern = pattern;
+          localStorage.setItem("ha_all_students", JSON.stringify(masterList));
+
+          const devInfo: DeviceStudent = {
+            name: match.name,
+            pin: match.pin || "",
+            pattern: pattern,
+          };
+          deviceStudent.value = devInfo;
+          localStorage.setItem("ha_device_student", JSON.stringify(devInfo));
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn("setStudentPattern error:", e);
+    }
+    return false;
+  }
+
+  async function resetPatternWithPin(pin: string, newPattern: string): Promise<{ success: boolean; message?: string }> {
+    const res = await loginWithPin(pin);
+    if (!res.success || !res.student) {
+      return { success: false, message: res.message || "PIN xato!" };
+    }
+    const saved = setStudentPattern(newPattern, res.student.name);
+    if (!saved) {
+      return { success: false, message: "Patternni saqlashda xatolik yuz berdi." };
+    }
+    return { success: true };
+  }
+
+  function clearDeviceStudent() {
+    deviceStudent.value = null;
+    localStorage.removeItem("ha_device_student");
+    logoutStudent();
+  }
+
   async function fetchStudentHistory() {
     if (!studentName.value) return;
     isLoading.value = true;
@@ -180,6 +391,27 @@ export function useStudentStore() {
       }
     } catch (e) {
       console.error("fetchStudentHistory error:", e);
+    }
+
+    // 2. Fetch server attendance logs so student profile reflects real attendance
+    try {
+      const attRes = await callApi("get_attendance");
+      if (attRes && attRes.status === "success" && Array.isArray(attRes.attendance)) {
+        serverAttendanceLogs.value = attRes.attendance;
+      }
+    } catch (e) {
+      console.warn("fetch server attendance error:", e);
+    }
+
+    // 3. Fetch cloud lesson sessions from Firebase
+    try {
+      const snap = await fbGet(fbRef(db, "lesson_sessions"));
+      if (snap.exists()) {
+        const val = snap.val();
+        cloudSessions.value = Object.values(val);
+      }
+    } catch (e) {
+      console.warn("fetch cloud sessions error:", e);
     } finally {
       isLoading.value = false;
     }
@@ -244,11 +476,21 @@ export function useStudentStore() {
     history.forEach((item) => {
       let y = item.year || now.getFullYear();
       let m = item.month || now.getMonth() + 1;
-      // If date is like "02.09" or "2026-09-02"
-      if (item.date && item.date.includes("-")) {
-        const parts = item.date.split("-");
-        y = parseInt(parts[0]);
-        m = parseInt(parts[1]);
+      if (item.date) {
+        if (item.date.includes("-")) {
+          const parts = item.date.split("-");
+          if (parts[0].length === 4) {
+            y = parseInt(parts[0], 10);
+            m = parseInt(parts[1], 10);
+          } else {
+            m = parseInt(parts[1], 10);
+            if (parts[2]) y = parseInt(parts[2], 10);
+          }
+        } else if (item.date.includes(".")) {
+          const parts = item.date.split(".");
+          m = parseInt(parts[1], 10);
+          if (parts[2]) y = parseInt(parts[2], 10);
+        }
       }
       const key = `${y}-${m}`;
       if (!groups[key]) {
@@ -261,9 +503,14 @@ export function useStudentStore() {
     });
 
     groupedMonths.value = groups;
-    const keys = Object.keys(groups);
+    // Sort descending so the most recent month (e.g. Sentyabr 2026) comes first!
+    const keys = Object.keys(groups).sort((a, b) => {
+      const [yA, mA] = a.split("-").map(Number);
+      const [yB, mB] = b.split("-").map(Number);
+      return yB !== yA ? yB - yA : mB - mA;
+    });
     if (keys.length > 0) {
-      activeMonthKey.value = keys[keys.length - 1]; // Latest month
+      activeMonthKey.value = keys[0]; // Most recent month (e.g. Sentyabr 2026)
     }
   }
 
@@ -278,6 +525,514 @@ export function useStudentStore() {
     }
   }
 
+  // --- Firebase Realtime Duel Listener for Incoming Challenges ---
+  function initDuelListener() {
+    if (duelListenerActive || typeof window === "undefined") return;
+    try {
+      duelListenerActive = true;
+      const duelsRef = fbRef(db, "duels");
+
+      const handleChallenge = (snap: any) => {
+        const val = snap.val();
+        if (
+          val &&
+          studentName.value &&
+          val.target?.toLowerCase().trim() === studentName.value.toLowerCase().trim() &&
+          val.status === "pending"
+        ) {
+          incomingDuel.value = { ...val, key: snap.key };
+        } else if (incomingDuel.value && incomingDuel.value.key === snap.key) {
+          if (val.status !== "pending") {
+            incomingDuel.value = null;
+          }
+        }
+      };
+
+      onChildAdded(duelsRef, handleChallenge);
+      onChildChanged(duelsRef, handleChallenge);
+      onChildRemoved(duelsRef, (snap: any) => {
+        if (incomingDuel.value && incomingDuel.value.key === snap.key) {
+          incomingDuel.value = null;
+        }
+      });
+    } catch (e) {
+      console.warn("initDuelListener error:", e);
+    }
+  }
+
+  initDuelListener();
+
+  async function acceptDuel(key: string): Promise<boolean> {
+    try {
+      await update(fbRef(db, `duels/${key}`), {
+        status: "accepted",
+        acceptedAt: Date.now(),
+      });
+      incomingDuel.value = null;
+      return true;
+    } catch (e) {
+      console.warn("acceptDuel error:", e);
+      return false;
+    }
+  }
+
+  async function declineDuel(key: string): Promise<boolean> {
+    try {
+      await update(fbRef(db, `duels/${key}`), {
+        status: "declined",
+        declinedAt: Date.now(),
+      });
+      incomingDuel.value = null;
+      return true;
+    } catch (e) {
+      console.warn("declineDuel error:", e);
+      return false;
+    }
+  }
+
+  // --- 1. All Books Mastery (for PieChart & Cardbox) ---
+  const studentAllBooksMastery = computed(() => {
+    const allBooksList = [
+      { id: "6-Tarix", name: "6-sinf Tarix", short: "6-Tarix", color: "#3b82f6" },
+      { id: "7-O'zT", name: "7-sinf O'zT", short: "7-O'zT", color: "#06b6d4" },
+      { id: "7-Jahon", name: "7-sinf Jahon", short: "7-Jahon", color: "#0ea5e9" },
+      { id: "8-O'zT", name: "8-sinf O'zT", short: "8-O'zT", color: "#10b981" },
+      { id: "8-Jahon", name: "8-sinf Jahon", short: "8-Jahon", color: "#14b8a6" },
+      { id: "9-O'zT", name: "9-sinf O'zT", short: "9-O'zT", color: "#8b5cf6" },
+      { id: "9-Jahon", name: "9-sinf Jahon", short: "9-Jahon", color: "#a855f7" },
+      { id: "10-O'zT", name: "10-sinf O'zT", short: "10-O'zT", color: "#f59e0b" },
+      { id: "10-Jahon", name: "10-sinf Jahon", short: "10-Jahon", color: "#f97316" },
+      { id: "11-O'zT", name: "11-sinf O'zT", short: "11-O'zT", color: "#ec4899" },
+      { id: "11-Jahon", name: "11-sinf Jahon", short: "11-Jahon", color: "#f43f5e" },
+    ];
+
+    let currentStudentBook = "8-O'zT";
+    let studentAvgAcc = 0;
+    let customBooksMastery: Record<string, { percent?: number; lessons?: number }> | null = null;
+
+    try {
+      const saved = localStorage.getItem("ha_all_students");
+      if (saved && studentName.value) {
+        const list: any[] = JSON.parse(saved);
+        const match = list.find((s) => s.name.toLowerCase() === studentName.value.toLowerCase());
+        if (match?.book) currentStudentBook = match.book;
+        if (match?.avgAccuracy) studentAvgAcc = Number(match.avgAccuracy);
+        if (match?.booksMastery) customBooksMastery = match.booksMastery;
+      }
+    } catch {}
+
+    // 1. Process Google Sheets historyData (contains real h.book for every lesson!)
+    const bookScores: Record<string, { totalScore: number; count: number }> = {};
+
+    historyData.value.forEach((h) => {
+      const rawBook = (h.book || "").trim();
+      if (!rawBook) return;
+      // Match with allBooksList
+      const matched = allBooksList.find(
+        (item) => item.id.toLowerCase() === rawBook.toLowerCase() || rawBook.toLowerCase().includes(item.id.toLowerCase())
+      );
+      const bookKey = matched ? matched.id : rawBook;
+      if (!bookScores[bookKey]) bookScores[bookKey] = { totalScore: 0, count: 0 };
+      bookScores[bookKey].totalScore += parseFloat(String(h.percent)) || 0;
+      bookScores[bookKey].count++;
+    });
+
+    // 2. Also incorporate any local/cloud lesson sessions
+    const allSessions = [...cloudSessions.value];
+    try {
+      const sessionsSaved = localStorage.getItem("ha_lesson_sessions");
+      if (sessionsSaved) {
+        allSessions.push(...JSON.parse(sessionsSaved));
+      }
+    } catch {}
+
+    if (studentName.value && allSessions.length > 0) {
+      allSessions.forEach((sess) => {
+        const rawBook = (sess.book || "").trim();
+        if (sess.studentResults && Array.isArray(sess.studentResults)) {
+          const res = sess.studentResults.find(
+            (r: any) => r.name?.toLowerCase().trim() === studentName.value.toLowerCase().trim()
+          );
+          if (res && rawBook) {
+            const matched = allBooksList.find(
+              (item) => item.id.toLowerCase() === rawBook.toLowerCase() || rawBook.toLowerCase().includes(item.id.toLowerCase())
+            );
+            const bookKey = matched ? matched.id : rawBook;
+            if (!bookScores[bookKey]) bookScores[bookKey] = { totalScore: 0, count: 0 };
+            bookScores[bookKey].totalScore += parseFloat(String(res.percent)) || 0;
+            bookScores[bookKey].count++;
+          }
+        }
+      });
+    }
+
+    // Determine current book: if student has recent lessons, pick latest lesson's book
+    if (historyData.value.length > 0) {
+      const latestWithBook = [...historyData.value].reverse().find((h) => (h.book || "").trim().length > 0);
+      if (latestWithBook?.book) {
+        const matched = allBooksList.find(
+          (item) => item.id.toLowerCase() === latestWithBook.book!.toLowerCase() || latestWithBook.book!.toLowerCase().includes(item.id.toLowerCase())
+        );
+        if (matched) currentStudentBook = matched.id;
+      }
+    }
+
+    let totalPercentSum = 0;
+    let booksWithActivityCount = 0;
+
+    const books = allBooksList.map((b) => {
+      const isCurrent = b.id === currentStudentBook;
+      let pct = 0;
+      let lessons = 0;
+
+      // 1. Exact scores from sheet / sessions
+      if (bookScores[b.id]) {
+        lessons = bookScores[b.id].count;
+        pct = Math.round(bookScores[b.id].totalScore / lessons);
+      }
+      // 2. Custom teacher settings in CRM
+      else if (customBooksMastery && customBooksMastery[b.id]) {
+        pct = customBooksMastery[b.id].percent || 0;
+        lessons = customBooksMastery[b.id].lessons || 0;
+      }
+
+      if (pct > 0) {
+        totalPercentSum += pct;
+        booksWithActivityCount++;
+      }
+
+      let badge = "Boshlanmagan";
+      let badgeClass = "text-slate-500 bg-white/5 border-white/5";
+      if (pct >= 85) {
+        badge = "A'lo 🌟";
+        badgeClass = "text-emerald-300 bg-emerald-500/20 border-emerald-500/30";
+      } else if (pct >= 70) {
+        badge = "Yaxshi 👍";
+        badgeClass = "text-blue-300 bg-blue-500/20 border-blue-500/30";
+      } else if (pct >= 50) {
+        badge = "O'rtacha ⚡️";
+        badgeClass = "text-amber-300 bg-amber-500/20 border-amber-500/30";
+      } else if (pct > 0) {
+        badge = "Past ⚠️";
+        badgeClass = "text-rose-300 bg-rose-500/20 border-rose-500/30";
+      }
+
+      return {
+        ...b,
+        percent: pct,
+        lessonsCount: lessons,
+        testsCount: lessons,
+        isCurrent,
+        badge,
+        badgeClass,
+      };
+    });
+
+    const overallAverage = booksWithActivityCount > 0
+      ? Math.round(totalPercentSum / booksWithActivityCount)
+      : (studentAvgAcc || 66);
+
+    return {
+      currentStudentBook,
+      overallAverage,
+      books,
+    };
+  });
+
+  // Backward compatibility alias for single book
+  const studentBookMastery = computed(() => {
+    const all = studentAllBooksMastery.value;
+    const current = all.books.find((b) => b.isCurrent) || all.books[3];
+    return {
+      bookName: current.name,
+      percent: current.percent,
+      testsCount: current.testsCount,
+      lessonsCount: current.lessonsCount,
+      rating: current.badge,
+      badgeClass: current.badgeClass,
+    };
+  });
+
+  // --- 2. Real Current-Month Attendance Calculation ---
+  const studentAttendance = computed(() => {
+    let present = 0;
+    let excused = 0;
+    let unexcused = 0;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthNum = now.getMonth() + 1; // e.g. 9 for September
+    const currentMonthName = monthNames[currentMonthNum] || "Joriy oy";
+
+    function isCurrentMonth(dateStr: string): boolean {
+      if (!dateStr || typeof dateStr !== "string") return false;
+      const clean = dateStr.trim();
+      // Case 1: YYYY-MM-DD
+      if (/^\d{4}-\d{1,2}-\d{1,2}/.test(clean)) {
+        const [y, m] = clean.split("-");
+        return parseInt(y, 10) === currentYear && parseInt(m, 10) === currentMonthNum;
+      }
+      // Case 2: DD.MM.YYYY
+      if (/^\d{1,2}\.\d{1,2}\.\d{4}/.test(clean)) {
+        const [d, m, y] = clean.split(".");
+        return parseInt(y, 10) === currentYear && parseInt(m, 10) === currentMonthNum;
+      }
+      // Case 3: DD.MM (e.g. "02.09" or "4.9")
+      if (/^\d{1,2}\.\d{1,2}$/.test(clean)) {
+        const [d, m] = clean.split(".");
+        return parseInt(m, 10) === currentMonthNum;
+      }
+      // Case 4: DD-MM-YYYY
+      if (/^\d{1,2}-\d{1,2}-\d{4}/.test(clean)) {
+        const [d, m, y] = clean.split("-");
+        return parseInt(y, 10) === currentYear && parseInt(m, 10) === currentMonthNum;
+      }
+      // Fallback: Date parse
+      const parsed = new Date(clean);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.getFullYear() === currentYear && (parsed.getMonth() + 1) === currentMonthNum;
+      }
+      return false;
+    }
+
+    // Map unique date to status to prevent duplicate counts
+    const dateStatusMap = new Map<string, string>();
+
+    // 0. FIRST: Check historyData.value!
+    // If the student participated in a lesson/session in the current month (e.g. "02.09"),
+    // they were DEFINITELY present in class ("Keldi")!
+    historyData.value.forEach((h) => {
+      if (h.date && isCurrentMonth(h.date)) {
+        dateStatusMap.set(h.date, "Keldi");
+      }
+    });
+
+    // 1. Check server attendance logs (serverAttendanceLogs & ha_cache_get_attendance_{})
+    const combinedServerLogs = [...serverAttendanceLogs.value];
+    try {
+      const cached = localStorage.getItem("ha_cache_get_attendance_{}");
+      if (cached) {
+        const { data } = JSON.parse(cached);
+        if (data && Array.isArray(data.attendance)) {
+          combinedServerLogs.push(...data.attendance);
+        }
+      }
+    } catch {}
+
+    if (studentName.value) {
+      combinedServerLogs.forEach((l) => {
+        if (
+          l.name?.toLowerCase().trim() === studentName.value.toLowerCase().trim() &&
+          isCurrentMonth(l.date)
+        ) {
+          dateStatusMap.set(l.date, l.status);
+        }
+      });
+    }
+
+    // 2. Check local teacher attendance logs (ha_attendance_logs)
+    try {
+      const logsSaved = localStorage.getItem("ha_attendance_logs");
+      if (logsSaved && studentName.value) {
+        const logs: any[] = JSON.parse(logsSaved);
+        logs.forEach((log) => {
+          // Flat record: { date, name, status }
+          if (log.name && log.date && log.name.toLowerCase().trim() === studentName.value.toLowerCase().trim()) {
+            if (isCurrentMonth(log.date)) {
+              dateStatusMap.set(log.date, log.status);
+            }
+          }
+          // Nested records: { date, records: [{ name, status }] }
+          if (log.date && Array.isArray(log.records)) {
+            const rec = log.records.find((r: any) => r.name?.toLowerCase().trim() === studentName.value.toLowerCase().trim());
+            if (rec && isCurrentMonth(log.date)) {
+              dateStatusMap.set(log.date, rec.status);
+            }
+          }
+        });
+      }
+    } catch {}
+
+    // 3. Check local attendance logs (ha_local_attendance_logs)
+    try {
+      const localLogs = localStorage.getItem("ha_local_attendance_logs");
+      if (localLogs && studentName.value) {
+        const list: any[] = JSON.parse(localLogs);
+        list.forEach((l) => {
+          if (l.name && l.date && l.name.toLowerCase().trim() === studentName.value.toLowerCase().trim()) {
+            if (isCurrentMonth(l.date) && !dateStatusMap.has(l.date)) {
+              dateStatusMap.set(l.date, l.status);
+            }
+          }
+        });
+      }
+    } catch {}
+
+    // Tally exact unique dates in current calendar month
+    dateStatusMap.forEach((status) => {
+      const s = (status || "").toLowerCase().trim();
+      if (s === "sababli") excused++;
+      else if (s === "sababsiz") unexcused++;
+      else present++; // "keldi" or default present
+    });
+
+    const total = present + excused + unexcused;
+    const percent = total > 0 ? Math.round((present / total) * 100) : 100;
+
+    let badge = "Darslar boshlanmoqda";
+    if (total > 0) {
+      if (percent >= 90) badge = "A'lo davomat 🔥";
+      else if (percent >= 70) badge = "Yaxshi davomat 👍";
+      else badge = "Dars qoldirmang ⚠️";
+    }
+
+    return {
+      monthName: `${currentMonthName} oyi`,
+      present,
+      excused,
+      unexcused,
+      total,
+      percent,
+      badge,
+    };
+  });
+
+  // --- 3. Next Lesson Time Schedule ---
+  const nextLessonSchedule = computed(() => {
+    let groupName = "1-Guruh";
+    try {
+      const saved = localStorage.getItem("ha_all_students");
+      if (saved && studentName.value) {
+        const list: any[] = JSON.parse(saved);
+        const match = list.find((s) => s.name.toLowerCase() === studentName.value.toLowerCase());
+        if (match?.group) groupName = match.group;
+      }
+    } catch {}
+
+    let days = ["Du", "Chor", "Juma"];
+    let time = "14:00 - 15:30";
+    let room = "3-xona";
+
+    try {
+      const metaSaved = localStorage.getItem("ha_groups_meta");
+      if (metaSaved) {
+        const metaMap = JSON.parse(metaSaved);
+        if (metaMap[groupName]) {
+          const m = metaMap[groupName];
+          if (m.days && m.days.length) days = m.days;
+          if (m.time) time = m.time;
+          if (m.room) room = m.room;
+        }
+      }
+    } catch {}
+
+    const uzDaysMap: Record<string, number> = {
+      "yak": 0, "yakshanba": 0,
+      "du": 1, "dushanba": 1,
+      "se": 2, "seshanba": 2,
+      "chor": 3, "chorshanba": 3,
+      "pay": 4, "payshanba": 4,
+      "ju": 5, "juma": 5,
+      "sha": 6, "shanba": 6,
+    };
+
+    const today = new Date().getDay();
+    let minDiff = 7;
+    let nextDayName = days[0] || "Dushanba";
+
+    days.forEach((d) => {
+      const clean = d.toLowerCase().trim();
+      const dayNum = uzDaysMap[clean] !== undefined ? uzDaysMap[clean] : uzDaysMap[clean.substring(0, 3)] ?? 1;
+      let diff = (dayNum - today + 7) % 7;
+      if (diff === 0) diff = 7;
+      if (diff < minDiff) {
+        minDiff = diff;
+        nextDayName = d;
+      }
+    });
+
+    const relativeText = minDiff === 1 ? "Ertaga" : minDiff === 7 ? "Bugun / Navbatdagi darsda" : `${nextDayName} kuni`;
+
+    return {
+      groupName,
+      days,
+      time,
+      room,
+      relativeText: `${relativeText}, ${time.split("-")[0].trim()} da`,
+      fullSchedule: `${days.join(", ")} | ${time} (${room})`,
+    };
+  });
+
+  // --- 4. Standalone Test History (Mavzulashtirilgan / Blok testlar) ---
+  const studentTestHistory = computed(() => {
+    const list: any[] = [];
+    try {
+      const saved = localStorage.getItem("ha_lesson_sessions");
+      if (saved && studentName.value) {
+        const sessions: any[] = JSON.parse(saved);
+        sessions.forEach((s) => {
+          if (
+            s.mode === "manual_test" ||
+            s.mode?.toLowerCase().includes("test") ||
+            s.topic?.toLowerCase().includes("test")
+          ) {
+            if (s.studentResults && Array.isArray(s.studentResults)) {
+              const res = s.studentResults.find(
+                (r: any) => r.name?.toLowerCase() === studentName.value.toLowerCase()
+              );
+              if (res) {
+                const p = parseFloat(String(res.percent)) || 0;
+                list.push({
+                  id: s.id,
+                  date: s.date || "Yaqinda",
+                  time: s.time || "",
+                  book: s.book || "Tarix",
+                  topic: s.topic || "Mavzulashtirilgan Test",
+                  testType: s.topic || "Mavzulashtirilgan Test",
+                  correct: res.correct || 0,
+                  total: res.total || s.maxQuestions || 30,
+                  percent: p,
+                  coins: res.coins || 0,
+                  strikes: res.strikes || 0,
+                  statusBadge: p >= 90 ? "Mukammal 🎯" : p >= 70 ? "Yaxshi ✅" : "Qayta topshirish ⚠️",
+                  badgeClass:
+                    p >= 90
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                      : p >= 70
+                      ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                      : "bg-rose-500/20 text-rose-300 border-rose-500/30",
+                });
+              }
+            }
+          }
+        });
+      }
+    } catch {}
+
+    return list.sort((a, b) => (b.date > a.date ? 1 : -1));
+  });
+
+  // --- 5. Daily Classroom Arena Scores (Kundalik dars natijalari) ---
+  const studentLessonScores = computed(() => {
+    return historyData.value.map((item, idx) => {
+      const p = parseFloat(String(item.percent)) || 0;
+      return {
+        id: idx + 1,
+        date: item.date || "Dars",
+        percent: p,
+        coin: item.coin || 0,
+        strike: item.strike || 0,
+        statusBadge: p >= 90 ? "Mukammal 🎯" : p >= 70 ? "Yaxshi ✅" : "Takrorlash ⚠️",
+        badgeClass:
+          p >= 90
+            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+            : p >= 70
+            ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+            : "bg-rose-500/20 text-rose-300 border-rose-500/30",
+      };
+    });
+  });
+
   return {
     studentName,
     isStudentLoggedIn,
@@ -290,10 +1045,26 @@ export function useStudentStore() {
     studentBadges,
     leaderboardData,
     isLoading,
+    deviceStudent,
+    incomingDuel,
+    studentBookMastery,
+    studentAllBooksMastery,
+    studentAttendance,
+    nextLessonSchedule,
+    studentTestHistory,
+    studentLessonScores,
     setStudent,
     logoutStudent,
     loginStudent,
+    findStudentByPin,
+    loginWithPin,
+    loginWithPattern,
+    setStudentPattern,
+    resetPatternWithPin,
+    clearDeviceStudent,
     fetchStudentHistory,
     fetchLeaderboard,
+    acceptDuel,
+    declineDuel,
   };
 }

@@ -10,7 +10,7 @@
 
     <!-- Main Container: Dynamically scales to max-w-7xl on desktop for CRM tables and analytics -->
     <main
-      class="flex-1 w-full mx-auto p-4 sm:p-6 flex flex-col transition-all duration-300"
+      class="flex-1 w-full mx-auto px-2.5 py-3 sm:p-6 flex flex-col transition-all duration-300 overflow-x-hidden"
       :class="isWideView ? 'max-w-7xl' : 'max-w-xl justify-center'"
     >
       <!-- 👨‍🏫 TEACHER PORTAL -->

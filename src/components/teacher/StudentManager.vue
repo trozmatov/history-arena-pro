@@ -450,15 +450,30 @@
                 </span>
               </div>
 
-              <!-- Login & PIN bar -->
+              <!-- 6-digit PIN & Pattern bar -->
               <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono pt-0.5">
-                <span class="flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded-md border border-white/5">
-                  <span class="text-slate-500">Login:</span> <b class="text-white">{{ st.login || st.name.toLowerCase().replace(/\s+/g, '_') }}</b>
+                <span class="flex items-center gap-1.5 bg-black/50 px-2.5 py-0.5 rounded-lg border border-amber-500/30 text-amber-300">
+                  <span class="text-slate-400 font-sans text-[11px]">🔢 PIN:</span>
+                  <b class="font-extrabold text-sm tracking-wider">{{ st.pin || st.password || '123456' }}</b>
+                  <button
+                    type="button"
+                    @click.stop="copyPin(st.pin || st.password || '123456')"
+                    class="hover:text-white transition p-0.5"
+                    title="PIN kodni nusxalash"
+                  >
+                    📋
+                  </button>
                 </span>
-                <span class="flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded-md border border-white/5">
-                  <span class="text-slate-500">Parol / PIN:</span> <b class="text-amber-300">{{ st.password || '1234' }}</b>
+
+                <!-- Pattern Status Badge -->
+                <span
+                  class="flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-sans font-bold"
+                  :class="st.pattern ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-white/10 text-slate-400'"
+                >
+                  <span>{{ st.pattern ? '🟢 Pattern faol' : '⏳ Pattern kutilmoqda' }}</span>
                 </span>
-                <span v-if="st.phone" class="text-slate-400 text-[11px]">
+
+                <span v-if="st.phone" class="text-slate-400 text-[11px] font-sans">
                   📞 {{ st.phone }}
                 </span>
               </div>
@@ -755,7 +770,7 @@
           </div>
           <div class="grid grid-cols-2 gap-2.5">
             <div>
-              <label class="block text-[10px] text-slate-400 mb-1">Login</label>
+              <label class="block text-[10px] text-slate-400 mb-1">Login (Zaxira)</label>
               <input
                 v-model="formStudent.login"
                 type="text"
@@ -764,12 +779,22 @@
               />
             </div>
             <div>
-              <label class="block text-[10px] text-slate-400 mb-1">Parol / PIN</label>
+              <div class="flex justify-between items-center mb-1">
+                <label class="block text-[10px] text-amber-300 font-bold">🔢 6 Xonali PIN Kod</label>
+                <button
+                  type="button"
+                  @click="generatePinForForm"
+                  class="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold"
+                >
+                  ⚡️ Yangilash
+                </button>
+              </div>
               <input
-                v-model="formStudent.password"
+                v-model="formStudent.pin"
                 type="text"
-                placeholder="1234"
-                class="w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2 font-mono text-xs text-amber-300 outline-none focus:border-indigo-500"
+                maxlength="6"
+                placeholder="123456"
+                class="w-full rounded-xl border border-amber-500/30 bg-black/50 px-3 py-2 font-mono text-xs text-amber-300 font-black tracking-widest outline-none focus:border-amber-400"
               />
             </div>
           </div>
@@ -963,13 +988,45 @@
           </div>
           <div class="grid grid-cols-2 gap-2 text-xs font-mono">
             <div class="bg-black/50 p-2.5 rounded-xl border border-white/10">
-              <span class="text-[10px] text-slate-400 block font-sans">Login:</span>
+              <span class="text-[10px] text-slate-400 block font-sans">Login (Zaxira):</span>
               <span class="text-white font-bold">{{ selectedStudent.login || selectedStudent.name.toLowerCase().replace(/\s+/g, '_') }}</span>
             </div>
-            <div class="bg-black/50 p-2.5 rounded-xl border border-white/10">
-              <span class="text-[10px] text-slate-400 block font-sans">Parol:</span>
-              <span class="text-amber-300 font-bold">{{ selectedStudent.password || '1234' }}</span>
+            <div class="bg-black/50 p-2.5 rounded-xl border border-amber-500/30">
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] text-amber-300 block font-sans font-bold">🔢 6 Xonali PIN:</span>
+                <button
+                  type="button"
+                  @click="handleRegeneratePin(selectedStudent)"
+                  class="text-[9px] text-indigo-400 hover:text-indigo-300 font-sans font-bold"
+                  title="Yangi PIN generatsiya qilish"
+                >
+                  ⚡️ Yangilash
+                </button>
+              </div>
+              <span class="text-amber-300 font-black text-sm tracking-widest">{{ selectedStudent.pin || selectedStudent.password || '123456' }}</span>
             </div>
+          </div>
+
+          <!-- Pattern status & Reset Action in Detail Modal -->
+          <div class="rounded-xl border border-white/10 bg-white/5 p-2.5 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2 font-sans">
+              <span class="text-slate-400 text-[11px]">Grafik Kalit (Pattern):</span>
+              <span
+                class="px-2 py-0.5 rounded-md font-bold text-[10px]"
+                :class="selectedStudent.pattern ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'"
+              >
+                {{ selectedStudent.pattern ? '🟢 O\'rnatilgan' : '⏳ O\'rnatilmagan' }}
+              </span>
+            </div>
+            <button
+              v-if="selectedStudent.pattern"
+              type="button"
+              @click="handleResetPattern(selectedStudent)"
+              class="rounded-lg bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 text-[11px] font-bold text-rose-300 hover:bg-rose-500/30 active:scale-95 transition"
+              title="Patternni tozalash, o'quvchi qayta o'rnatishi uchun"
+            >
+              🔄 Patternni Tozalash
+            </button>
           </div>
         </div>
 
@@ -1654,9 +1711,11 @@
                 <div class="space-y-0.5">
                   <div class="font-bold text-white text-sm">{{ st.name }}</div>
                   <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400">
-                    <span>👤 {{ st.login || st.name.toLowerCase().replace(/\s+/g, '_') }}</span>
+                    <span class="text-amber-300 font-bold">🔢 PIN: {{ st.pin || st.password || '123456' }}</span>
                     <span>•</span>
-                    <span class="text-amber-300 font-bold">🔑 {{ st.password || '1234' }}</span>
+                    <span class="font-sans text-[10px]" :class="st.pattern ? 'text-emerald-400 font-bold' : 'text-slate-500'">
+                      {{ st.pattern ? '🟢 Pattern' : '⏳ Kutilmoqda' }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2419,7 +2478,9 @@ const formStudent = ref<Partial<Student>>({
   parentPhone: "",
   parentTg: "",
   login: "",
+  pin: "",
   password: "",
+  pattern: "",
   notes: "",
 });
 
@@ -2924,6 +2985,7 @@ function toggleGroupFreeze(groupName: string, freeze: boolean) {
 // --- Student CRUD Actions ---
 function openAddModal() {
   editingStudent.value = false;
+  const pin = teacherStore.generateUnique6DigitPin(teacherStore.allStudentsRegistry.value);
   formStudent.value = {
     id: "usr-" + Date.now(),
     name: "",
@@ -2934,7 +2996,9 @@ function openAddModal() {
     parentPhone: "",
     parentTg: "",
     login: "",
-    password: "PIN" + Math.floor(1000 + Math.random() * 9000),
+    pin: pin,
+    password: pin,
+    pattern: "",
     notes: "",
   };
   showAddEditModal.value = true;
@@ -2942,18 +3006,64 @@ function openAddModal() {
 
 function openEditModal(student: Student) {
   editingStudent.value = true;
-  formStudent.value = { ...student };
+  formStudent.value = {
+    ...student,
+    pin: student.pin || student.password || teacherStore.generateUnique6DigitPin(teacherStore.allStudentsRegistry.value),
+  };
   showAddEditModal.value = true;
 }
 
 function generateCredentials() {
   const base = formStudent.value.name?.trim().toLowerCase().replace(/\s+/g, "_") || "student";
   formStudent.value.login = base + (Math.floor(10 + Math.random() * 90));
-  formStudent.value.password = "PIN" + Math.floor(1000 + Math.random() * 9000);
+  const pin = teacherStore.generateUnique6DigitPin(teacherStore.allStudentsRegistry.value);
+  formStudent.value.pin = pin;
+  formStudent.value.password = pin;
+}
+
+function generatePinForForm() {
+  const pin = teacherStore.generateUnique6DigitPin(teacherStore.allStudentsRegistry.value);
+  formStudent.value.pin = pin;
+  formStudent.value.password = pin;
+}
+
+function copyPin(pin: string) {
+  navigator.clipboard.writeText(pin);
+  alert(`6 xonali PIN (${pin}) nusxalandi!`);
+}
+
+function handleResetPattern(student: Student) {
+  if (confirm(`"${student.name}"ning grafik kalitini (Pattern) tozalashni tasdiqlaysizmi?`)) {
+    teacherStore.resetStudentPattern(student.name);
+    student.pattern = "";
+    if (selectedStudent.value && selectedStudent.value.name === student.name) {
+      selectedStudent.value.pattern = "";
+    }
+    alert(`"${student.name}"ning grafik kaliti tozalandi! O'quvchi keyingi safar o'z 6 xonali PIN kodi (${student.pin || student.password || '123456'}) orqali kirib yangi grafik kalit chizib oladi.`);
+  }
+}
+
+function handleRegeneratePin(student: Student) {
+  if (confirm(`"${student.name}" uchun yangi 6 xonali PIN kod generatsiya qilinsinmi?`)) {
+    const newPin = teacherStore.regenerateStudentPin(student.name);
+    if (newPin) {
+      student.pin = newPin;
+      student.password = newPin;
+      if (selectedStudent.value && selectedStudent.value.name === student.name) {
+        selectedStudent.value.pin = newPin;
+        selectedStudent.value.password = newPin;
+      }
+      alert(`"${student.name}" uchun yangi 6 xonali PIN kod berildi: 🔢 ${newPin}`);
+    }
+  }
 }
 
 function saveStudentData() {
   if (!formStudent.value.name?.trim()) return;
+  if (!formStudent.value.pin) {
+    formStudent.value.pin = teacherStore.generateUnique6DigitPin(teacherStore.allStudentsRegistry.value);
+    formStudent.value.password = formStudent.value.pin;
+  }
   teacherStore.saveStudent(formStudent.value as any);
   showAddEditModal.value = false;
 }
@@ -2974,14 +3084,13 @@ function openStudentDetail(student: Student) {
 }
 
 function copyCredentials(student: Student) {
-  const login = student.login || student.name.toLowerCase().replace(/\s+/g, "_");
-  const pass = student.password || "1234";
+  const pin = student.pin || student.password || "123456";
   const url = window.location.origin;
 
-  const text = `🎓 Hurmatli ${student.name}!\nSizning "History Arena Pro" portaliga kirish ma'lumotlaringiz:\n🌐 Sayt: ${url}\n👤 Login: ${login}\n🔑 Parol: ${pass}\n\nDarslarda faol ishtirok eting! 🚀`;
+  const text = `🎓 Hurmatli ${student.name}!\nSizning "History Arena Pro" portaliga kirish 6 xonali PIN kodingiz: 🔢 ${pin}\n🌐 Sayt: ${url}\n\n💡 Saytga kiring va 6 xonali PIN kodingizni terib, o'zingizga qulay grafik kalit (Pattern) chizib oling! 🚀`;
 
   navigator.clipboard.writeText(text);
-  alert("Kirish ma'lumotlari nusxalandi! O'quvchi yoki ota-onasiga yuborishingiz mumkin.");
+  alert("O'quvchining 6 xonali PIN kodi nusxalandi! O'quvchi yoki ota-onasiga yuborishingiz mumkin.");
 }
 
 // --- Reminders Actions ---
@@ -3172,10 +3281,10 @@ function copyAllGroupCredentials(groupName: string) {
   text += `------------------------------------\n`;
 
   students.forEach((s, idx) => {
-    const login = s.login || s.name.toLowerCase().replace(/\s+/g, "_");
-    const pass = s.password || "1234";
+    const pin = s.pin || s.password || "123456";
+    const patternStatus = s.pattern ? "🟢 Pattern o'rnatilgan" : "⏳ Pattern kutilmoqda";
     const statusIcon = s.status === "frozen" ? " [❄️ Muzlatilgan]" : "";
-    text += `${idx + 1}. 👤 ${s.name}${statusIcon}\n   🔑 Login: ${login}  |  PIN: ${pass}\n\n`;
+    text += `${idx + 1}. 👤 ${s.name}${statusIcon}\n   🔢 6 xonali PIN: ${pin} (${patternStatus})\n\n`;
   });
 
   text += `------------------------------------\n`;

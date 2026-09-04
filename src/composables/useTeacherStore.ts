@@ -47,6 +47,8 @@ export interface Student {
   parentTg?: string;
   login?: string;
   password?: string;
+  pin?: string; // 6-digit numeric PIN (e.g. "482910")
+  pattern?: string; // Android 3x3 pattern sequence (e.g. "0-1-2-5-8")
   notes?: string;
   joinedDate?: string;
   coins?: number;
@@ -158,13 +160,28 @@ function loadInitialStudents(): Student[] {
 const teacherName = ref<string>(localStorage.getItem("teacherName") || "");
 const students = ref<Student[]>(loadInitialStudents());
 
+export function generateUnique6DigitPin(existingList?: Student[]): string {
+  const usedPins = new Set<string>();
+  if (existingList) {
+    existingList.forEach((s) => {
+      if (s.pin && /^\d{6}$/.test(s.pin)) usedPins.add(s.pin);
+    });
+  }
+  for (let i = 0; i < 10000; i++) {
+    const candidate = Math.floor(100000 + Math.random() * 900000).toString();
+    if (!usedPins.has(candidate)) return candidate;
+  }
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 function loadInitialMasterStudents(): Student[] {
   const saved = localStorage.getItem("ha_all_students");
   if (!saved) return [];
   try {
     const list: Student[] = JSON.parse(saved);
     const sampleNames = new Set(["Ali Valiyev", "Madina Karimova", "Jasur Rahimov", "Zuhra Yusupova", "Bekzod Rustamov"]);
-    return list.filter(
+    let needsSave = false;
+    const filtered = list.filter(
       (s) =>
         !sampleNames.has(s.name) &&
         s.id !== "std-1" &&
@@ -173,6 +190,24 @@ function loadInitialMasterStudents(): Student[] {
         s.id !== "std-4" &&
         s.id !== "std-5"
     );
+
+    // Auto-migrate: ensure every student has a unique 6-digit PIN
+    filtered.forEach((s) => {
+      if (!s.pin || !/^\d{6}$/.test(s.pin)) {
+        if (s.password && /^\d{6}$/.test(s.password)) {
+          s.pin = s.password;
+        } else {
+          s.pin = generateUnique6DigitPin(filtered);
+          s.password = s.pin;
+        }
+        needsSave = true;
+      }
+    });
+
+    if (needsSave) {
+      localStorage.setItem("ha_all_students", JSON.stringify(filtered));
+    }
+    return filtered;
   } catch {
     return [];
   }
@@ -483,13 +518,16 @@ export function useTeacherStore() {
 
     // Also ensure it exists in master registry
     if (!reg) {
+      const pin = generateUnique6DigitPin(allStudentsRegistry.value);
       allStudentsRegistry.value.push({
         id: "std-" + Date.now(),
         name: trimmed,
         group: "Umumiy",
         status: "active",
         login: trimmed.toLowerCase().replace(/\s+/g, "_"),
-        password: "PIN" + Math.floor(1000 + Math.random() * 9000),
+        pin,
+        password: pin,
+        pattern: "",
         correct: 0,
         total: 0,
         sess: 0,
@@ -574,9 +612,17 @@ export function useTeacherStore() {
       parentTg: studentData.parentTg || "",
       login:
         studentData.login || trimmedName.toLowerCase().replace(/\s+/g, "_"),
+      pin:
+        studentData.pin && /^\d{6}$/.test(studentData.pin)
+          ? studentData.pin
+          : (studentData.password && /^\d{6}$/.test(studentData.password)
+              ? studentData.password
+              : generateUnique6DigitPin(allStudentsRegistry.value)),
       password:
         studentData.password ||
-        "PIN" + Math.floor(1000 + Math.random() * 9000),
+        studentData.pin ||
+        generateUnique6DigitPin(allStudentsRegistry.value),
+      pattern: studentData.pattern || "",
       notes: studentData.notes || "",
       joinedDate:
         studentData.joinedDate || new Date().toISOString().split("T")[0],
@@ -1156,6 +1202,32 @@ export function useTeacherStore() {
     actionHistory.value = [];
   }
 
+  function resetStudentPattern(studentName: string) {
+    const target = allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === studentName.toLowerCase().trim()
+    );
+    if (target) {
+      target.pattern = "";
+      allStudentsRegistry.value = [...allStudentsRegistry.value];
+      return true;
+    }
+    return false;
+  }
+
+  function regenerateStudentPin(studentName: string): string | null {
+    const target = allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === studentName.toLowerCase().trim()
+    );
+    if (target) {
+      const newPin = generateUnique6DigitPin(allStudentsRegistry.value);
+      target.pin = newPin;
+      target.password = newPin;
+      allStudentsRegistry.value = [...allStudentsRegistry.value];
+      return newPin;
+    }
+    return null;
+  }
+
   return {
     teacherName,
     students,
@@ -1206,6 +1278,8 @@ export function useTeacherStore() {
     removeStudent,
     addFromDb,
     saveStudent,
+    resetStudentPattern,
+    regenerateStudentPin,
     toggleFreezeStudent,
     toggleFreezeGroup,
     transferStudentGroup,
