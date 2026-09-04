@@ -388,6 +388,35 @@ onMounted(() => {
       }
     }
   });
+
+  // Realtime Cloud synchronization for frozen groups
+  const frozenGroupsRef = fbRef(db, "frozen_groups");
+  onChildAdded(frozenGroupsRef, (snap: any) => {
+    const val = snap.val();
+    const grp = val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."));
+    if (grp) {
+      teacherStore.allStudentsRegistry.value.forEach((s) => {
+        if (s.group && s.group.toLowerCase().trim() === grp.toLowerCase().trim()) {
+          s.status = "frozen";
+        }
+      });
+      teacherStore.students.value = teacherStore.students.value.filter(
+        (s) => !s.group || s.group.toLowerCase().trim() !== grp.toLowerCase().trim()
+      );
+    }
+  });
+
+  onChildRemoved(frozenGroupsRef, (snap: any) => {
+    const val = snap.val();
+    const grp = val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."));
+    if (grp) {
+      teacherStore.allStudentsRegistry.value.forEach((s) => {
+        if (s.group && s.group.toLowerCase().trim() === grp.toLowerCase().trim()) {
+          s.status = "active";
+        }
+      });
+    }
+  });
 });
 </script>
 

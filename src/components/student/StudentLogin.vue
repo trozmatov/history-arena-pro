@@ -91,6 +91,11 @@
         ></div>
       </div>
 
+      <div v-if="isPinChecking" class="text-xs font-bold text-amber-300 animate-pulse flex items-center justify-center gap-1.5 py-1">
+        <span>Baza tekshirilmoqda...</span>
+        <span>⏳</span>
+      </div>
+
       <div v-if="errorMsg" class="rounded-xl bg-rose-500/15 border border-rose-500/30 p-2.5 text-xs font-bold text-rose-300">
         {{ errorMsg }}
       </div>

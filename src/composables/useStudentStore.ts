@@ -44,6 +44,21 @@ export interface DeviceStudent {
   pattern?: string;
 }
 
+export function getStudentDefaultPin(name: string): string {
+  if (!name || typeof name !== "string") return "123456";
+  const clean = name
+    .trim()
+    .toLowerCase()
+    .replace(/[\u02BB\u02BC\u2018\u2019\x60]/g, "'")
+    .replace(/\s+/g, " ");
+  let hash = 5381;
+  for (let i = 0; i < clean.length; i++) {
+    hash = ((hash << 5) + hash) + clean.charCodeAt(i);
+    hash = hash & hash; // 32-bit integer
+  }
+  return ((Math.abs(hash) % 900000) + 100000).toString();
+}
+
 function loadDeviceStudent(): DeviceStudent | null {
   try {
     const raw = localStorage.getItem("ha_device_student");
@@ -52,6 +67,7 @@ function loadDeviceStudent(): DeviceStudent | null {
     return null;
   }
 }
+
 
 const deviceStudent = ref<DeviceStudent | null>(loadDeviceStudent());
 const studentName = ref<string>(localStorage.getItem("studentUser") || "");
@@ -217,9 +233,14 @@ export function useStudentStore() {
       const saved = localStorage.getItem("ha_all_students");
       if (saved) {
         const masterList: any[] = JSON.parse(saved);
-        return masterList.find(
-          (s) => (s.pin && s.pin.trim() === trimmed) || (s.password && s.password.trim() === trimmed)
-        ) || null;
+        return (
+          masterList.find(
+            (s) =>
+              (s.pin && s.pin.trim() === trimmed) ||
+              (s.password && s.password.trim() === trimmed) ||
+              (s.name && getStudentDefaultPin(s.name) === trimmed)
+          ) || null
+        );
       }
     } catch (e) {
       console.warn("findStudentByPin error:", e);
@@ -238,12 +259,16 @@ export function useStudentStore() {
       return { success: false, message: "6 xonali PIN kodni kiriting!" };
     }
 
+    // 1. Check local master CRM registry if present
     try {
       const saved = localStorage.getItem("ha_all_students");
       if (saved) {
         const masterList: any[] = JSON.parse(saved);
         const match = masterList.find(
-          (s) => (s.pin && s.pin.trim() === trimmed) || (s.password && s.password.trim() === trimmed)
+          (s) =>
+            (s.pin && s.pin.trim() === trimmed) ||
+            (s.password && s.password.trim() === trimmed) ||
+            (s.name && getStudentDefaultPin(s.name) === trimmed)
         );
 
         if (match) {
@@ -273,7 +298,81 @@ export function useStudentStore() {
         }
       }
     } catch (e) {
-      console.warn("loginWithPin error:", e);
+      console.warn("loginWithPin local check error:", e);
+    }
+
+    // 2. Student device has no local master list - fetch live students from Google Sheets
+    try {
+      const res = await callApi("get_student_list");
+      if (res && res.status === "success" && res.groups) {
+        let matchedStudentName: string | null = null;
+        let matchedGroup: string = "";
+
+        for (const [groupName, studentList] of Object.entries(res.groups)) {
+          if (Array.isArray(studentList)) {
+            for (const sName of studentList) {
+              if (typeof sName === "string") {
+                const sPin = getStudentDefaultPin(sName);
+                if (sPin === trimmed) {
+                  matchedStudentName = sName.trim();
+                  matchedGroup = groupName;
+                  break;
+                }
+              }
+            }
+          }
+          if (matchedStudentName) break;
+        }
+
+        if (matchedStudentName) {
+          const studentObj = {
+            id: "std-" + trimmed,
+            name: matchedStudentName,
+            group: matchedGroup,
+            pin: trimmed,
+            password: trimmed,
+            pattern: "",
+            status: "active",
+          };
+
+          // Cache student locally on this device
+          let masterList: any[] = [];
+          try {
+            const saved = localStorage.getItem("ha_all_students");
+            if (saved) masterList = JSON.parse(saved);
+          } catch {}
+
+          const existingIdx = masterList.findIndex(
+            (s) => s.name.toLowerCase() === matchedStudentName!.toLowerCase()
+          );
+          if (existingIdx >= 0) {
+            masterList[existingIdx].pin = trimmed;
+            masterList[existingIdx].group = matchedGroup;
+          } else {
+            masterList.push(studentObj);
+          }
+          localStorage.setItem("ha_all_students", JSON.stringify(masterList));
+
+          const devInfo: DeviceStudent = {
+            name: matchedStudentName,
+            pin: trimmed,
+            pattern: "",
+          };
+          deviceStudent.value = devInfo;
+          localStorage.setItem("ha_device_student", JSON.stringify(devInfo));
+
+          setStudent(matchedStudentName);
+          await fetchStudentHistory();
+
+          return {
+            success: true,
+            student: studentObj,
+            needsPattern: true,
+          };
+        }
+      }
+    } catch (e) {
+      console.error("Remote student list lookup error:", e);
     }
 
     return { success: false, message: "Bunday 6 xonali PIN kodli o'quvchi topilmadi!" };
@@ -284,7 +383,7 @@ export function useStudentStore() {
       return { success: false, message: "Grafik kalitni chizing!" };
     }
 
-    // Attempt to sync latest from master list
+    // Attempt to sync latest from master list or deviceStudent
     let currentStudentName = deviceStudent.value?.name || studentName.value;
     if (!currentStudentName) {
       return { success: false, message: "Avval 6 xonali PIN kod bilan kiring!" };
@@ -305,7 +404,9 @@ export function useStudentStore() {
               message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
             };
           }
-          actualPattern = match.pattern || "";
+          if (match.pattern) {
+            actualPattern = match.pattern;
+          }
           if (deviceStudent.value) {
             deviceStudent.value.pattern = actualPattern;
             deviceStudent.value.pin = match.pin || deviceStudent.value.pin;
@@ -337,25 +438,36 @@ export function useStudentStore() {
 
     try {
       const saved = localStorage.getItem("ha_all_students");
+      let masterList: any[] = [];
       if (saved) {
-        const masterList: any[] = JSON.parse(saved);
-        const match = masterList.find(
-          (s) => s.name.toLowerCase() === sName.toLowerCase()
-        );
-        if (match) {
-          match.pattern = pattern;
-          localStorage.setItem("ha_all_students", JSON.stringify(masterList));
-
-          const devInfo: DeviceStudent = {
-            name: match.name,
-            pin: match.pin || "",
-            pattern: pattern,
-          };
-          deviceStudent.value = devInfo;
-          localStorage.setItem("ha_device_student", JSON.stringify(devInfo));
-          return true;
-        }
+        masterList = JSON.parse(saved);
       }
+      let match = masterList.find(
+        (s) => s.name.toLowerCase() === sName.toLowerCase()
+      );
+      if (match) {
+        match.pattern = pattern;
+      } else {
+        match = {
+          id: "std-" + Date.now(),
+          name: sName,
+          pin: deviceStudent.value?.pin || getStudentDefaultPin(sName),
+          password: deviceStudent.value?.pin || getStudentDefaultPin(sName),
+          pattern: pattern,
+          status: "active",
+        };
+        masterList.push(match);
+      }
+      localStorage.setItem("ha_all_students", JSON.stringify(masterList));
+
+      const devInfo: DeviceStudent = {
+        name: match.name,
+        pin: match.pin || deviceStudent.value?.pin || getStudentDefaultPin(match.name),
+        pattern: pattern,
+      };
+      deviceStudent.value = devInfo;
+      localStorage.setItem("ha_device_student", JSON.stringify(devInfo));
+      return true;
     } catch (e) {
       console.warn("setStudentPattern error:", e);
     }
@@ -1061,6 +1173,7 @@ export function useStudentStore() {
     loginWithPattern,
     setStudentPattern,
     resetPatternWithPin,
+    getStudentDefaultPin,
     clearDeviceStudent,
     fetchStudentHistory,
     fetchLeaderboard,

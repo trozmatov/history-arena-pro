@@ -2929,13 +2929,15 @@ async function syncFromDb(force = true) {
             (s) => s.name.toLowerCase() === trimmed.toLowerCase()
           );
           if (!exists) {
+            const pin = teacherStore.generateUnique6DigitPin(trimmed);
             teacherStore.saveStudent({
               id: "db-" + Math.random().toString(36).substring(2, 9),
               name: trimmed,
               group: groupName,
               status: "active",
               login: trimmed.toLowerCase().replace(/\s+/g, "_"),
-              password: "PIN" + Math.floor(1000 + Math.random() * 9000),
+              pin: pin,
+              password: pin,
               correct: 0,
               total: 0,
               sess: 0,
@@ -2949,8 +2951,15 @@ async function syncFromDb(force = true) {
               joinedDate: new Date().toISOString().split("T")[0],
             });
             countAdded++;
-          } else if (!exists.group || exists.group === "Umumiy") {
-            exists.group = groupName;
+          } else {
+            if (!exists.group || exists.group === "Umumiy") {
+              exists.group = groupName;
+            }
+            if (!exists.pin || !/^\d{6}$/.test(exists.pin)) {
+              const defPin = teacherStore.generateUnique6DigitPin(trimmed);
+              exists.pin = defPin;
+              exists.password = defPin;
+            }
           }
         });
       }

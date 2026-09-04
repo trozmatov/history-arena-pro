@@ -2,6 +2,8 @@ import { ref, computed, watch } from "vue";
 import { callApi } from "../services/api";
 import { soundManager, fireConfetti, fireVictoryConfetti } from "./useAudio";
 import { db, ref as fbRef, set as fbSet, remove as fbRemove } from "../services/firebase";
+import { getStudentDefaultPin } from "./useStudentStore";
+
 
 export function sanitizeFbKey(name: string): string {
   return encodeURIComponent(name.toLowerCase().trim()).replace(/\./g, "%2E");
@@ -23,6 +25,23 @@ export function syncFreezeToCloud(studentName: string, isFrozen: boolean, group:
     console.warn("syncFreezeToCloud error:", e);
   }
 }
+
+export function syncGroupFreezeToCloud(groupName: string, isFrozen: boolean) {
+  try {
+    const key = sanitizeFbKey(groupName);
+    if (isFrozen) {
+      fbSet(fbRef(db, `frozen_groups/${key}`), {
+        group: groupName,
+        frozenAt: Date.now(),
+      }).catch((e: any) => console.warn("Firebase group sync error:", e));
+    } else {
+      fbRemove(fbRef(db, `frozen_groups/${key}`)).catch((e: any) => console.warn("Firebase group sync error:", e));
+    }
+  } catch (e) {
+    console.warn("syncGroupFreezeToCloud error:", e);
+  }
+}
+
 
 export interface Student {
   id?: string;
@@ -160,16 +179,9 @@ function loadInitialStudents(): Student[] {
 const teacherName = ref<string>(localStorage.getItem("teacherName") || "");
 const students = ref<Student[]>(loadInitialStudents());
 
-export function generateUnique6DigitPin(existingList?: Student[]): string {
-  const usedPins = new Set<string>();
-  if (existingList) {
-    existingList.forEach((s) => {
-      if (s.pin && /^\d{6}$/.test(s.pin)) usedPins.add(s.pin);
-    });
-  }
-  for (let i = 0; i < 10000; i++) {
-    const candidate = Math.floor(100000 + Math.random() * 900000).toString();
-    if (!usedPins.has(candidate)) return candidate;
+export function generateUnique6DigitPin(nameOrList?: string | Student[]): string {
+  if (typeof nameOrList === "string" && nameOrList.trim()) {
+    return getStudentDefaultPin(nameOrList);
   }
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -191,15 +203,12 @@ function loadInitialMasterStudents(): Student[] {
         s.id !== "std-5"
     );
 
-    // Auto-migrate: ensure every student has a unique 6-digit PIN
+    // Auto-migrate: ensure every student has their universal deterministic 6-digit PIN so it matches student devices
     filtered.forEach((s) => {
-      if (!s.pin || !/^\d{6}$/.test(s.pin)) {
-        if (s.password && /^\d{6}$/.test(s.password)) {
-          s.pin = s.password;
-        } else {
-          s.pin = generateUnique6DigitPin(filtered);
-          s.password = s.pin;
-        }
+      const defPin = getStudentDefaultPin(s.name);
+      if (!s.pin || !/^\d{6}$/.test(s.pin) || s.pin !== defPin) {
+        s.pin = defPin;
+        s.password = s.pin;
         needsSave = true;
       }
     });
@@ -518,7 +527,7 @@ export function useTeacherStore() {
 
     // Also ensure it exists in master registry
     if (!reg) {
-      const pin = generateUnique6DigitPin(allStudentsRegistry.value);
+      const pin = generateUnique6DigitPin(trimmed);
       allStudentsRegistry.value.push({
         id: "std-" + Date.now(),
         name: trimmed,
@@ -617,11 +626,11 @@ export function useTeacherStore() {
           ? studentData.pin
           : (studentData.password && /^\d{6}$/.test(studentData.password)
               ? studentData.password
-              : generateUnique6DigitPin(allStudentsRegistry.value)),
+              : generateUnique6DigitPin(trimmedName)),
       password:
         studentData.password ||
         studentData.pin ||
-        generateUnique6DigitPin(allStudentsRegistry.value),
+        generateUnique6DigitPin(trimmedName),
       pattern: studentData.pattern || "",
       notes: studentData.notes || "",
       joinedDate:
@@ -683,6 +692,7 @@ export function useTeacherStore() {
 
   function toggleFreezeGroup(groupName: string, freeze: boolean) {
     const newStatus: "active" | "frozen" = freeze ? "frozen" : "active";
+    syncGroupFreezeToCloud(groupName, freeze);
     allStudentsRegistry.value.forEach((s) => {
       if (s.group === groupName) {
         s.status = newStatus;
@@ -1219,7 +1229,7 @@ export function useTeacherStore() {
       (s) => s.name.toLowerCase().trim() === studentName.toLowerCase().trim()
     );
     if (target) {
-      const newPin = generateUnique6DigitPin(allStudentsRegistry.value);
+      const newPin = generateUnique6DigitPin(studentName);
       target.pin = newPin;
       target.password = newPin;
       allStudentsRegistry.value = [...allStudentsRegistry.value];
