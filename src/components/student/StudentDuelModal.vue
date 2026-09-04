@@ -212,6 +212,8 @@ import { db, ref as fbRef, push } from "../../services/firebase";
 import { useStudentStore } from "../../composables/useStudentStore";
 import { soundManager } from "../../composables/useAudio";
 import { callApi } from "../../services/api";
+import { notifyDuelChallenged } from "../../services/telegram";
+
 
 defineProps<{
   modelValue: boolean;
@@ -329,6 +331,13 @@ async function sendDuel() {
       message: `${studentStore.studentName.value} ➡️ ${selectedOpponent.value.name} (${duelType.value === "live" ? "🔥 Jonli Doskada" : "📊 Dars Natijasi"})`,
       time: timeStr,
     });
+
+    // Send Telegram Bot notification to Telegram group
+    notifyDuelChallenged(
+      studentStore.studentName.value,
+      selectedOpponent.value.name,
+      duelType.value
+    ).catch((e) => console.warn("TG duel challenge notification error:", e));
 
     soundManager.playSuccess();
     alert(`⚔️ "${selectedOpponent.value.name}"ga duel taklifi yuborildi! Raqib o'z profilida qabul qilishi kutilmoqda.`);

@@ -521,7 +521,7 @@ async function handleAcceptDuel() {
   const duel = studentStore.incomingDuel.value;
   soundManager.playSuccess();
   fireConfetti();
-  const ok = await studentStore.acceptDuel(duel.key);
+  const ok = await studentStore.acceptDuel(duel.key, duel);
   if (ok) {
     alert(`⚔️ "${duel.challenger}" bilan duel taklifini qabul qildingiz! ${duel.type === 'live' ? "Doskadagi jangga tayyorlaning!" : "Darsdagi testda omad!"}`);
   }
@@ -530,7 +530,7 @@ async function handleAcceptDuel() {
 async function handleDeclineDuel() {
   if (!studentStore.incomingDuel.value) return;
   const duel = studentStore.incomingDuel.value;
-  await studentStore.declineDuel(duel.key);
+  await studentStore.declineDuel(duel.key, duel);
 }
 
 // Pattern Update State

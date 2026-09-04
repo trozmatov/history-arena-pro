@@ -9,6 +9,8 @@ import {
   onChildRemoved,
   update,
 } from "../services/firebase";
+import { notifyDuelAccepted, notifyDuelDeclined } from "../services/telegram";
+
 
 export interface DuelChallenge {
   key: string;
@@ -775,12 +777,18 @@ export function useStudentStore() {
 
   initDuelListener();
 
-  async function acceptDuel(key: string): Promise<boolean> {
+  async function acceptDuel(key: string, duelObj?: DuelChallenge): Promise<boolean> {
     try {
+      const duelData = duelObj || incomingDuel.value;
       await update(fbRef(db, `duels/${key}`), {
         status: "accepted",
         acceptedAt: Date.now(),
       });
+      if (duelData) {
+        notifyDuelAccepted(duelData.challenger, duelData.target, duelData.type).catch((e) =>
+          console.warn("TG duel accept notification error:", e)
+        );
+      }
       incomingDuel.value = null;
       return true;
     } catch (e) {
@@ -789,12 +797,18 @@ export function useStudentStore() {
     }
   }
 
-  async function declineDuel(key: string): Promise<boolean> {
+  async function declineDuel(key: string, duelObj?: DuelChallenge): Promise<boolean> {
     try {
+      const duelData = duelObj || incomingDuel.value;
       await update(fbRef(db, `duels/${key}`), {
         status: "declined",
         declinedAt: Date.now(),
       });
+      if (duelData) {
+        notifyDuelDeclined(duelData.challenger, duelData.target).catch((e) =>
+          console.warn("TG duel decline notification error:", e)
+        );
+      }
       incomingDuel.value = null;
       return true;
     } catch (e) {
