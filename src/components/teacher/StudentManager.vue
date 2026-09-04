@@ -500,14 +500,14 @@
 
             <!-- Quick Action Buttons -->
             <div class="flex items-center gap-1 shrink-0 flex-nowrap">
-              <!-- 1. Deep Stats -->
+              <!-- 1. Deep Stats / Doskasi -->
               <button
                 type="button"
                 @click="openStudentDetail(st)"
                 class="flex items-center gap-1 rounded-xl bg-blue-600/20 border border-blue-500/30 px-2.5 py-2 text-xs font-bold text-blue-300 hover:bg-blue-600/30 active:scale-95 transition shrink-0"
-                title="Individual Statistika"
+                title="Shaxsiy Doskasi"
               >
-                <span>📊</span> <span class="hidden sm:inline">Statistika</span>
+                <span>🪪</span> <span class="hidden sm:inline">Doskasi</span>
               </button>
 
               <!-- 2. Transfer Group Button -->
@@ -904,7 +904,7 @@
     <!-- ======================================================== -->
     <BaseModal
       v-model="showDetailModal"
-      :title="selectedStudent ? `🪪 ${selectedStudent.name} — Shaxsiy Dosyesi` : 'Shaxsiy Dosye'"
+      :title="selectedStudent ? `🪪 ${selectedStudent.name} — Shaxsiy Doskasi` : 'Shaxsiy Doskasi'"
       customClass="max-w-2xl"
     >
       <div v-if="selectedStudent" class="py-2 space-y-4">
@@ -965,21 +965,21 @@
           </div>
         </div>
 
-        <!-- Dosye Navigation Tabs -->
+        <!-- Doska Navigation Tabs -->
         <div class="flex items-center gap-1.5 p-1 rounded-2xl bg-black/50 border border-white/10 text-xs">
           <button
             type="button"
-            @click="activeDosyeTab = 'overview'"
+            @click="activeDoskaTab = 'overview'"
             class="flex-1 py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5"
-            :class="activeDosyeTab === 'overview' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+            :class="activeDoskaTab === 'overview' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
           >
             <span>👤 Shaxsiy & Aloqa</span>
           </button>
           <button
             type="button"
-            @click="activeDosyeTab = 'attendance'"
+            @click="activeDoskaTab = 'attendance'"
             class="flex-1 py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5"
-            :class="activeDosyeTab === 'attendance' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+            :class="activeDoskaTab === 'attendance' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
           >
             <span>📅 Davomat</span>
             <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-black/30 font-mono font-bold">
@@ -988,9 +988,9 @@
           </button>
           <button
             type="button"
-            @click="activeDosyeTab = 'history'"
+            @click="activeDoskaTab = 'history'"
             class="flex-1 py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5"
-            :class="activeDosyeTab === 'history' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+            :class="activeDoskaTab === 'history' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
           >
             <span>📈 Natijalar</span>
             <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-black/30 font-mono font-bold">
@@ -1000,7 +1000,7 @@
         </div>
 
         <!-- ================= TAB 1: SHAXSIY & ALOQA ================= -->
-        <div v-if="activeDosyeTab === 'overview'" class="space-y-3">
+        <div v-if="activeDoskaTab === 'overview'" class="space-y-3">
           <!-- 4 Key Metrics -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
@@ -1190,7 +1190,7 @@
         </div>
 
         <!-- ================= TAB 2: DAVOMAT JURNALI ================= -->
-        <div v-if="activeDosyeTab === 'attendance'" class="space-y-3">
+        <div v-if="activeDoskaTab === 'attendance'" class="space-y-3">
           <!-- Attendance Stats -->
           <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
             <div class="flex items-center justify-between">
@@ -1265,7 +1265,7 @@
         </div>
 
         <!-- ================= TAB 3: AKADEMIK NATIJALAR & BAHOLAR ================= -->
-        <div v-if="activeDosyeTab === 'history'" class="space-y-3">
+        <div v-if="activeDoskaTab === 'history'" class="space-y-3">
           <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
             <div class="flex items-center justify-between">
               <span class="text-xs font-black uppercase tracking-wider text-slate-300">
@@ -2760,7 +2760,7 @@ const selectedStudentAttendanceData = computed(() => {
 });
 
 const studentHistoryMap = ref<Record<string, any[]>>({});
-const activeDosyeTab = ref<"overview" | "attendance" | "history">("overview");
+const activeDoskaTab = ref<"overview" | "attendance" | "history">("overview");
 
 const selectedStudentHistory = computed(() => {
   if (!selectedStudent.value) return [];
@@ -3530,7 +3530,7 @@ function confirmDelete(student: Student) {
 
 function openStudentDetail(student: Student) {
   selectedStudent.value = student;
-  activeDosyeTab.value = "overview";
+  activeDoskaTab.value = "overview";
   showDetailModal.value = true;
   if (Object.keys(studentAttendanceLogsMap.value).length === 0 || Object.keys(studentHistoryMap.value).length === 0) {
     refreshStudentStats();
