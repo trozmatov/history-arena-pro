@@ -951,26 +951,74 @@
         </div>
 
         <!-- Attendance Stats -->
-        <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-2">
-          <div class="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-            <span>📅 Davomat Ko'rsatkichlari</span>
-            <span class="text-white font-bold">
-              {{ (selectedStudent.attendanceStats?.present || 0) + (selectedStudent.attendanceStats?.excused || 0) + (selectedStudent.attendanceStats?.unexcused || 0) }} jami dars
+        <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black uppercase tracking-wider text-slate-300">📅 Davomat Ko'rsatkichlari</span>
+              <span
+                class="px-2 py-0.5 text-[11px] font-black rounded-full"
+                :class="selectedStudentAttendanceData.percent >= 80 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : selectedStudentAttendanceData.percent >= 60 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+              >
+                {{ selectedStudentAttendanceData.percent }}% davomat
+              </span>
+            </div>
+            <span class="text-xs font-bold text-slate-400">
+              {{ selectedStudentAttendanceData.total }} ta dars
             </span>
           </div>
-          <div class="grid grid-cols-3 gap-2 pt-1">
+
+          <!-- Progress Bar -->
+          <div class="w-full h-2 rounded-full bg-white/5 overflow-hidden border border-white/10">
+            <div
+              class="h-full rounded-full transition-all duration-500"
+              :class="selectedStudentAttendanceData.percent >= 80 ? 'bg-emerald-500' : selectedStudentAttendanceData.percent >= 60 ? 'bg-amber-500' : 'bg-rose-500'"
+              :style="{ width: `${selectedStudentAttendanceData.percent}%` }"
+            ></div>
+          </div>
+
+          <!-- 3 Stats Pills -->
+          <div class="grid grid-cols-3 gap-2">
             <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-center">
-              <div class="text-xs font-black text-emerald-400">✅ {{ selectedStudent.attendanceStats?.present || 0 }}</div>
-              <div class="text-[10px] text-slate-400">Qatnashdi</div>
+              <div class="text-base font-black text-emerald-400">✅ {{ selectedStudentAttendanceData.present }}</div>
+              <div class="text-[10px] font-semibold text-slate-400">Qatnashdi</div>
             </div>
             <div class="rounded-xl bg-amber-500/10 border border-amber-500/30 p-2.5 text-center">
-              <div class="text-xs font-black text-amber-400">🟡 {{ selectedStudent.attendanceStats?.excused || 0 }}</div>
-              <div class="text-[10px] text-slate-400">Sababli</div>
+              <div class="text-base font-black text-amber-400">🟡 {{ selectedStudentAttendanceData.excused }}</div>
+              <div class="text-[10px] font-semibold text-slate-400">Sababli</div>
             </div>
-            <div class="rounded-xl bg-red-500/10 border border-red-500/30 p-2.5 text-center">
-              <div class="text-xs font-black text-red-400">❌ {{ selectedStudent.attendanceStats?.unexcused || 0 }}</div>
-              <div class="text-[10px] text-slate-400">Sababsiz</div>
+            <div class="rounded-xl bg-rose-500/10 border border-rose-500/30 p-2.5 text-center">
+              <div class="text-base font-black text-rose-400">❌ {{ selectedStudentAttendanceData.unexcused }}</div>
+              <div class="text-[10px] font-semibold text-slate-400">Sababsiz</div>
             </div>
+          </div>
+
+          <!-- Recent Attendance History Logs -->
+          <div v-if="selectedStudentAttendanceData.logs && selectedStudentAttendanceData.logs.length > 0" class="pt-2 border-t border-white/10 space-y-1.5">
+            <div class="text-[11px] font-bold text-slate-400 flex items-center justify-between">
+              <span>Oxirgi darslar davomati ({{ selectedStudentAttendanceData.logs.length }} ta)</span>
+              <span class="text-[10px] text-slate-500">Sana bo'yicha</span>
+            </div>
+            <div class="max-h-44 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+              <div
+                v-for="(log, idx) in selectedStudentAttendanceData.logs.slice(0, 20)"
+                :key="idx"
+                class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-xs"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-[11px] font-semibold text-indigo-300">🗓️ {{ log.date }}</span>
+                  <span class="text-slate-300 text-[11px] truncate max-w-[140px]">{{ log.topic || 'Dars' }}</span>
+                </div>
+                <span
+                  class="px-2 py-0.5 rounded text-[10px] font-bold"
+                  :class="log.status === 'Keldi' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : log.status === 'Sababli' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+                >
+                  {{ log.status === 'Keldi' ? '✅ Keldi' : log.status === 'Sababli' ? '🟡 Sababli' : '❌ Sababsiz' }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="selectedStudentAttendanceData.total === 0" class="pt-1 text-center text-[11px] text-slate-500 italic">
+            Hozircha davomat yozuvlari kiritilmagan
           </div>
         </div>
 
@@ -2450,6 +2498,39 @@ const showAddEditModal = ref(false);
 const editingStudent = ref(false);
 const showDetailModal = ref(false);
 const selectedStudent = ref<Student | null>(null);
+const studentAttendanceLogsMap = ref<Record<string, { present: number; excused: number; unexcused: number; logs: any[] }>>({});
+
+const selectedStudentAttendanceData = computed(() => {
+  if (!selectedStudent.value) {
+    return { present: 0, excused: 0, unexcused: 0, total: 0, percent: 100, logs: [] };
+  }
+  const key = selectedStudent.value.name.trim().toLowerCase();
+  const att = studentAttendanceLogsMap.value[key];
+  if (att) {
+    const total = att.present + att.excused + att.unexcused;
+    const percent = total > 0 ? Math.round((att.present / total) * 100) : 100;
+    return {
+      present: att.present,
+      excused: att.excused,
+      unexcused: att.unexcused,
+      total,
+      percent,
+      logs: att.logs || [],
+    };
+  }
+  const st = selectedStudent.value.attendanceStats || { present: 0, excused: 0, unexcused: 0 };
+  const total = (st.present || 0) + (st.excused || 0) + (st.unexcused || 0);
+  const percent = total > 0 ? Math.round(((st.present || 0) / total) * 100) : 100;
+  return {
+    present: st.present || 0,
+    excused: st.excused || 0,
+    unexcused: st.unexcused || 0,
+    total,
+    percent,
+    logs: [],
+  };
+});
+
 
 // Transfer Group Modal State
 const showTransferModal = ref(false);
@@ -2757,9 +2838,10 @@ function formatCleanTopicName(rawTopic: string): string {
 
 async function refreshStudentStats(force = false) {
   try {
-    const [resHist, resLb] = await Promise.all([
+    const [resHist, resLb, resAtt] = await Promise.all([
       callApi("get_history", {}, { forceRefresh: force }),
       callApi("get_leaderboard", {}, { forceRefresh: force }),
+      callApi("get_attendance", {}, { forceRefresh: force }),
     ]);
 
     const historyByName: Record<string, any[]> = {};
@@ -2839,11 +2921,122 @@ async function refreshStudentStats(force = false) {
       });
     }
 
+    // Process Attendance Logs
+    const studentDatesMap: Record<string, Map<string, { date: string; status: "Keldi" | "Sababli" | "Sababsiz"; topic: string }>> = {};
+    const getStudentDates = (name: string) => {
+      const k = name.trim().toLowerCase();
+      if (!studentDatesMap[k]) studentDatesMap[k] = new Map();
+      return { key: k, map: studentDatesMap[k] };
+    };
+
+    // 1. Google Sheets attendance records
+    if (resAtt && resAtt.status === "success" && Array.isArray(resAtt.attendance)) {
+      resAtt.attendance.forEach((att: any) => {
+        if (!att || !att.name) return;
+        const dStr = att.date ? String(att.date).trim() : "";
+        if (!dStr) return;
+        const { map } = getStudentDates(String(att.name));
+
+        const rawStatus = String(att.status || "").trim().toLowerCase();
+        let status: "Keldi" | "Sababli" | "Sababsiz" = "Keldi";
+        if (rawStatus === "sababli" || rawStatus === "excused") {
+          status = "Sababli";
+        } else if (rawStatus === "sababsiz" || rawStatus === "unexcused") {
+          status = "Sababsiz";
+        }
+
+        map.set(dStr, {
+          date: dStr,
+          status,
+          topic: att.topic || "Dars",
+        });
+      });
+    }
+
+    // 2. Local teacher attendance logs (offline/recent marks)
+    try {
+      const localLogsStr = localStorage.getItem("ha_attendance_logs");
+      if (localLogsStr) {
+        const localLogs = JSON.parse(localLogsStr);
+        if (Array.isArray(localLogs)) {
+          localLogs.forEach((item: any) => {
+            if (item.name && item.date) {
+              const { map } = getStudentDates(String(item.name));
+              const dStr = String(item.date).trim();
+              const rawStatus = String(item.status || "").trim().toLowerCase();
+              let status: "Keldi" | "Sababli" | "Sababsiz" = "Keldi";
+              if (rawStatus === "sababli" || rawStatus === "excused") status = "Sababli";
+              else if (rawStatus === "sababsiz" || rawStatus === "unexcused") status = "Sababsiz";
+              map.set(dStr, { date: dStr, status, topic: item.topic || "Dars" });
+            }
+            if (item.date && Array.isArray(item.records)) {
+              item.records.forEach((rec: any) => {
+                if (rec.name) {
+                  const { map } = getStudentDates(String(rec.name));
+                  const dStr = String(item.date).trim();
+                  const rawStatus = String(rec.status || "").trim().toLowerCase();
+                  let status: "Keldi" | "Sababli" | "Sababsiz" = "Keldi";
+                  if (rawStatus === "sababli" || rawStatus === "excused") status = "Sababli";
+                  else if (rawStatus === "sababsiz" || rawStatus === "unexcused") status = "Sababsiz";
+                  map.set(dStr, { date: dStr, status, topic: item.topic || "Dars" });
+                }
+              });
+            }
+          });
+        }
+      }
+    } catch {}
+
+    // 3. Test history (students who took tests were definitely in class)
+    if (resHist.status === "success" && resHist.history) {
+      resHist.history.forEach((h: any) => {
+        if (!h.name || !h.date) return;
+        const dStr = String(h.date).trim();
+        const { map } = getStudentDates(String(h.name));
+        if (!map.has(dStr)) {
+          map.set(dStr, {
+            date: dStr,
+            status: "Keldi",
+            topic: formatCleanTopicName(h.topic || (h.book ? `${h.book} darsi` : "Savol-Javob Darsi")),
+          });
+        }
+      });
+    }
+
+    const finalAttMap: Record<string, { present: number; excused: number; unexcused: number; logs: any[] }> = {};
+    for (const key in studentDatesMap) {
+      const records = Array.from(studentDatesMap[key].values());
+      records.sort((a, b) => {
+        const tA = parseDateStrToMillis(a.date, 0);
+        const tB = parseDateStrToMillis(b.date, 0);
+        return tB - tA;
+      });
+
+      let present = 0;
+      let excused = 0;
+      let unexcused = 0;
+      records.forEach((r) => {
+        if (r.status === "Keldi") present++;
+        else if (r.status === "Sababli") excused++;
+        else if (r.status === "Sababsiz") unexcused++;
+      });
+
+      finalAttMap[key] = {
+        present,
+        excused,
+        unexcused,
+        logs: records,
+      };
+    }
+
+    studentAttendanceLogsMap.value = finalAttMap;
+
     // Update all students in master registry
     teacherStore.allStudentsRegistry.value.forEach((s) => {
       const key = s.name.trim().toLowerCase();
       const histList = historyByName[key] || [];
       const lb = lbByName[key];
+      const att = finalAttMap[key];
 
       if (histList.length > 0) {
         s.totalTests = histList.length;
@@ -2856,6 +3049,14 @@ async function refreshStudentStats(force = false) {
       } else if (histList.length > 0) {
         s.coins = histList.reduce((acc: number, h: any) => acc + (parseInt(h.coin) || 0), 0);
         s.strikes = histList.reduce((acc: number, h: any) => acc + (parseInt(h.strike) || 0), 0);
+      }
+
+      if (att) {
+        s.attendanceStats = {
+          present: att.present,
+          excused: att.excused,
+          unexcused: att.unexcused,
+        };
       }
     });
   } catch (e) {
@@ -3090,6 +3291,9 @@ function confirmDelete(student: Student) {
 function openStudentDetail(student: Student) {
   selectedStudent.value = student;
   showDetailModal.value = true;
+  if (Object.keys(studentAttendanceLogsMap.value).length === 0) {
+    refreshStudentStats();
+  }
 }
 
 function copyCredentials(student: Student) {
