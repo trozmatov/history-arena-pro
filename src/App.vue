@@ -373,6 +373,7 @@ onMounted(() => {
       teacherStore.students.value = teacherStore.students.value.filter(
         (s) => s.name.toLowerCase().trim() !== val.name.toLowerCase().trim()
       );
+      teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
     }
   });
 
@@ -385,6 +386,7 @@ onMounted(() => {
       );
       if (target) {
         target.status = "active";
+        teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
       }
     }
   });
@@ -403,6 +405,7 @@ onMounted(() => {
       teacherStore.students.value = teacherStore.students.value.filter(
         (s) => !s.group || s.group.toLowerCase().trim() !== grp.toLowerCase().trim()
       );
+      teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
     }
   });
 
@@ -415,8 +418,60 @@ onMounted(() => {
           s.status = "active";
         }
       });
+      teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
     }
   });
+
+  // Realtime Cloud synchronization for student group transfers
+  const studentGroupsRef = fbRef(db, "student_groups");
+  const handleStudentGroupSnap = (snap: any) => {
+    const val = snap.val();
+    if (val && val.name && val.group) {
+      const target = teacherStore.allStudentsRegistry.value.find(
+        (s) => s.name.toLowerCase().trim() === val.name.toLowerCase().trim()
+      );
+      if (target) {
+        if (target.group !== val.group) {
+          target.group = val.group;
+          teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
+        }
+      } else {
+        teacherStore.saveStudent({
+          name: val.name,
+          group: val.group,
+          status: "active",
+        });
+      }
+    }
+  };
+  onChildAdded(studentGroupsRef, handleStudentGroupSnap);
+  onChildChanged(studentGroupsRef, handleStudentGroupSnap);
+
+  // Realtime Cloud synchronization for attendance logs
+  const attLogsRef = fbRef(db, "attendance_logs");
+  const handleAttLogSnap = (snap: any) => {
+    const val = snap.val();
+    if (val && val.name && val.date && val.status) {
+      const existing = teacherStore.localAttendanceLogs.value.find(
+        (l) => l.name.toLowerCase().trim() === val.name.toLowerCase().trim() && l.date === val.date
+      );
+      if (existing) {
+        existing.status = val.status;
+        existing.group = val.group || existing.group;
+        existing.reason = val.reason || existing.reason;
+      } else {
+        teacherStore.localAttendanceLogs.value.push({
+          name: val.name,
+          date: val.date,
+          status: val.status,
+          group: val.group || "Umumiy",
+          reason: val.reason || "",
+        });
+      }
+    }
+  };
+  onChildAdded(attLogsRef, handleAttLogSnap);
+  onChildChanged(attLogsRef, handleAttLogSnap);
 });
 </script>
 

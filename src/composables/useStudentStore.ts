@@ -129,6 +129,16 @@ function initFreezeListener() {
         cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== grp);
       }
     });
+
+    const sgRef = fbRef(db, "student_groups");
+    const handleGroupSnap = (snap: any) => {
+      const val = snap.val();
+      if (val && val.name && val.group) {
+        studentGroupMap.value[val.name.toLowerCase().trim()] = val.group;
+      }
+    };
+    onChildAdded(sgRef, handleGroupSnap);
+    onChildChanged(sgRef, handleGroupSnap);
   } catch (e) {
     console.warn("initFreezeListener error:", e);
   }
@@ -371,7 +381,7 @@ export function useStudentStore() {
         );
 
         if (match) {
-          if (match.status === "frozen") {
+          if (match.status === "frozen" || isStudentFrozen(match.name, match.group)) {
             return {
               success: false,
               message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
@@ -424,6 +434,13 @@ export function useStudentStore() {
         }
 
         if (matchedStudentName) {
+          if (isStudentFrozen(matchedStudentName, matchedGroup)) {
+            return {
+              success: false,
+              message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
+            };
+          }
+
           const studentObj = {
             id: "std-" + trimmed,
             name: matchedStudentName,
@@ -486,6 +503,13 @@ export function useStudentStore() {
     let currentStudentName = deviceStudent.value?.name || studentName.value;
     if (!currentStudentName) {
       return { success: false, message: "Avval 6 xonali PIN kod bilan kiring!" };
+    }
+
+    if (isStudentFrozen(currentStudentName)) {
+      return {
+        success: false,
+        message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
+      };
     }
 
     let actualPattern = deviceStudent.value?.pattern || "";

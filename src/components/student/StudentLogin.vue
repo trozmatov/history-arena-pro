@@ -246,6 +246,11 @@ onUnmounted(() => {
 
 function decideInitialMode() {
   const dev = studentStore.deviceStudent.value;
+  if (dev && studentStore.isStudentFrozen(dev.name)) {
+    errorMsg.value = "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.";
+    loginMode.value = "PIN_LOGIN";
+    return;
+  }
   // If we have a saved student on this device who already has a pattern set
   if (dev && dev.pattern && dev.pattern.trim()) {
     loginMode.value = "PATTERN_LOGIN";

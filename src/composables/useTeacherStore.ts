@@ -42,6 +42,40 @@ export function syncGroupFreezeToCloud(groupName: string, isFrozen: boolean) {
   }
 }
 
+export function syncGroupTransferToCloud(studentName: string, newGroup: string) {
+  try {
+    const key = sanitizeFbKey(studentName);
+    const trimmedGroup = newGroup.trim();
+    if (trimmedGroup) {
+      fbSet(fbRef(db, `student_groups/${key}`), {
+        name: studentName,
+        group: trimmedGroup,
+        updatedAt: Date.now(),
+      }).catch((e: any) => console.warn("Firebase group transfer sync error:", e));
+    }
+  } catch (e) {
+    console.warn("syncGroupTransferToCloud error:", e);
+  }
+}
+
+export function syncAttendanceLogToCloud(date: string, studentName: string, status: string, group: string = "", reason: string = "") {
+  try {
+    const safeDate = date.replace(/\./g, "_").replace(/\//g, "_").replace(/-/g, "_");
+    const safeName = sanitizeFbKey(studentName);
+    const key = `${safeDate}___${safeName}`;
+    fbSet(fbRef(db, `attendance_logs/${key}`), {
+      date,
+      name: studentName,
+      status,
+      group: group || "",
+      reason: reason || "",
+      timestamp: Date.now(),
+    }).catch((e: any) => console.warn("Firebase attendance sync error:", e));
+  } catch (e) {
+    console.warn("syncAttendanceLogToCloud error:", e);
+  }
+}
+
 
 export interface Student {
   id?: string;
@@ -241,6 +275,8 @@ function syncExistingFrozenToCloud() {
     for (const [g, stat] of Object.entries(groupMap)) {
       if (stat.total > 0 && stat.frozen === stat.total) {
         syncGroupFreezeToCloud(g, true);
+      } else if (stat.total > 0 && stat.frozen < stat.total) {
+        syncGroupFreezeToCloud(g, false);
       }
     }
   } catch (e) {
@@ -360,6 +396,7 @@ const actionHistory = ref<string[]>([]);
 const zeroScorers = ref<Student[]>([]);
 const activeDuels = ref<Record<string, any>>({});
 const suggestedLiveDuel = ref<any>(null);
+const sessionFinalized = ref<boolean>(false);
 
 export interface AttendanceLog {
   date: string; // "DD.MM" e.g. "02.09" or "YYYY-MM-DD"
@@ -693,62 +730,87 @@ export function useTeacherStore() {
   }
 
   function toggleFreezeStudent(studentName: string) {
+    const clean = studentName.toLowerCase().trim();
     const target = allStudentsRegistry.value.find(
-      (s) => s.name.toLowerCase().trim() === studentName.toLowerCase().trim()
+      (s) => s.name.toLowerCase().trim() === clean
     );
     if (target) {
       target.status = target.status === "frozen" ? "active" : "frozen";
       const isFrozen = target.status === "frozen";
       syncFreezeToCloud(target.name, isFrozen, target.group || "");
 
+      // Check group-level freeze status:
+      const grp = (target.group || "").trim();
+      if (grp) {
+        const grpStudents = allStudentsRegistry.value.filter(
+          (s) => (s.group || "").toLowerCase().trim() === grp.toLowerCase()
+        );
+        const allFrozen = grpStudents.length > 0 && grpStudents.every((s) => s.status === "frozen");
+        syncGroupFreezeToCloud(grp, allFrozen);
+      }
+
       // If frozen, immediately eject from active game session
       if (isFrozen) {
         students.value = students.value.filter(
-          (s) => s.name.toLowerCase().trim() !== studentName.toLowerCase().trim()
+          (s) => s.name.toLowerCase().trim() !== clean
         );
       } else {
         const inSession = students.value.find(
-          (s) => s.name.toLowerCase().trim() === studentName.toLowerCase().trim()
+          (s) => s.name.toLowerCase().trim() === clean
         );
         if (inSession) inSession.status = "active";
       }
+
+      allStudentsRegistry.value = [...allStudentsRegistry.value];
     }
   }
 
   function toggleFreezeGroup(groupName: string, freeze: boolean) {
+    const cleanGrp = groupName.toLowerCase().trim();
     const newStatus: "active" | "frozen" = freeze ? "frozen" : "active";
-    syncGroupFreezeToCloud(groupName, freeze);
+    syncGroupFreezeToCloud(groupName.trim(), freeze);
     allStudentsRegistry.value.forEach((s) => {
-      if (s.group === groupName) {
+      if ((s.group || "").toLowerCase().trim() === cleanGrp) {
         s.status = newStatus;
         syncFreezeToCloud(s.name, freeze, s.group || "");
       }
     });
     // If frozen, immediately eject all group members from active game session
     if (freeze) {
-      students.value = students.value.filter((s) => s.group !== groupName);
+      students.value = students.value.filter(
+        (s) => (s.group || "").toLowerCase().trim() !== cleanGrp
+      );
     } else {
       students.value.forEach((s) => {
-        if (s.group === groupName) {
+        if ((s.group || "").toLowerCase().trim() === cleanGrp) {
           s.status = "active";
         }
       });
     }
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
   }
 
   function transferStudentGroup(studentName: string, newGroup: string) {
+    const cleanName = studentName.toLowerCase().trim();
     const trimmedGroup = newGroup.trim();
-    if (!trimmedGroup) return;
+    if (!trimmedGroup || !cleanName) return;
 
-    const target = allStudentsRegistry.value.find((s) => s.name === studentName);
+    const target = allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === cleanName
+    );
     if (target) {
       target.group = trimmedGroup;
     }
 
-    const inSession = students.value.find((s) => s.name === studentName);
+    const inSession = students.value.find(
+      (s) => s.name.toLowerCase().trim() === cleanName
+    );
     if (inSession) {
       inSession.group = trimmedGroup;
     }
+
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    syncGroupTransferToCloud(target?.name || studentName, trimmedGroup);
   }
 
   function transferMultipleStudentsGroup(studentNames: string[], newGroup: string) {
@@ -756,15 +818,23 @@ export function useTeacherStore() {
     if (!trimmedGroup || studentNames.length === 0) return;
 
     studentNames.forEach((name) => {
-      const target = allStudentsRegistry.value.find((s) => s.name === name);
+      const cleanName = name.toLowerCase().trim();
+      const target = allStudentsRegistry.value.find(
+        (s) => s.name.toLowerCase().trim() === cleanName
+      );
       if (target) {
         target.group = trimmedGroup;
       }
-      const inSession = students.value.find((s) => s.name === name);
+      const inSession = students.value.find(
+        (s) => s.name.toLowerCase().trim() === cleanName
+      );
       if (inSession) {
         inSession.group = trimmedGroup;
       }
+      syncGroupTransferToCloud(target?.name || name, trimmedGroup);
     });
+
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
   }
 
   function deleteStudentPermanently(studentName: string) {
@@ -981,6 +1051,9 @@ export function useTeacherStore() {
   }
 
   function finalizeResults() {
+    if (sessionFinalized.value) return;
+    sessionFinalized.value = true;
+
     stopTimer();
     fireVictoryConfetti();
     const players = getActivePlayers();
@@ -1043,7 +1116,7 @@ export function useTeacherStore() {
         }
       }
 
-      // 4. Record entry into local attendance logs
+      // 4. Record entry into local attendance logs and sync to Firebase
       const existingLog = localAttendanceLogs.value.find(
         (l) => l.name === s.name && l.date === todayDate
       );
@@ -1067,7 +1140,13 @@ export function useTeacherStore() {
           reason: reasonText,
         });
       }
+
+      // Sync to Firebase Cloud
+      syncAttendanceLogToCloud(todayDate, s.name, status, groupName, reasonText);
     });
+
+    // Trigger reactivity for CRM UI
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
 
     // 5. Save detailed Lesson Session Record into history
     const sessionStudentResults: LessonSessionStudentResult[] = [];
@@ -1219,6 +1298,7 @@ export function useTeacherStore() {
   }
 
   function resetSession() {
+    sessionFinalized.value = false;
     const players = getActivePlayers();
     players.forEach((s) => {
       s.correct = 0;
@@ -1338,5 +1418,9 @@ export function useTeacherStore() {
     checkZeroScorers,
     finalizeResults,
     resetSession,
+    sessionFinalized,
+    syncGroupTransferToCloud,
+    syncAttendanceLogToCloud,
+    syncGroupFreezeToCloud,
   };
 }

@@ -666,9 +666,21 @@ function navMonth(dir: number) {
 
 const uniqueGroups = computed(() => {
   const set = new Set<string>();
+  // 1. From allStudentsRegistry (only active, non-frozen students)
+  teacherStore.allStudentsRegistry.value.forEach((s) => {
+    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
+    const g = (s.group || "").trim();
+    if (g && g !== "Arxiv" && !g.toLowerCase().includes("arxiv")) {
+      set.add(g);
+    }
+  });
+  // 2. From rawLogs
   rawLogs.value.forEach((l) => {
     if (teacherStore.isStudentFrozen(l.name)) return;
-    if (l.group && l.group !== "Arxiv") set.add(l.group);
+    const g = (l.group || "").trim();
+    if (g && g !== "Arxiv" && !g.toLowerCase().includes("arxiv")) {
+      set.add(g);
+    }
   });
   return [...set].sort();
 });
@@ -677,13 +689,31 @@ const uniqueGroups = computed(() => {
 const monthDates = computed(() => {
   const targetM = selectedMonth.value;
   const set = new Set<string>();
+
+  // Lookup for student group transfers
+  const studentGroupMap = new Map<string, string>();
+  teacherStore.allStudentsRegistry.value.forEach((s) => {
+    studentGroupMap.set(s.name.toLowerCase().trim(), (s.group || "").trim());
+  });
+
   rawLogs.value.forEach((l) => {
     if (getMonthFromDate(l.date) === targetM) {
-      if (selectedGroup.value === "all" || (l.group || "Boshqa") === selectedGroup.value) {
+      const effectiveGroup = studentGroupMap.get(l.name.toLowerCase().trim()) || l.group || "Boshqa";
+      if (selectedGroup.value === "all" || effectiveGroup === selectedGroup.value) {
         set.add(l.date);
       }
     }
   });
+
+  // Also include dates from lessonSessions
+  teacherStore.lessonSessions.value.forEach((sess) => {
+    if (sess.date && getMonthFromDate(sess.date) === targetM) {
+      if (selectedGroup.value === "all" || sess.group === selectedGroup.value) {
+        set.add(sess.date);
+      }
+    }
+  });
+
   return [...set].sort((a, b) => {
     const dayA = parseInt(a.split(".")[0] || a, 10);
     const dayB = parseInt(b.split(".")[0] || b, 10);
@@ -707,11 +737,33 @@ const allStudentRows = computed<StudentRow[]>(() => {
   const targetM = selectedMonth.value;
   const studentsMap: Record<string, { group: string; records: Record<string, any>; reasons: Record<string, any> }> = {};
 
+  // Build lookup of master student info from registry
+  const masterMap = new Map<string, { group: string; isFrozen: boolean }>();
+  teacherStore.allStudentsRegistry.value.forEach((s) => {
+    masterMap.set(s.name.toLowerCase().trim(), {
+      group: (s.group || "").trim(),
+      isFrozen: s.status === "frozen" || teacherStore.isStudentFrozen(s.name),
+    });
+  });
+
+  // 1. Seed all active students belonging to selectedGroup (or all active students if selectedGroup === 'all')
+  teacherStore.allStudentsRegistry.value.forEach((s) => {
+    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
+    const g = (s.group || "Boshqa").trim();
+    if (g === "Arxiv" || g.toLowerCase().includes("arxiv")) return;
+    if (selectedGroup.value !== "all" && g !== selectedGroup.value) return;
+
+    studentsMap[s.name] = { group: g, records: {}, reasons: {} };
+  });
+
+  // 2. Populate logs and discover any additional students in rawLogs
   rawLogs.value.forEach((l) => {
-    // Exclude frozen students completely from attendance matrix
-    if (teacherStore.isStudentFrozen(l.name)) return;
+    const norm = l.name.toLowerCase().trim();
+    const master = masterMap.get(norm);
+    if (master?.isFrozen || teacherStore.isStudentFrozen(l.name)) return;
     if (getMonthFromDate(l.date) !== targetM) return;
-    const g = l.group || "Boshqa";
+
+    const g = master?.group || l.group || "Boshqa";
     if (selectedGroup.value !== "all" && g !== selectedGroup.value) return;
 
     if (!studentsMap[l.name]) {
@@ -817,13 +869,17 @@ function saveStatusEdit() {
   if (!editTarget.value || editReason.value.trim().length < 4) return;
   const { name, date, status } = editTarget.value;
   const reasonText = editReason.value.trim();
-  const group = selectedGroup.value === "all" ? "Boshqa" : selectedGroup.value;
+  const master = teacherStore.allStudentsRegistry.value.find(
+    (s) => s.name.toLowerCase().trim() === name.toLowerCase().trim()
+  );
+  const group = master?.group || (selectedGroup.value === "all" ? "Boshqa" : selectedGroup.value);
 
   // Find and update or insert in rawLogs
   const item = rawLogs.value.find((l) => l.name === name && l.date === date);
   if (item) {
     item.status = status;
     item.reason = reasonText;
+    item.group = group;
   } else {
     rawLogs.value.push({
       name,
@@ -839,6 +895,7 @@ function saveStatusEdit() {
   if (localItem) {
     localItem.status = status;
     localItem.reason = reasonText;
+    localItem.group = group;
   } else {
     teacherStore.localAttendanceLogs.value.push({
       name,
@@ -849,17 +906,29 @@ function saveStatusEdit() {
     });
   }
 
+  // Sync to Firebase Cloud
+  teacherStore.syncAttendanceLogToCloud(date, name, status, group, reasonText);
+
   showEditModal.value = false;
 }
 
 // 2. Open Manual Attendance Modal
 const availableManualGroups = computed(() => {
-  const list = Object.keys(allGroupsDict.value).filter((g) => {
-    if (g === "Arxiv") return false;
-    const members = allGroupsDict.value[g] || [];
-    // Check if group has any non-frozen student
-    return members.some((name) => !teacherStore.isStudentFrozen(name));
+  const set = new Set<string>();
+  // 1. Google Sheets groups
+  Object.keys(allGroupsDict.value).forEach((g) => {
+    if (g === "Arxiv" || g.toLowerCase().includes("arxiv")) return;
+    set.add(g.trim());
   });
+  // 2. Registry groups
+  teacherStore.allStudentsRegistry.value.forEach((s) => {
+    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
+    const g = (s.group || "").trim();
+    if (g && g !== "Arxiv" && !g.toLowerCase().includes("arxiv")) {
+      set.add(g);
+    }
+  });
+  const list = Array.from(set).sort();
   return list.length > 0 ? list : uniqueGroups.value;
 });
 
@@ -885,10 +954,35 @@ async function openManualAttendanceModal() {
 }
 
 function onManualGroupChange() {
-  const g = manualGroup.value;
+  const g = manualGroup.value.trim();
+  const set = new Set<string>();
+
+  // 1. Google Sheets members (checking if transferred in CRM)
   const list = allGroupsDict.value[g] || [];
-  // Exclude frozen students from manual attendance list
-  manualStudentsList.value = list.filter((name) => !teacherStore.isStudentFrozen(name));
+  list.forEach((name) => {
+    const master = teacherStore.allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === name.toLowerCase().trim()
+    );
+    if (master) {
+      if (master.status === "frozen" || teacherStore.isStudentFrozen(name)) return;
+      if (master.group && master.group.toLowerCase().trim() !== g.toLowerCase()) return; // transferred away
+      set.add(master.name);
+    } else {
+      if (!teacherStore.isStudentFrozen(name)) {
+        set.add(name);
+      }
+    }
+  });
+
+  // 2. Students in allStudentsRegistry whose current group is g
+  teacherStore.allStudentsRegistry.value.forEach((s) => {
+    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
+    if ((s.group || "").toLowerCase().trim() === g.toLowerCase()) {
+      set.add(s.name);
+    }
+  });
+
+  manualStudentsList.value = Array.from(set).sort((a, b) => a.localeCompare(b));
 
   const st: Record<string, "Keldi" | "Sababsiz" | "Sababli"> = {};
   manualStudentsList.value.forEach((name) => {
@@ -949,7 +1043,13 @@ async function saveManualAttendance() {
       else if (status === "Sababli") reg.attendanceStats.excused++;
       else if (status === "Sababsiz") reg.attendanceStats.unexcused++;
     }
+
+    // Sync to Firebase Cloud
+    teacherStore.syncAttendanceLogToCloud(dateStr, name, status, group, "Offline darsda qo'lda kiritildi");
   });
+
+  // Trigger reactivity for CRM UI
+  teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
 
   // Switch selected month to match the inserted date
   const m = getMonthFromDate(dateStr);

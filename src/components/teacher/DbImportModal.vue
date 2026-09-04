@@ -136,52 +136,69 @@ const groupsData = ref<Record<string, string[]>>({});
 const selectedNames = ref<string[]>([]);
 const openGroups = ref<Record<string, boolean>>({});
 
-// Filter out archive groups, completely frozen groups, and frozen individual students
+// Filter out archive groups, completely frozen groups, and reflect group transfers
 const normalGroups = computed(() => {
   const result: Record<string, string[]> = {};
 
-  // 1. Build lookup of frozen students from registry
-  const frozenStudentNames = new Set(
-    teacherStore.allStudentsRegistry.value
-      .filter((s) => s.status === "frozen")
-      .map((s) => s.name.toLowerCase().trim())
-  );
-
-  // 2. Build group freeze stats from registry
-  const groupStats: Record<string, { total: number; frozen: number }> = {};
+  // Build a lookup map of student -> current group & status from allStudentsRegistry
+  const studentMasterMap = new Map<string, { group: string; isFrozen: boolean }>();
   teacherStore.allStudentsRegistry.value.forEach((s) => {
-    const g = (s.group || "").toLowerCase().trim();
-    if (g) {
-      if (!groupStats[g]) groupStats[g] = { total: 0, frozen: 0 };
-      groupStats[g].total++;
-      if (s.status === "frozen") groupStats[g].frozen++;
-    }
+    const normName = s.name.toLowerCase().trim();
+    studentMasterMap.set(normName, {
+      group: s.group ? s.group.trim() : "",
+      isFrozen: s.status === "frozen" || teacherStore.isStudentFrozen(s.name),
+    });
   });
 
-  for (const g in groupsData.value) {
-    const gTrimmed = g.trim();
-    const gLower = gTrimmed.toLowerCase();
+  // Group buckets: Map groupName -> Set of student display names
+  const groupBuckets = new Map<string, Set<string>>();
 
-    // Skip archive groups
+  // 1. Process Google Sheets groupsData
+  for (const g in groupsData.value) {
+    const gTrim = g.trim();
+    if (!gTrim) continue;
+    if (!groupBuckets.has(gTrim)) {
+      groupBuckets.set(gTrim, new Set());
+    }
+    const members = groupsData.value[g] || [];
+    for (const name of members) {
+      const normName = name.toLowerCase().trim();
+      const master = studentMasterMap.get(normName);
+      if (master) {
+        if (master.isFrozen) continue; // skip frozen
+        // Place in transferred group if specified
+        const effectiveGroup = master.group || gTrim;
+        if (!groupBuckets.has(effectiveGroup)) {
+          groupBuckets.set(effectiveGroup, new Set());
+        }
+        groupBuckets.get(effectiveGroup)!.add(name);
+      } else {
+        if (teacherStore.isStudentFrozen(name)) continue;
+        groupBuckets.get(gTrim)!.add(name);
+      }
+    }
+  }
+
+  // 2. Also include any students in registry who were transferred or registered
+  teacherStore.allStudentsRegistry.value.forEach((s) => {
+    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
+    const gTrim = (s.group || "").trim();
+    if (!gTrim) return;
+    if (!groupBuckets.has(gTrim)) {
+      groupBuckets.set(gTrim, new Set());
+    }
+    groupBuckets.get(gTrim)!.add(s.name);
+  });
+
+  // 3. Assemble result filtering out archive and empty groups
+  for (const [groupName, studentSet] of groupBuckets.entries()) {
+    const gLower = groupName.toLowerCase();
     if (gLower === "arxiv" || gLower === "archive" || gLower.includes("arxiv")) {
       continue;
     }
-
-    // Skip groups where all registered students are frozen
-    const stat = groupStats[gLower];
-    if (stat && stat.total > 0 && stat.frozen === stat.total) {
-      continue;
-    }
-
-    const members = groupsData.value[g] || [];
-    // Exclude frozen students
-    const activeMembers = members.filter(
-      (m) => !frozenStudentNames.has(m.toLowerCase().trim())
-    );
-
-    // Only include group if it has active students
-    if (activeMembers.length > 0) {
-      result[gTrimmed] = activeMembers;
+    const list = Array.from(studentSet).sort((a, b) => a.localeCompare(b));
+    if (list.length > 0) {
+      result[groupName] = list;
     }
   }
 
