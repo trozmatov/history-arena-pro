@@ -225,6 +225,31 @@ function loadInitialMasterStudents(): Student[] {
 // All Registered Students Database Registry (Master CRM list)
 const allStudentsRegistry = ref<Student[]>(loadInitialMasterStudents());
 
+function syncExistingFrozenToCloud() {
+  try {
+    const groupMap: Record<string, { total: number; frozen: number }> = {};
+    allStudentsRegistry.value.forEach((s) => {
+      const g = s.group || "Umumiy";
+      if (!groupMap[g]) groupMap[g] = { total: 0, frozen: 0 };
+      groupMap[g].total++;
+      if (s.status === "frozen") {
+        groupMap[g].frozen++;
+        syncFreezeToCloud(s.name, true, s.group || "");
+      }
+    });
+
+    for (const [g, stat] of Object.entries(groupMap)) {
+      if (stat.total > 0 && stat.frozen === stat.total) {
+        syncGroupFreezeToCloud(g, true);
+      }
+    }
+  } catch (e) {
+    console.warn("syncExistingFrozenToCloud error:", e);
+  }
+}
+
+syncExistingFrozenToCloud();
+
 // Persist master registry
 watch(
   allStudentsRegistry,

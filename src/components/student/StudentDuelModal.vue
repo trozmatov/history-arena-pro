@@ -211,6 +211,7 @@ import BaseModal from "../common/BaseModal.vue";
 import { db, ref as fbRef, push } from "../../services/firebase";
 import { useStudentStore } from "../../composables/useStudentStore";
 import { soundManager } from "../../composables/useAudio";
+import { callApi } from "../../services/api";
 
 defineProps<{
   modelValue: boolean;
@@ -233,7 +234,32 @@ onMounted(() => {
   loadEligibleStudents();
 });
 
-function loadEligibleStudents() {
+async function loadEligibleStudents() {
+  try {
+    const res = await callApi("get_student_list");
+    if (res && res.status === "success" && res.groups) {
+      const list: any[] = [];
+      for (const [groupName, members] of Object.entries(res.groups)) {
+        if (groupName === "Arxiv") continue;
+        if (Array.isArray(members)) {
+          members.forEach((m) => {
+            if (typeof m === "string") {
+              list.push({
+                name: m.trim(),
+                group: groupName,
+                status: studentStore.isStudentFrozen(m, groupName) ? "frozen" : "active",
+              });
+            }
+          });
+        }
+      }
+      if (list.length > 0) {
+        allMasterStudents.value = list;
+        return;
+      }
+    }
+  } catch (e) {}
+
   try {
     const saved = localStorage.getItem("ha_all_students");
     if (saved) {
@@ -248,8 +274,8 @@ function loadEligibleStudents() {
 const activeEligibleStudents = computed(() => {
   const currentName = studentStore.studentName.value.toLowerCase().trim();
   return allMasterStudents.value.filter((s) => {
-    const isSelf = s.name.toLowerCase().trim() === currentName;
-    const isFrozen = s.status === "frozen";
+    const isSelf = (s.name || "").toLowerCase().trim() === currentName;
+    const isFrozen = s.status === "frozen" || studentStore.isStudentFrozen(s.name, s.group);
     return !isSelf && !isFrozen;
   });
 });

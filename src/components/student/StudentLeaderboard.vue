@@ -91,28 +91,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useStudentStore } from "../../composables/useStudentStore";
 
 const studentStore = useStudentStore();
 const tab = ref<"coin" | "strike">("coin");
 
-const sortedData = computed(() => {
-  const frozenNames = new Set<string>();
-  try {
-    const saved = localStorage.getItem("ha_all_students");
-    if (saved) {
-      const list = JSON.parse(saved);
-      list.forEach((s: any) => {
-        if (s.status === "frozen" && s.name) {
-          frozenNames.add(s.name.toLowerCase().trim());
-        }
-      });
-    }
-  } catch (e) {}
+onMounted(() => {
+  studentStore.fetchLeaderboard();
+});
 
+const sortedData = computed(() => {
   const list = studentStore.leaderboardData.value.filter(
-    (u) => !frozenNames.has((u.name || "").toLowerCase().trim())
+    (u) => !studentStore.isStudentFrozen(u.name)
   );
 
   if (tab.value === "coin") {

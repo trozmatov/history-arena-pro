@@ -85,6 +85,102 @@ const studentBadges = ref<{ id: string; name: string; icon: string; special?: bo
 const incomingDuel = ref<DuelChallenge | null>(null);
 let duelListenerActive = false;
 
+// --- Realtime Cloud Freeze State for Students and Groups ---
+const cloudFrozenStudents = ref<string[]>([]);
+const cloudFrozenGroups = ref<string[]>(["arxiv"]); // Arxiv is always frozen
+const studentGroupMap = ref<Record<string, string>>({});
+let freezeListenerActive = false;
+
+function initFreezeListener() {
+  if (freezeListenerActive || typeof window === "undefined") return;
+  freezeListenerActive = true;
+
+  try {
+    const fsRef = fbRef(db, "frozen_students");
+    onChildAdded(fsRef, (snap: any) => {
+      const val = snap.val();
+      const sName = (val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (sName && !cloudFrozenStudents.value.includes(sName)) {
+        cloudFrozenStudents.value = [...cloudFrozenStudents.value, sName];
+      }
+    });
+    onChildRemoved(fsRef, (snap: any) => {
+      const val = snap.val();
+      const sName = (val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (sName) {
+        cloudFrozenStudents.value = cloudFrozenStudents.value.filter((n) => n !== sName);
+      }
+    });
+
+    const fgRef = fbRef(db, "frozen_groups");
+    onChildAdded(fgRef, (snap: any) => {
+      const val = snap.val();
+      const grp = (val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (grp && !cloudFrozenGroups.value.includes(grp)) {
+        cloudFrozenGroups.value = [...cloudFrozenGroups.value, grp];
+      }
+    });
+    onChildRemoved(fgRef, (snap: any) => {
+      const val = snap.val();
+      const grp = (val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (grp && grp !== "arxiv") {
+        cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== grp);
+      }
+    });
+  } catch (e) {
+    console.warn("initFreezeListener error:", e);
+  }
+}
+
+async function loadStudentGroupMap() {
+  try {
+    const res = await callApi("get_student_list");
+    if (res && res.status === "success" && res.groups) {
+      const map: Record<string, string> = {};
+      for (const [grp, members] of Object.entries(res.groups)) {
+        if (Array.isArray(members)) {
+          members.forEach((m) => {
+            if (typeof m === "string") {
+              map[m.toLowerCase().trim()] = grp;
+            }
+          });
+        }
+      }
+      studentGroupMap.value = map;
+    }
+  } catch (e) {}
+}
+
+initFreezeListener();
+loadStudentGroupMap();
+
+export function isStudentFrozen(name: string, group?: string): boolean {
+  if (!name) return false;
+  const clean = name.toLowerCase().trim();
+  // 1. Direct student freeze
+  if (cloudFrozenStudents.value.includes(clean)) return true;
+
+  // 2. Group freeze
+  const grp = (group || studentGroupMap.value[clean] || "").toLowerCase().trim();
+  if (grp && (grp === "arxiv" || cloudFrozenGroups.value.includes(grp))) return true;
+
+  // 3. Local master list check if available
+  try {
+    const saved = localStorage.getItem("ha_all_students");
+    if (saved) {
+      const list = JSON.parse(saved);
+      const match = list.find((s: any) => (s.name || "").toLowerCase().trim() === clean);
+      if (match) {
+        if (match.status === "frozen") return true;
+        const matchGrp = (match.group || "").toLowerCase().trim();
+        if (matchGrp && (matchGrp === "arxiv" || cloudFrozenGroups.value.includes(matchGrp))) return true;
+      }
+    }
+  } catch {}
+
+  return false;
+}
+
 const monthNames = [
   "",
   "Yanvar",
@@ -104,6 +200,7 @@ const monthNames = [
 export function useStudentStore() {
   const isStudentLoggedIn = computed(() => {
     if (!studentName.value) return false;
+    if (isStudentFrozen(studentName.value)) return false;
     try {
       const saved = localStorage.getItem("ha_all_students");
       if (saved) {
@@ -627,6 +724,10 @@ export function useStudentStore() {
   }
 
   async function fetchLeaderboard() {
+    initFreezeListener();
+    if (Object.keys(studentGroupMap.value).length === 0) {
+      loadStudentGroupMap();
+    }
     try {
       const res = await callApi("get_leaderboard");
       if (res.status === "success" && res.leaderboard) {
@@ -1174,6 +1275,9 @@ export function useStudentStore() {
     setStudentPattern,
     resetPatternWithPin,
     getStudentDefaultPin,
+    isStudentFrozen,
+    cloudFrozenStudents,
+    cloudFrozenGroups,
     clearDeviceStudent,
     fetchStudentHistory,
     fetchLeaderboard,
