@@ -904,185 +904,413 @@
     <!-- ======================================================== -->
     <BaseModal
       v-model="showDetailModal"
-      :title="selectedStudent ? `📊 ${selectedStudent.name} — Shaxsiy Dosyesi` : 'Statistika'"
+      :title="selectedStudent ? `🪪 ${selectedStudent.name} — Shaxsiy Dosyesi` : 'Shaxsiy Dosye'"
+      customClass="max-w-2xl"
     >
       <div v-if="selectedStudent" class="py-2 space-y-4">
         <!-- Profile Header -->
-        <div class="flex items-center justify-between rounded-2xl border border-white/10 bg-black/40 p-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/40 p-4">
           <div class="flex items-center gap-3">
-            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-2xl text-white shadow-lg">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-2xl text-white shadow-lg shrink-0">
               🎓
             </div>
             <div>
-              <h4 class="text-base font-black text-white">{{ selectedStudent.name }}</h4>
-              <div class="flex items-center gap-2 text-xs text-slate-400">
-                <span>📚 {{ selectedStudent.group || 'Umumiy' }}</span>
-                <span>•</span>
-                <span :class="selectedStudent.status === 'frozen' ? 'text-cyan-400 font-bold' : 'text-emerald-400 font-bold'">
-                  {{ selectedStudent.status === 'frozen' ? '❄️ Muzlatilgan' : '🟢 Faol O\'quvchi' }}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="text-xs text-slate-400 font-bold">Tangalar</div>
-            <div class="text-lg font-black text-amber-400">🪙 {{ selectedStudent.coins || 0 }}</div>
-          </div>
-        </div>
-
-        <!-- 4 Key Metrics -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
-            <div class="text-[10px] uppercase font-bold text-slate-400">Aniqlik</div>
-            <div class="text-lg font-black text-emerald-400">{{ selectedStudent.avgAccuracy || 0 }}%</div>
-          </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
-            <div class="text-[10px] uppercase font-bold text-slate-400">Darslar</div>
-            <div class="text-lg font-black text-white">{{ selectedStudent.totalTests || 0 }} ta</div>
-          </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
-            <div class="text-[10px] uppercase font-bold text-slate-400">Strikylar</div>
-            <div class="text-lg font-black text-yellow-400">⭐ {{ selectedStudent.strikes || 0 }}</div>
-          </div>
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
-            <div class="text-[10px] uppercase font-bold text-slate-400">Jarimalar</div>
-            <div class="text-lg font-black text-red-400">⚠️ {{ selectedStudent.penalties || 0 }}</div>
-          </div>
-        </div>
-
-        <!-- Attendance Stats -->
-        <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-black uppercase tracking-wider text-slate-300">📅 Davomat Ko'rsatkichlari</span>
-              <span
-                class="px-2 py-0.5 text-[11px] font-black rounded-full"
-                :class="selectedStudentAttendanceData.percent >= 80 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : selectedStudentAttendanceData.percent >= 60 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
-              >
-                {{ selectedStudentAttendanceData.percent }}% davomat
-              </span>
-            </div>
-            <span class="text-xs font-bold text-slate-400">
-              {{ selectedStudentAttendanceData.total }} ta dars
-            </span>
-          </div>
-
-          <!-- Progress Bar -->
-          <div class="w-full h-2 rounded-full bg-white/5 overflow-hidden border border-white/10">
-            <div
-              class="h-full rounded-full transition-all duration-500"
-              :class="selectedStudentAttendanceData.percent >= 80 ? 'bg-emerald-500' : selectedStudentAttendanceData.percent >= 60 ? 'bg-amber-500' : 'bg-rose-500'"
-              :style="{ width: `${selectedStudentAttendanceData.percent}%` }"
-            ></div>
-          </div>
-
-          <!-- 3 Stats Pills -->
-          <div class="grid grid-cols-3 gap-2">
-            <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-center">
-              <div class="text-base font-black text-emerald-400">✅ {{ selectedStudentAttendanceData.present }}</div>
-              <div class="text-[10px] font-semibold text-slate-400">Qatnashdi</div>
-            </div>
-            <div class="rounded-xl bg-amber-500/10 border border-amber-500/30 p-2.5 text-center">
-              <div class="text-base font-black text-amber-400">🟡 {{ selectedStudentAttendanceData.excused }}</div>
-              <div class="text-[10px] font-semibold text-slate-400">Sababli</div>
-            </div>
-            <div class="rounded-xl bg-rose-500/10 border border-rose-500/30 p-2.5 text-center">
-              <div class="text-base font-black text-rose-400">❌ {{ selectedStudentAttendanceData.unexcused }}</div>
-              <div class="text-[10px] font-semibold text-slate-400">Sababsiz</div>
-            </div>
-          </div>
-
-          <!-- Recent Attendance History Logs -->
-          <div v-if="selectedStudentAttendanceData.logs && selectedStudentAttendanceData.logs.length > 0" class="pt-2 border-t border-white/10 space-y-1.5">
-            <div class="text-[11px] font-bold text-slate-400 flex items-center justify-between">
-              <span>Oxirgi darslar davomati ({{ selectedStudentAttendanceData.logs.length }} ta)</span>
-              <span class="text-[10px] text-slate-500">Sana bo'yicha</span>
-            </div>
-            <div class="max-h-44 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-              <div
-                v-for="(log, idx) in selectedStudentAttendanceData.logs.slice(0, 20)"
-                :key="idx"
-                class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-xs"
-              >
-                <div class="flex items-center gap-2">
-                  <span class="font-mono text-[11px] font-semibold text-indigo-300">🗓️ {{ log.date }}</span>
-                  <span class="text-slate-300 text-[11px] truncate max-w-[140px]">{{ log.topic || 'Dars' }}</span>
-                </div>
+              <div class="flex items-center gap-2">
+                <h4 class="text-base sm:text-lg font-black text-white">{{ selectedStudent.name }}</h4>
                 <span
-                  class="px-2 py-0.5 rounded text-[10px] font-bold"
-                  :class="log.status === 'Keldi' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : log.status === 'Sababli' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+                  class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                  :class="selectedStudent.status === 'frozen' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'"
                 >
-                  {{ log.status === 'Keldi' ? '✅ Keldi' : log.status === 'Sababli' ? '🟡 Sababli' : '❌ Sababsiz' }}
+                  {{ selectedStudent.status === 'frozen' ? '❄️ Muzlatilgan' : '🟢 Faol' }}
                 </span>
               </div>
+              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-1">
+                <span>📚 <b class="text-slate-200">{{ selectedStudent.group || 'Umumiy' }}</b></span>
+                <span>•</span>
+                <span>📅 {{ selectedStudent.joinedDate ? selectedStudent.joinedDate + ' da qo\'shilgan' : 'Faol a\'zo' }}</span>
+              </div>
             </div>
           </div>
-          <div v-else-if="selectedStudentAttendanceData.total === 0" class="pt-1 text-center text-[11px] text-slate-500 italic">
-            Hozircha davomat yozuvlari kiritilmagan
+
+          <!-- Quick Actions & Coins in Header -->
+          <div class="flex items-center gap-2 self-end sm:self-auto">
+            <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-center">
+              <div class="text-[9px] uppercase font-bold text-amber-300">Tangalar</div>
+              <div class="text-sm font-black text-amber-400">🪙 {{ selectedStudent.coins || 0 }}</div>
+            </div>
+            <button
+              type="button"
+              @click="openEditModal(selectedStudent)"
+              class="rounded-xl border border-white/10 bg-white/5 hover:bg-white/15 p-2 text-slate-300 hover:text-white transition shadow active:scale-95"
+              title="O'quvchi ma'lumotlarini tahrirlash"
+            >
+              ✏️
+            </button>
+            <button
+              type="button"
+              @click="openParentAlert(selectedStudent)"
+              class="rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/25 p-2 text-sky-300 transition shadow active:scale-95"
+              title="Ota-onasiga Telegram orqali xabar yuborish"
+            >
+              ✉️
+            </button>
+            <button
+              type="button"
+              @click="openReminderModal(selectedStudent)"
+              class="rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/25 p-2 text-indigo-300 transition shadow active:scale-95"
+              title="O'quvchi bo'yicha eslatma qo'shish"
+            >
+              🔔
+            </button>
           </div>
         </div>
 
-        <!-- Credentials Card (Ready to Copy/Share) -->
-        <div class="rounded-2xl border border-indigo-500/40 bg-indigo-950/30 p-4 space-y-2.5">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-black text-indigo-300">🔑 O'quvchi Kirish Kartasi</span>
-            <button
-              type="button"
-              @click="copyCredentials(selectedStudent)"
-              class="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-500 active:scale-95 shadow transition"
-            >
-              📋 Nusxalash
-            </button>
-          </div>
-          <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-            <div class="bg-black/50 p-2.5 rounded-xl border border-white/10">
-              <span class="text-[10px] text-slate-400 block font-sans">Login (Zaxira):</span>
-              <span class="text-white font-bold">{{ selectedStudent.login || selectedStudent.name.toLowerCase().replace(/\s+/g, '_') }}</span>
+        <!-- Dosye Navigation Tabs -->
+        <div class="flex items-center gap-1.5 p-1 rounded-2xl bg-black/50 border border-white/10 text-xs">
+          <button
+            type="button"
+            @click="activeDosyeTab = 'overview'"
+            class="flex-1 py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5"
+            :class="activeDosyeTab === 'overview' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+          >
+            <span>👤 Shaxsiy & Aloqa</span>
+          </button>
+          <button
+            type="button"
+            @click="activeDosyeTab = 'attendance'"
+            class="flex-1 py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5"
+            :class="activeDosyeTab === 'attendance' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+          >
+            <span>📅 Davomat</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-black/30 font-mono font-bold">
+              {{ selectedStudentAttendanceData.percent }}%
+            </span>
+          </button>
+          <button
+            type="button"
+            @click="activeDosyeTab = 'history'"
+            class="flex-1 py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5"
+            :class="activeDosyeTab === 'history' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+          >
+            <span>📈 Natijalar</span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-black/30 font-mono font-bold">
+              {{ selectedStudentHistory.length || selectedStudent.totalTests || 0 }} ta
+            </span>
+          </button>
+        </div>
+
+        <!-- ================= TAB 1: SHAXSIY & ALOQA ================= -->
+        <div v-if="activeDosyeTab === 'overview'" class="space-y-3">
+          <!-- 4 Key Metrics -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Aniqlik</div>
+              <div class="text-lg font-black text-emerald-400">{{ selectedStudent.avgAccuracy || 0 }}%</div>
             </div>
-            <div class="bg-black/50 p-2.5 rounded-xl border border-amber-500/30">
-              <div class="flex justify-between items-center">
-                <span class="text-[10px] text-amber-300 block font-sans font-bold">🔢 6 Xonali PIN:</span>
-                <button
-                  type="button"
-                  @click="handleRegeneratePin(selectedStudent)"
-                  class="text-[9px] text-indigo-400 hover:text-indigo-300 font-sans font-bold"
-                  title="Yangi PIN generatsiya qilish"
-                >
-                  ⚡️ Yangilash
-                </button>
-              </div>
-              <span class="text-amber-300 font-black text-sm tracking-widest">{{ selectedStudent.pin || selectedStudent.password || '123456' }}</span>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Darslar</div>
+              <div class="text-lg font-black text-white">{{ selectedStudent.totalTests || 0 }} ta</div>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Strikylar</div>
+              <div class="text-lg font-black text-yellow-400">⭐ {{ selectedStudent.strikes || 0 }}</div>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Jarimalar</div>
+              <div class="text-lg font-black text-red-400">⚠️ {{ selectedStudent.penalties || 0 }}</div>
             </div>
           </div>
 
-          <!-- Pattern status & Reset Action in Detail Modal -->
-          <div class="rounded-xl border border-white/10 bg-white/5 p-2.5 flex items-center justify-between text-xs">
-            <div class="flex items-center gap-2 font-sans">
-              <span class="text-slate-400 text-[11px]">Grafik Kalit (Pattern):</span>
-              <span
-                class="px-2 py-0.5 rounded-md font-bold text-[10px]"
-                :class="selectedStudent.pattern ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'"
+          <!-- Personal Contacts & Family Card -->
+          <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-black uppercase tracking-wider text-slate-300">📞 Aloqa va Oila Ma'lumotlari</span>
+              <button
+                type="button"
+                @click="openEditModal(selectedStudent)"
+                class="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
               >
-                {{ selectedStudent.pattern ? '🟢 O\'rnatilgan' : '⏳ O\'rnatilmagan' }}
+                ✏️ Tahrirlash
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <!-- Student Phone -->
+              <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">📱 O'quvchi Telefoni</span>
+                <div v-if="selectedStudent.phone" class="flex items-center justify-between">
+                  <a :href="'tel:' + selectedStudent.phone" class="font-mono text-white font-bold hover:text-indigo-400">
+                    {{ selectedStudent.phone }}
+                  </a>
+                  <a :href="'tel:' + selectedStudent.phone" class="text-[10px] px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold hover:bg-emerald-500/30">
+                    📞 Qo'ng'iroq
+                  </a>
+                </div>
+                <div v-else class="text-slate-500 italic text-[11px] flex items-center justify-between">
+                  <span>Kiritilmagan</span>
+                  <button type="button" @click="openEditModal(selectedStudent)" class="text-indigo-400 text-[10px] font-bold hover:underline">
+                    + Kiritish
+                  </button>
+                </div>
+              </div>
+
+              <!-- Parent Name -->
+              <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">👨‍👩‍👧 Ota-onasi (F.I.SH)</span>
+                <div class="text-white font-semibold truncate">
+                  {{ selectedStudent.parentName || "Kiritilmagan" }}
+                </div>
+              </div>
+
+              <!-- Parent Phone -->
+              <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">📞 Ota-ona Telefoni</span>
+                <div v-if="selectedStudent.parentPhone" class="flex items-center justify-between">
+                  <a :href="'tel:' + selectedStudent.parentPhone" class="font-mono text-white font-bold hover:text-indigo-400">
+                    {{ selectedStudent.parentPhone }}
+                  </a>
+                  <a :href="'tel:' + selectedStudent.parentPhone" class="text-[10px] px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold hover:bg-emerald-500/30">
+                    📞 Qo'ng'iroq
+                  </a>
+                </div>
+                <div v-else class="text-slate-500 italic text-[11px] flex items-center justify-between">
+                  <span>Kiritilmagan</span>
+                  <button type="button" @click="openEditModal(selectedStudent)" class="text-indigo-400 text-[10px] font-bold hover:underline">
+                    + Kiritish
+                  </button>
+                </div>
+              </div>
+
+              <!-- Parent Telegram -->
+              <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">💬 Ota-ona Telegrami</span>
+                <div v-if="selectedStudent.parentTg" class="flex items-center justify-between">
+                  <a
+                    :href="'https://t.me/' + selectedStudent.parentTg.replace('@', '')"
+                    target="_blank"
+                    class="text-sky-400 font-bold hover:underline truncate max-w-[120px]"
+                  >
+                    {{ selectedStudent.parentTg.startsWith('@') ? selectedStudent.parentTg : '@' + selectedStudent.parentTg }}
+                  </a>
+                  <a
+                    :href="'https://t.me/' + selectedStudent.parentTg.replace('@', '')"
+                    target="_blank"
+                    class="text-[10px] px-2.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold hover:bg-sky-500/30"
+                  >
+                    💬 Yozish
+                  </a>
+                </div>
+                <div v-else class="text-slate-500 italic text-[11px] flex items-center justify-between">
+                  <span>Kiritilmagan</span>
+                  <button type="button" @click="openEditModal(selectedStudent)" class="text-indigo-400 text-[10px] font-bold hover:underline">
+                    + Kiritish
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Credentials Card (Ready to Copy/Share) -->
+          <div class="rounded-2xl border border-indigo-500/40 bg-indigo-950/30 p-4 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-black text-indigo-300">🔑 O'quvchi Kirish Kartasi</span>
+              <button
+                type="button"
+                @click="copyCredentials(selectedStudent)"
+                class="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-500 active:scale-95 shadow transition"
+              >
+                📋 Nusxalash
+              </button>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+              <div class="bg-black/50 p-2.5 rounded-xl border border-white/10">
+                <span class="text-[10px] text-slate-400 block font-sans">Login (Zaxira):</span>
+                <span class="text-white font-bold">{{ selectedStudent.login || selectedStudent.name.toLowerCase().replace(/\s+/g, '_') }}</span>
+              </div>
+              <div class="bg-black/50 p-2.5 rounded-xl border border-amber-500/30">
+                <div class="flex justify-between items-center">
+                  <span class="text-[10px] text-amber-300 block font-sans font-bold">🔢 6 Xonali PIN:</span>
+                  <button
+                    type="button"
+                    @click="handleRegeneratePin(selectedStudent)"
+                    class="text-[9px] text-indigo-400 hover:text-indigo-300 font-sans font-bold"
+                    title="Yangi PIN generatsiya qilish"
+                  >
+                    ⚡️ Yangilash
+                  </button>
+                </div>
+                <span class="text-amber-300 font-black text-sm tracking-widest">{{ selectedStudent.pin || selectedStudent.password || '123456' }}</span>
+              </div>
+            </div>
+
+            <!-- Pattern status & Reset Action in Detail Modal -->
+            <div class="rounded-xl border border-white/10 bg-white/5 p-2.5 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2 font-sans">
+                <span class="text-slate-400 text-[11px]">Grafik Kalit (Pattern):</span>
+                <span
+                  class="px-2 py-0.5 rounded-md font-bold text-[10px]"
+                  :class="selectedStudent.pattern ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'"
+                >
+                  {{ selectedStudent.pattern ? '🟢 O\'rnatilgan' : '⏳ O\'rnatilmagan' }}
+                </span>
+              </div>
+              <button
+                v-if="selectedStudent.pattern"
+                type="button"
+                @click="handleResetPattern(selectedStudent)"
+                class="rounded-lg bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 text-[11px] font-bold text-rose-300 hover:bg-rose-500/30 active:scale-95 transition"
+                title="Patternni tozalash, o'quvchi qayta o'rnatishi uchun"
+              >
+                🔄 Patternni Tozalash
+              </button>
+            </div>
+          </div>
+
+          <!-- Teacher Notes / Dossier Characteristics -->
+          <div class="rounded-2xl border border-white/10 bg-white/5 p-3.5 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <span>📝 O'qituvchi Xarakteristikasi & Eslatmasi</span>
+              </div>
+              <button
+                type="button"
+                @click="openEditModal(selectedStudent)"
+                class="text-[10px] text-indigo-400 hover:underline font-bold"
+              >
+                ✏️ {{ selectedStudent.notes ? "Tahrirlash" : "+ Eslatma yozish" }}
+              </button>
+            </div>
+            <p v-if="selectedStudent.notes" class="text-xs text-slate-300 italic bg-black/30 p-2.5 rounded-xl border border-white/5">
+              {{ selectedStudent.notes }}
+            </p>
+            <p v-else class="text-xs text-slate-500 italic">
+              O'quvchi bo'yicha maxsus pedagogik eslatma yoki xarakteristika kiritilmagan.
+            </p>
+          </div>
+        </div>
+
+        <!-- ================= TAB 2: DAVOMAT JURNALI ================= -->
+        <div v-if="activeDosyeTab === 'attendance'" class="space-y-3">
+          <!-- Attendance Stats -->
+          <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-black uppercase tracking-wider text-slate-300">📅 Davomat Ko'rsatkichlari</span>
+                <span
+                  class="px-2 py-0.5 text-[11px] font-black rounded-full"
+                  :class="selectedStudentAttendanceData.percent >= 80 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : selectedStudentAttendanceData.percent >= 60 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+                >
+                  {{ selectedStudentAttendanceData.percent }}% davomat
+                </span>
+              </div>
+              <span class="text-xs font-bold text-slate-400">
+                {{ selectedStudentAttendanceData.total }} ta dars
               </span>
             </div>
-            <button
-              v-if="selectedStudent.pattern"
-              type="button"
-              @click="handleResetPattern(selectedStudent)"
-              class="rounded-lg bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 text-[11px] font-bold text-rose-300 hover:bg-rose-500/30 active:scale-95 transition"
-              title="Patternni tozalash, o'quvchi qayta o'rnatishi uchun"
-            >
-              🔄 Patternni Tozalash
-            </button>
+
+            <!-- Progress Bar -->
+            <div class="w-full h-2 rounded-full bg-white/5 overflow-hidden border border-white/10">
+              <div
+                class="h-full rounded-full transition-all duration-500"
+                :class="selectedStudentAttendanceData.percent >= 80 ? 'bg-emerald-500' : selectedStudentAttendanceData.percent >= 60 ? 'bg-amber-500' : 'bg-rose-500'"
+                :style="{ width: `${selectedStudentAttendanceData.percent}%` }"
+              ></div>
+            </div>
+
+            <!-- 3 Stats Pills -->
+            <div class="grid grid-cols-3 gap-2">
+              <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-center">
+                <div class="text-base font-black text-emerald-400">✅ {{ selectedStudentAttendanceData.present }}</div>
+                <div class="text-[10px] font-semibold text-slate-400">Qatnashdi</div>
+              </div>
+              <div class="rounded-xl bg-amber-500/10 border border-amber-500/30 p-2.5 text-center">
+                <div class="text-base font-black text-amber-400">🟡 {{ selectedStudentAttendanceData.excused }}</div>
+                <div class="text-[10px] font-semibold text-slate-400">Sababli</div>
+              </div>
+              <div class="rounded-xl bg-rose-500/10 border border-rose-500/30 p-2.5 text-center">
+                <div class="text-base font-black text-rose-400">❌ {{ selectedStudentAttendanceData.unexcused }}</div>
+                <div class="text-[10px] font-semibold text-slate-400">Sababsiz</div>
+              </div>
+            </div>
+
+            <!-- Recent Attendance History Logs -->
+            <div v-if="selectedStudentAttendanceData.logs && selectedStudentAttendanceData.logs.length > 0" class="pt-2 border-t border-white/10 space-y-1.5">
+              <div class="text-[11px] font-bold text-slate-400 flex items-center justify-between">
+                <span>Darslar davomati jurnali ({{ selectedStudentAttendanceData.logs.length }} ta)</span>
+                <span class="text-[10px] text-slate-500">Sana bo'yicha</span>
+              </div>
+              <div class="max-h-60 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                <div
+                  v-for="(log, idx) in selectedStudentAttendanceData.logs"
+                  :key="idx"
+                  class="flex items-center justify-between px-3 py-2 rounded-xl bg-white/5 border border-white/5 text-xs hover:border-white/15 transition"
+                >
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="font-mono text-xs font-bold text-indigo-300 shrink-0">🗓️ {{ log.date }}</span>
+                    <span class="text-slate-300 text-xs truncate">{{ log.topic || 'Dars' }}</span>
+                  </div>
+                  <span
+                    class="px-2.5 py-0.5 rounded-lg text-[10px] font-bold shrink-0 ml-2"
+                    :class="log.status === 'Keldi' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : log.status === 'Sababli' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+                  >
+                    {{ log.status === 'Keldi' ? '✅ Keldi' : log.status === 'Sababli' ? '🟡 Sababli' : '❌ Sababsiz' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div v-else-if="selectedStudentAttendanceData.total === 0" class="pt-1 text-center text-xs text-slate-500 italic py-4">
+              Hozircha davomat yozuvlari kiritilmagan
+            </div>
           </div>
         </div>
 
-        <!-- Teacher Notes -->
-        <div v-if="selectedStudent.notes" class="rounded-2xl border border-white/10 bg-white/5 p-3.5 space-y-1">
-          <div class="text-xs font-bold text-slate-300">📝 O'qituvchi eslatmasi:</div>
-          <p class="text-xs text-slate-400 italic">{{ selectedStudent.notes }}</p>
+        <!-- ================= TAB 3: AKADEMIK NATIJALAR & BAHOLAR ================= -->
+        <div v-if="activeDosyeTab === 'history'" class="space-y-3">
+          <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-black uppercase tracking-wider text-slate-300">
+                📈 Topshirilgan Sinovlar Tarixi ({{ selectedStudentHistory.length }} ta)
+              </span>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="text-slate-400">O'rtacha:</span>
+                <span class="font-bold text-emerald-400">{{ selectedStudent.avgAccuracy || 0 }}%</span>
+              </div>
+            </div>
+
+            <div v-if="selectedStudentHistory.length > 0" class="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              <div
+                v-for="(h, idx) in selectedStudentHistory"
+                :key="idx"
+                class="p-3 rounded-xl bg-white/5 border border-white/5 hover:border-indigo-500/30 transition text-xs space-y-2"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="font-mono text-xs font-bold text-indigo-300 shrink-0">🗓️ {{ h.date || "Avvalgi dars" }}</span>
+                    <span class="text-white font-semibold truncate">{{ formatCleanTopicName(h.topic || (h.book ? `${h.book} darsi` : "Savol-Javob Darsi")) }}</span>
+                  </div>
+                  <span
+                    class="px-2 py-0.5 rounded-lg text-xs font-black shrink-0 ml-2"
+                    :class="(parseFloat(h.percent) || 0) >= 80 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (parseFloat(h.percent) || 0) >= 50 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+                  >
+                    {{ Math.round(parseFloat(h.percent) || 0) }}%
+                  </span>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-white/5">
+                  <div class="flex items-center gap-3">
+                    <span>Natija: <b class="text-white">{{ h.correct || Math.round(((parseFloat(h.percent) || 0) / 100) * (parseInt(h.total) || 10)) }} / {{ h.total || 10 }}</b></span>
+                    <span v-if="h.coin" class="text-amber-400 font-bold">🪙 +{{ h.coin }}</span>
+                    <span v-if="h.strike && parseInt(h.strike) > 0" class="text-yellow-400 font-bold">⭐ +{{ h.strike }}</span>
+                  </div>
+                  <span v-if="h.time" class="text-slate-500 font-mono text-[10px]">⏰ {{ h.time }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="text-center py-8 text-xs text-slate-500 italic">
+              Bu o'quvchi bo'yicha hali darslar yoki test natijalari yozuvi mavjud emas.
+            </div>
+          </div>
         </div>
+
       </div>
     </BaseModal>
 
@@ -2531,8 +2759,19 @@ const selectedStudentAttendanceData = computed(() => {
   };
 });
 
+const studentHistoryMap = ref<Record<string, any[]>>({});
+const activeDosyeTab = ref<"overview" | "attendance" | "history">("overview");
 
-// Transfer Group Modal State
+const selectedStudentHistory = computed(() => {
+  if (!selectedStudent.value) return [];
+  const key = selectedStudent.value.name.trim().toLowerCase();
+  const list = studentHistoryMap.value[key] || [];
+  return [...list].sort((a, b) => {
+    const tA = parseDateStrToMillis(a.date, 0);
+    const tB = parseDateStrToMillis(b.date, 0);
+    return tB - tA;
+  });
+});
 const showTransferModal = ref(false);
 const transferTargetStudent = ref<Student | null>(null);
 const isBatchTransfer = ref(false);
@@ -2912,6 +3151,7 @@ async function refreshStudentStats(force = false) {
 
       dbHistorySessions.value = Object.values(sessionMap);
     }
+    studentHistoryMap.value = historyByName;
 
     const lbByName: Record<string, any> = {};
     if (resLb.status === "success" && resLb.leaderboard) {
@@ -3290,8 +3530,9 @@ function confirmDelete(student: Student) {
 
 function openStudentDetail(student: Student) {
   selectedStudent.value = student;
+  activeDosyeTab.value = "overview";
   showDetailModal.value = true;
-  if (Object.keys(studentAttendanceLogsMap.value).length === 0) {
+  if (Object.keys(studentAttendanceLogsMap.value).length === 0 || Object.keys(studentHistoryMap.value).length === 0) {
     refreshStudentStats();
   }
 }
