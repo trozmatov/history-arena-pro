@@ -2859,7 +2859,7 @@ const groupsList = computed(() => {
         count: 0,
         activeCount: 0,
         frozenCount: 0,
-        isAllFrozen: true,
+        isAllFrozen: teacherStore.isGroupFrozen(g),
         totalAccuracy: 0,
         avgAccuracy: 0,
         days: meta.days || ["Du", "Chor", "Juma"],
@@ -2874,7 +2874,6 @@ const groupsList = computed(() => {
       map[g].frozenCount++;
     } else {
       map[g].activeCount++;
-      map[g].isAllFrozen = false;
       map[g].totalAccuracy += s.avgAccuracy || 0;
     }
   });
@@ -2882,6 +2881,7 @@ const groupsList = computed(() => {
   const list = Object.values(map);
   list.forEach((g) => {
     g.avgAccuracy = g.activeCount > 0 ? Math.round(g.totalAccuracy / g.activeCount) : 0;
+    g.isAllFrozen = teacherStore.isGroupFrozen(g.name);
   });
   return list;
 });
@@ -2944,8 +2944,8 @@ const currentGroupTopLeaders = computed(() => {
 });
 
 const isCurrentGroupAllFrozen = computed(() => {
-  if (currentGroupStudents.value.length === 0) return false;
-  return currentGroupStudents.value.every((s) => s.status === "frozen");
+  if (!selectedGroupHubName.value) return false;
+  return teacherStore.isGroupFrozen(selectedGroupHubName.value);
 });
 
 // Filtered Students list

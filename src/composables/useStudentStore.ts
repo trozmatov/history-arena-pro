@@ -4,12 +4,18 @@ import {
   db,
   ref as fbRef,
   get as fbGet,
+  set as fbSet,
+  remove as fbRemove,
   onChildAdded,
   onChildChanged,
   onChildRemoved,
   update,
 } from "../services/firebase";
 import { notifyDuelAccepted, notifyDuelDeclined } from "../services/telegram";
+
+function sanitizeFbKey(name: string): string {
+  return encodeURIComponent(name.toLowerCase().trim()).replace(/\./g, "%2E");
+}
 
 
 export interface DuelChallenge {
@@ -87,11 +93,18 @@ const studentBadges = ref<{ id: string; name: string; icon: string; special?: bo
 const incomingDuel = ref<DuelChallenge | null>(null);
 let duelListenerActive = false;
 
-// --- Realtime Cloud Freeze State for Students and Groups ---
-const cloudFrozenStudents = ref<string[]>([]);
-const cloudFrozenGroups = ref<string[]>(["arxiv"]); // Arxiv is always frozen
-const studentGroupMap = ref<Record<string, string>>({});
+// --- Realtime Cloud State for Students and Groups ---
+export const cloudFrozenStudents = ref<string[]>([]);
+export const cloudFrozenGroups = ref<string[]>(["arxiv"]); // Arxiv is always frozen
+export const studentGroupMap = ref<Record<string, string>>({});
+export const cloudGroupsMeta = ref<Record<string, any>>({});
 let freezeListenerActive = false;
+
+export function getEffectiveStudentGroup(name: string, fallbackGroup?: string): string {
+  if (!name) return fallbackGroup || "Umumiy";
+  const clean = name.toLowerCase().trim();
+  return studentGroupMap.value[clean] || fallbackGroup || "Umumiy";
+}
 
 function initFreezeListener() {
   if (freezeListenerActive || typeof window === "undefined") return;
@@ -134,11 +147,63 @@ function initFreezeListener() {
     const handleGroupSnap = (snap: any) => {
       const val = snap.val();
       if (val && val.name && val.group) {
-        studentGroupMap.value[val.name.toLowerCase().trim()] = val.group;
+        const cleanName = val.name.toLowerCase().trim();
+        studentGroupMap.value[cleanName] = val.group;
+        // Keep local storage updated in background
+        try {
+          const saved = localStorage.getItem("ha_all_students");
+          if (saved) {
+            const list = JSON.parse(saved);
+            const match = list.find((s: any) => (s.name || "").toLowerCase().trim() === cleanName);
+            if (match && match.group !== val.group) {
+              match.group = val.group;
+              localStorage.setItem("ha_all_students", JSON.stringify(list));
+            }
+          }
+        } catch (e) {}
       }
     };
     onChildAdded(sgRef, handleGroupSnap);
     onChildChanged(sgRef, handleGroupSnap);
+
+    // Realtime Cloud synchronization for groups metadata (schedules, rooms, times)
+    const gmRef = fbRef(db, "groups_meta");
+    const handleGroupMetaSnap = (snap: any) => {
+      const val = snap.val();
+      if (val && val.name) {
+        cloudGroupsMeta.value[val.name] = val;
+      }
+    };
+    onChildAdded(gmRef, handleGroupMetaSnap);
+    onChildChanged(gmRef, handleGroupMetaSnap);
+
+    // Realtime Cloud synchronization for student patterns
+    const spRef = fbRef(db, "student_patterns");
+    onChildAdded(spRef, (snap: any) => {
+      const val = snap.val();
+      const sName = (val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (sName && val?.pattern && deviceStudent.value?.name?.toLowerCase().trim() === sName) {
+        if (deviceStudent.value.pattern !== val.pattern) {
+          deviceStudent.value = {
+            ...deviceStudent.value,
+            pattern: val.pattern,
+          };
+          localStorage.setItem("ha_device_student", JSON.stringify(deviceStudent.value));
+        }
+      }
+    });
+    onChildRemoved(spRef, (snap: any) => {
+      const sName = decodeURIComponent(snap.key.replace(/%2E/g, ".")).toLowerCase().trim();
+      if (sName && deviceStudent.value?.name?.toLowerCase().trim() === sName) {
+        if (deviceStudent.value.pattern) {
+          deviceStudent.value = {
+            ...deviceStudent.value,
+            pattern: "",
+          };
+          localStorage.setItem("ha_device_student", JSON.stringify(deviceStudent.value));
+        }
+      }
+    });
   } catch (e) {
     console.warn("initFreezeListener error:", e);
   }
@@ -148,17 +213,18 @@ async function loadStudentGroupMap() {
   try {
     const res = await callApi("get_student_list");
     if (res && res.status === "success" && res.groups) {
-      const map: Record<string, string> = {};
       for (const [grp, members] of Object.entries(res.groups)) {
         if (Array.isArray(members)) {
           members.forEach((m) => {
             if (typeof m === "string") {
-              map[m.toLowerCase().trim()] = grp;
+              const clean = m.toLowerCase().trim();
+              if (!studentGroupMap.value[clean]) {
+                studentGroupMap.value[clean] = grp;
+              }
             }
           });
         }
       }
-      studentGroupMap.value = map;
     }
   } catch (e) {}
 }
@@ -381,7 +447,9 @@ export function useStudentStore() {
         );
 
         if (match) {
-          if (match.status === "frozen" || isStudentFrozen(match.name, match.group)) {
+          const effectiveGroup = getEffectiveStudentGroup(match.name, match.group);
+          match.group = effectiveGroup;
+          if (match.status === "frozen" || isStudentFrozen(match.name, effectiveGroup)) {
             return {
               success: false,
               message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
@@ -434,7 +502,8 @@ export function useStudentStore() {
         }
 
         if (matchedStudentName) {
-          if (isStudentFrozen(matchedStudentName, matchedGroup)) {
+          const effectiveGroup = getEffectiveStudentGroup(matchedStudentName, matchedGroup);
+          if (isStudentFrozen(matchedStudentName, effectiveGroup)) {
             return {
               success: false,
               message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
@@ -444,7 +513,7 @@ export function useStudentStore() {
           const studentObj = {
             id: "std-" + trimmed,
             name: matchedStudentName,
-            group: matchedGroup,
+            group: effectiveGroup,
             pin: trimmed,
             password: trimmed,
             pattern: "",
@@ -463,7 +532,7 @@ export function useStudentStore() {
           );
           if (existingIdx >= 0) {
             masterList[existingIdx].pin = trimmed;
-            masterList[existingIdx].group = matchedGroup;
+            masterList[existingIdx].group = effectiveGroup;
           } else {
             masterList.push(studentObj);
           }
@@ -590,6 +659,17 @@ export function useStudentStore() {
       };
       deviceStudent.value = devInfo;
       localStorage.setItem("ha_device_student", JSON.stringify(devInfo));
+
+      // Realtime Cloud synchronization for student patterns
+      try {
+        const key = sanitizeFbKey(match.name);
+        fbSet(fbRef(db, `student_patterns/${key}`), {
+          name: match.name,
+          pattern: pattern,
+          updatedAt: Date.now(),
+        }).catch(() => {});
+      } catch (e) {}
+
       return true;
     } catch (e) {
       console.warn("setStudentPattern error:", e);
@@ -1160,22 +1240,36 @@ export function useStudentStore() {
       }
     } catch {}
 
+    // Cloud override: realtime group assignment
+    if (studentName.value) {
+      groupName = getEffectiveStudentGroup(studentName.value, groupName);
+    }
+
     let days = ["Du", "Chor", "Juma"];
     let time = "14:00 - 15:30";
     let room = "3-xona";
 
-    try {
-      const metaSaved = localStorage.getItem("ha_groups_meta");
-      if (metaSaved) {
-        const metaMap = JSON.parse(metaSaved);
-        if (metaMap[groupName]) {
-          const m = metaMap[groupName];
-          if (m.days && m.days.length) days = m.days;
-          if (m.time) time = m.time;
-          if (m.room) room = m.room;
+    // 1. First priority: cloudGroupsMeta from Firebase
+    const cloudMeta = cloudGroupsMeta.value[groupName];
+    if (cloudMeta) {
+      if (cloudMeta.days && cloudMeta.days.length) days = cloudMeta.days;
+      if (cloudMeta.time) time = cloudMeta.time;
+      if (cloudMeta.room) room = cloudMeta.room;
+    } else {
+      // 2. Fallback to localStorage
+      try {
+        const metaSaved = localStorage.getItem("ha_groups_meta");
+        if (metaSaved) {
+          const metaMap = JSON.parse(metaSaved);
+          if (metaMap[groupName]) {
+            const m = metaMap[groupName];
+            if (m.days && m.days.length) days = m.days;
+            if (m.time) time = m.time;
+            if (m.room) room = m.room;
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
 
     const uzDaysMap: Record<string, number> = {
       "yak": 0, "yakshanba": 0,
@@ -1321,5 +1415,8 @@ export function useStudentStore() {
     fetchLeaderboard,
     acceptDuel,
     declineDuel,
+    studentGroupMap,
+    cloudGroupsMeta,
+    getEffectiveStudentGroup,
   };
 }

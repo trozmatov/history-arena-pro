@@ -1,7 +1,7 @@
 import { ref, computed, watch } from "vue";
 import { callApi } from "../services/api";
 import { soundManager, fireConfetti, fireVictoryConfetti } from "./useAudio";
-import { db, ref as fbRef, set as fbSet, remove as fbRemove } from "../services/firebase";
+import { db, ref as fbRef, set as fbSet, remove as fbRemove, onChildAdded, onChildRemoved } from "../services/firebase";
 import { getStudentDefaultPin } from "./useStudentStore";
 
 
@@ -41,6 +41,41 @@ export function syncGroupFreezeToCloud(groupName: string, isFrozen: boolean) {
     console.warn("syncGroupFreezeToCloud error:", e);
   }
 }
+
+// Realtime Cloud synchronization for frozen groups
+export const cloudFrozenGroups = ref<string[]>(["arxiv"]); // 'arxiv' is always frozen
+
+export function isGroupFrozen(groupName: string): boolean {
+  if (!groupName) return false;
+  const clean = groupName.toLowerCase().trim();
+  return clean === "arxiv" || cloudFrozenGroups.value.includes(clean);
+}
+
+let teacherFreezeListenerActive = false;
+function initTeacherFreezeListener() {
+  if (teacherFreezeListenerActive || typeof window === "undefined") return;
+  teacherFreezeListenerActive = true;
+  try {
+    const fgRef = fbRef(db, "frozen_groups");
+    onChildAdded(fgRef, (snap: any) => {
+      const val = snap.val();
+      const grp = (val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (grp && !cloudFrozenGroups.value.includes(grp)) {
+        cloudFrozenGroups.value = [...cloudFrozenGroups.value, grp];
+      }
+    });
+    onChildRemoved(fgRef, (snap: any) => {
+      const val = snap.val();
+      const grp = (val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (grp && grp !== "arxiv") {
+        cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== grp);
+      }
+    });
+  } catch (e) {
+    console.warn("initTeacherFreezeListener error:", e);
+  }
+}
+initTeacherFreezeListener();
 
 export function syncGroupTransferToCloud(studentName: string, newGroup: string) {
   try {
@@ -247,6 +282,18 @@ function loadInitialMasterStudents(): Student[] {
       }
     });
 
+    // Self-healing migration: restore any students incorrectly marked frozen by the runaway loop bug
+    const freezeBugRepaired = localStorage.getItem("ha_freeze_repaired_v3");
+    if (!freezeBugRepaired) {
+      filtered.forEach((s) => {
+        if ((s.group || "").toLowerCase().trim() !== "arxiv") {
+          s.status = "active";
+        }
+      });
+      localStorage.setItem("ha_freeze_repaired_v3", "true");
+      needsSave = true;
+    }
+
     if (needsSave) {
       localStorage.setItem("ha_all_students", JSON.stringify(filtered));
     }
@@ -258,33 +305,6 @@ function loadInitialMasterStudents(): Student[] {
 
 // All Registered Students Database Registry (Master CRM list)
 const allStudentsRegistry = ref<Student[]>(loadInitialMasterStudents());
-
-function syncExistingFrozenToCloud() {
-  try {
-    const groupMap: Record<string, { total: number; frozen: number }> = {};
-    allStudentsRegistry.value.forEach((s) => {
-      const g = s.group || "Umumiy";
-      if (!groupMap[g]) groupMap[g] = { total: 0, frozen: 0 };
-      groupMap[g].total++;
-      if (s.status === "frozen") {
-        groupMap[g].frozen++;
-        syncFreezeToCloud(s.name, true, s.group || "");
-      }
-    });
-
-    for (const [g, stat] of Object.entries(groupMap)) {
-      if (stat.total > 0 && stat.frozen === stat.total) {
-        syncGroupFreezeToCloud(g, true);
-      } else if (stat.total > 0 && stat.frozen < stat.total) {
-        syncGroupFreezeToCloud(g, false);
-      }
-    }
-  } catch (e) {
-    console.warn("syncExistingFrozenToCloud error:", e);
-  }
-}
-
-syncExistingFrozenToCloud();
 
 // Persist master registry
 watch(
@@ -328,7 +348,7 @@ function loadInitialGroupsMeta(): Record<string, GroupMeta> {
 }
 
 // Group Meta Database (Schedules, rooms, notes, reminders, fees)
-const groupsMeta = ref<Record<string, GroupMeta>>(loadInitialGroupsMeta());
+export const groupsMeta = ref<Record<string, GroupMeta>>(loadInitialGroupsMeta());
 
 watch(
   groupsMeta,
@@ -346,6 +366,40 @@ export function syncGroupMetaToCloud(meta: GroupMeta) {
     );
   } catch (e) {
     console.warn("syncGroupMetaToCloud error:", e);
+  }
+}
+
+export function syncAllExistingGroupsToCloud() {
+  try {
+    allStudentsRegistry.value.forEach((s) => {
+      const g = (s.group || "").trim();
+      if (s.name && g && g !== "Umumiy") {
+        syncGroupTransferToCloud(s.name, g);
+      }
+    });
+  } catch (e) {
+    console.warn("syncAllExistingGroupsToCloud error:", e);
+  }
+}
+
+export function syncAllExistingGroupsMetaToCloud() {
+  try {
+    for (const [, meta] of Object.entries(groupsMeta.value)) {
+      if (meta && meta.name) {
+        syncGroupMetaToCloud(meta);
+      }
+    }
+  } catch (e) {
+    console.warn("syncAllExistingGroupsMetaToCloud error:", e);
+  }
+}
+
+if (typeof window !== "undefined") {
+  if (allStudentsRegistry.value.length > 0) {
+    syncAllExistingGroupsToCloud();
+  }
+  if (Object.keys(groupsMeta.value).length > 0) {
+    syncAllExistingGroupsMetaToCloud();
   }
 }
 
@@ -719,6 +773,11 @@ export function useTeacherStore() {
       allStudentsRegistry.value.unshift(fullData);
     }
 
+    // Realtime Cloud synchronization for student group
+    if (fullData.group && fullData.group.trim() && fullData.group.trim() !== "Umumiy") {
+      syncGroupTransferToCloud(fullData.name, fullData.group.trim());
+    }
+
     // Sync status with session students
     const activeSessionStudent = students.value.find(
       (s) => s.name === fullData.name
@@ -738,16 +797,6 @@ export function useTeacherStore() {
       target.status = target.status === "frozen" ? "active" : "frozen";
       const isFrozen = target.status === "frozen";
       syncFreezeToCloud(target.name, isFrozen, target.group || "");
-
-      // Check group-level freeze status:
-      const grp = (target.group || "").trim();
-      if (grp) {
-        const grpStudents = allStudentsRegistry.value.filter(
-          (s) => (s.group || "").toLowerCase().trim() === grp.toLowerCase()
-        );
-        const allFrozen = grpStudents.length > 0 && grpStudents.every((s) => s.status === "frozen");
-        syncGroupFreezeToCloud(grp, allFrozen);
-      }
 
       // If frozen, immediately eject from active game session
       if (isFrozen) {
@@ -769,6 +818,13 @@ export function useTeacherStore() {
     const cleanGrp = groupName.toLowerCase().trim();
     const newStatus: "active" | "frozen" = freeze ? "frozen" : "active";
     syncGroupFreezeToCloud(groupName.trim(), freeze);
+    if (freeze) {
+      if (!cloudFrozenGroups.value.includes(cleanGrp)) {
+        cloudFrozenGroups.value = [...cloudFrozenGroups.value, cleanGrp];
+      }
+    } else {
+      cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== cleanGrp);
+    }
     allStudentsRegistry.value.forEach((s) => {
       if ((s.group || "").toLowerCase().trim() === cleanGrp) {
         s.status = newStatus;
@@ -1324,6 +1380,10 @@ export function useTeacherStore() {
     if (target) {
       target.pattern = "";
       allStudentsRegistry.value = [...allStudentsRegistry.value];
+      try {
+        const key = sanitizeFbKey(target.name);
+        fbRemove(fbRef(db, `student_patterns/${key}`)).catch(() => {});
+      } catch (e) {}
       return true;
     }
     return false;
@@ -1422,5 +1482,7 @@ export function useTeacherStore() {
     syncGroupTransferToCloud,
     syncAttendanceLogToCloud,
     syncGroupFreezeToCloud,
+    cloudFrozenGroups,
+    isGroupFrozen,
   };
 }

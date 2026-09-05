@@ -246,10 +246,11 @@ async function loadEligibleStudents() {
         if (Array.isArray(members)) {
           members.forEach((m) => {
             if (typeof m === "string") {
+              const effectiveGroup = studentStore.getEffectiveStudentGroup(m.trim(), groupName);
               list.push({
                 name: m.trim(),
-                group: groupName,
-                status: studentStore.isStudentFrozen(m, groupName) ? "frozen" : "active",
+                group: effectiveGroup,
+                status: studentStore.isStudentFrozen(m, effectiveGroup) ? "frozen" : "active",
               });
             }
           });
@@ -265,7 +266,11 @@ async function loadEligibleStudents() {
   try {
     const saved = localStorage.getItem("ha_all_students");
     if (saved) {
-      allMasterStudents.value = JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      allMasterStudents.value = parsed.map((s: any) => ({
+        ...s,
+        group: studentStore.getEffectiveStudentGroup(s.name, s.group),
+      }));
     }
   } catch (e) {
     allMasterStudents.value = [];

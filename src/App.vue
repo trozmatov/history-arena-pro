@@ -362,18 +362,12 @@ onMounted(() => {
       );
       if (target) {
         target.status = "frozen";
-      } else {
-        teacherStore.saveStudent({
-          name: val.name,
-          group: val.group || "Umumiy",
-          status: "frozen",
-        });
+        // Eject from active game session if present
+        teacherStore.students.value = teacherStore.students.value.filter(
+          (s) => s.name.toLowerCase().trim() !== val.name.toLowerCase().trim()
+        );
+        teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
       }
-      // Eject from active game session if present
-      teacherStore.students.value = teacherStore.students.value.filter(
-        (s) => s.name.toLowerCase().trim() !== val.name.toLowerCase().trim()
-      );
-      teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
     }
   });
 
@@ -397,13 +391,17 @@ onMounted(() => {
     const val = snap.val();
     const grp = val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."));
     if (grp) {
+      const cleanGrp = grp.toLowerCase().trim();
+      if (!teacherStore.cloudFrozenGroups.value.includes(cleanGrp)) {
+        teacherStore.cloudFrozenGroups.value = [...teacherStore.cloudFrozenGroups.value, cleanGrp];
+      }
       teacherStore.allStudentsRegistry.value.forEach((s) => {
-        if (s.group && s.group.toLowerCase().trim() === grp.toLowerCase().trim()) {
+        if (s.group && s.group.toLowerCase().trim() === cleanGrp) {
           s.status = "frozen";
         }
       });
       teacherStore.students.value = teacherStore.students.value.filter(
-        (s) => !s.group || s.group.toLowerCase().trim() !== grp.toLowerCase().trim()
+        (s) => !s.group || s.group.toLowerCase().trim() !== cleanGrp
       );
       teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
     }
@@ -413,8 +411,12 @@ onMounted(() => {
     const val = snap.val();
     const grp = val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."));
     if (grp) {
+      const cleanGrp = grp.toLowerCase().trim();
+      if (cleanGrp !== "arxiv") {
+        teacherStore.cloudFrozenGroups.value = teacherStore.cloudFrozenGroups.value.filter((g) => g !== cleanGrp);
+      }
       teacherStore.allStudentsRegistry.value.forEach((s) => {
-        if (s.group && s.group.toLowerCase().trim() === grp.toLowerCase().trim()) {
+        if (s.group && s.group.toLowerCase().trim() === cleanGrp) {
           s.status = "active";
         }
       });
@@ -442,10 +444,59 @@ onMounted(() => {
           status: "active",
         });
       }
+      const inSession = teacherStore.students.value.find(
+        (s) => s.name.toLowerCase().trim() === val.name.toLowerCase().trim()
+      );
+      if (inSession && inSession.group !== val.group) {
+        inSession.group = val.group;
+      }
     }
   };
   onChildAdded(studentGroupsRef, handleStudentGroupSnap);
   onChildChanged(studentGroupsRef, handleStudentGroupSnap);
+
+  // Realtime Cloud synchronization for groups metadata (schedules, rooms, times)
+  const groupsMetaRef = fbRef(db, "groups_meta");
+  const handleGroupMetaSnap = (snap: any) => {
+    const val = snap.val();
+    if (val && val.name) {
+      teacherStore.groupsMeta.value[val.name] = {
+        ...teacherStore.groupsMeta.value[val.name],
+        ...val,
+      };
+      localStorage.setItem("ha_groups_meta", JSON.stringify(teacherStore.groupsMeta.value));
+    }
+  };
+  onChildAdded(groupsMetaRef, handleGroupMetaSnap);
+  onChildChanged(groupsMetaRef, handleGroupMetaSnap);
+
+  // Realtime Cloud synchronization for student patterns
+  const studentPatternsRef = fbRef(db, "student_patterns");
+  onChildAdded(studentPatternsRef, (snap: any) => {
+    const val = snap.val();
+    const sName = (val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+    if (sName && val?.pattern) {
+      const target = teacherStore.allStudentsRegistry.value.find(
+        (s) => s.name.toLowerCase().trim() === sName
+      );
+      if (target && target.pattern !== val.pattern) {
+        target.pattern = val.pattern;
+        teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
+      }
+    }
+  });
+  onChildRemoved(studentPatternsRef, (snap: any) => {
+    const sName = decodeURIComponent(snap.key.replace(/%2E/g, ".")).toLowerCase().trim();
+    if (sName) {
+      const target = teacherStore.allStudentsRegistry.value.find(
+        (s) => s.name.toLowerCase().trim() === sName
+      );
+      if (target && target.pattern) {
+        target.pattern = "";
+        teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
+      }
+    }
+  });
 
   // Realtime Cloud synchronization for attendance logs
   const attLogsRef = fbRef(db, "attendance_logs");
