@@ -188,7 +188,7 @@
                 :key="d"
                 class="px-2 py-2.5 whitespace-nowrap border-r border-white/5 min-w-[44px]"
               >
-                <div class="text-white font-black">{{ d }}</div>
+                <div class="text-white font-black">{{ normalizeDateToDDMM(d) }}</div>
                 <div class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{{ getWeekdayShort(d) }}</div>
               </th>
 
@@ -551,7 +551,7 @@ import { ref, computed, onMounted } from "vue";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { callApi } from "../../services/api";
-import { useTeacherStore } from "../../composables/useTeacherStore";
+import { useTeacherStore, normalizeDateToDDMM } from "../../composables/useTeacherStore";
 import BaseModal from "../common/BaseModal.vue";
 
 defineEmits<{
@@ -595,13 +595,10 @@ onMounted(() => {
 // Helper: Extract month code ("01" - "12") from date string ("DD.MM" or "YYYY-MM-DD")
 function getMonthFromDate(dStr: string): string {
   if (!dStr) return "";
-  if (dStr.includes(".")) {
-    const parts = dStr.split(".");
-    return parts[1] || ""; // e.g. "09.04" -> "04"
-  }
-  if (dStr.includes("-")) {
-    const parts = dStr.split("-");
-    return parts[1] || ""; // e.g. "2026-09-02" -> "09"
+  const norm = normalizeDateToDDMM(dStr);
+  if (norm.includes(".")) {
+    const parts = norm.split(".");
+    return parts[1] || ""; // e.g. "05.09" -> "09"
   }
   return "";
 }
@@ -612,13 +609,15 @@ async function fetchAttendance(forceRefresh = false) {
     const res = await callApi("get_attendance", {}, { forceRefresh });
     const serverLogs: AttendanceLog[] = (res && res.status === "success" && Array.isArray(res.attendance)) ? res.attendance : [];
 
-    // Merge server logs and local logs seamlessly
+    // Merge server logs and local logs seamlessly with date normalization
     const mergedMap = new Map<string, AttendanceLog>();
     serverLogs.forEach((l) => {
-      mergedMap.set(`${l.name}_${l.date}`, l);
+      const normDate = normalizeDateToDDMM(l.date);
+      mergedMap.set(`${l.name}_${normDate}`, { ...l, date: normDate });
     });
     teacherStore.localAttendanceLogs.value.forEach((l) => {
-      mergedMap.set(`${l.name}_${l.date}`, l);
+      const normDate = normalizeDateToDDMM(l.date);
+      mergedMap.set(`${l.name}_${normDate}`, { ...l, date: normDate });
     });
 
     rawLogs.value = Array.from(mergedMap.values());
@@ -697,19 +696,23 @@ const monthDates = computed(() => {
   });
 
   rawLogs.value.forEach((l) => {
-    if (getMonthFromDate(l.date) === targetM) {
+    const norm = normalizeDateToDDMM(l.date);
+    if (getMonthFromDate(norm) === targetM) {
       const effectiveGroup = studentGroupMap.get(l.name.toLowerCase().trim()) || l.group || "Boshqa";
       if (selectedGroup.value === "all" || effectiveGroup === selectedGroup.value) {
-        set.add(l.date);
+        set.add(norm);
       }
     }
   });
 
-  // Also include dates from lessonSessions
+  // Also include dates from lessonSessions (normalized to DD.MM)
   teacherStore.lessonSessions.value.forEach((sess) => {
-    if (sess.date && getMonthFromDate(sess.date) === targetM) {
-      if (selectedGroup.value === "all" || sess.group === selectedGroup.value) {
-        set.add(sess.date);
+    if (sess.date) {
+      const norm = normalizeDateToDDMM(sess.date);
+      if (getMonthFromDate(norm) === targetM) {
+        if (selectedGroup.value === "all" || sess.group === selectedGroup.value) {
+          set.add(norm);
+        }
       }
     }
   });
@@ -761,7 +764,8 @@ const allStudentRows = computed<StudentRow[]>(() => {
     const norm = l.name.toLowerCase().trim();
     const master = masterMap.get(norm);
     if (master?.isFrozen || teacherStore.isStudentFrozen(l.name)) return;
-    if (getMonthFromDate(l.date) !== targetM) return;
+    const normDate = normalizeDateToDDMM(l.date);
+    if (getMonthFromDate(normDate) !== targetM) return;
 
     const g = master?.group || l.group || "Boshqa";
     if (selectedGroup.value !== "all" && g !== selectedGroup.value) return;
@@ -769,9 +773,33 @@ const allStudentRows = computed<StudentRow[]>(() => {
     if (!studentsMap[l.name]) {
       studentsMap[l.name] = { group: g, records: {}, reasons: {} };
     }
-    studentsMap[l.name].records[l.date] = l.status;
+    studentsMap[l.name].records[normDate] = l.status;
     if (l.reason) {
-      studentsMap[l.name].reasons[l.date] = l.reason;
+      studentsMap[l.name].reasons[normDate] = l.reason;
+    }
+  });
+
+  // 3. Also merge attendance records from lessonSessions (especially test sessions)
+  teacherStore.lessonSessions.value.forEach((sess) => {
+    if (!sess.date) return;
+    const normDate = normalizeDateToDDMM(sess.date);
+    if (getMonthFromDate(normDate) !== targetM) return;
+    if (sess.studentResults && Array.isArray(sess.studentResults)) {
+      sess.studentResults.forEach((sr: any) => {
+        if (!sr.name) return;
+        const norm = sr.name.toLowerCase().trim();
+        const master = masterMap.get(norm);
+        if (master?.isFrozen || teacherStore.isStudentFrozen(sr.name)) return;
+        const g = master?.group || sess.group || "Boshqa";
+        if (selectedGroup.value !== "all" && g !== selectedGroup.value) return;
+
+        if (!studentsMap[sr.name]) {
+          studentsMap[sr.name] = { group: g, records: {}, reasons: {} };
+        }
+        if (!studentsMap[sr.name].records[normDate] && sr.attStatus) {
+          studentsMap[sr.name].records[normDate] = sr.attStatus;
+        }
+      });
     }
   });
 
@@ -842,7 +870,8 @@ function formatMonthLabel(mCode: string) {
 
 function getWeekdayShort(dateStr: string) {
   if (!dateStr) return "";
-  const parts = dateStr.split(".");
+  const norm = normalizeDateToDDMM(dateStr);
+  const parts = norm.split(".");
   if (parts.length === 2) {
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10) - 1;
@@ -855,9 +884,10 @@ function getWeekdayShort(dateStr: string) {
 
 // 1. Open Safe Edit Modal
 function openEditModal(name: string, dateStr: string, currentStatus?: "Keldi" | "Sababsiz" | "Sababli") {
+  const normDate = normalizeDateToDDMM(dateStr);
   editTarget.value = {
     name,
-    date: dateStr,
+    date: normDate,
     status: currentStatus || "Keldi",
   };
   editReason.value = "";
@@ -868,6 +898,7 @@ function openEditModal(name: string, dateStr: string, currentStatus?: "Keldi" | 
 function saveStatusEdit() {
   if (!editTarget.value || editReason.value.trim().length < 4) return;
   const { name, date, status } = editTarget.value;
+  const normDate = normalizeDateToDDMM(date);
   const reasonText = editReason.value.trim();
   const master = teacherStore.allStudentsRegistry.value.find(
     (s) => s.name.toLowerCase().trim() === name.toLowerCase().trim()
@@ -875,15 +906,16 @@ function saveStatusEdit() {
   const group = master?.group || (selectedGroup.value === "all" ? "Boshqa" : selectedGroup.value);
 
   // Find and update or insert in rawLogs
-  const item = rawLogs.value.find((l) => l.name === name && l.date === date);
+  const item = rawLogs.value.find((l) => l.name === name && normalizeDateToDDMM(l.date) === normDate);
   if (item) {
+    item.date = normDate;
     item.status = status;
     item.reason = reasonText;
     item.group = group;
   } else {
     rawLogs.value.push({
       name,
-      date,
+      date: normDate,
       status,
       reason: reasonText,
       group,
@@ -891,15 +923,16 @@ function saveStatusEdit() {
   }
 
   // Update in localAttendanceLogs
-  const localItem = teacherStore.localAttendanceLogs.value.find((l) => l.name === name && l.date === date);
+  const localItem = teacherStore.localAttendanceLogs.value.find((l) => l.name === name && normalizeDateToDDMM(l.date) === normDate);
   if (localItem) {
+    localItem.date = normDate;
     localItem.status = status;
     localItem.reason = reasonText;
     localItem.group = group;
   } else {
     teacherStore.localAttendanceLogs.value.push({
       name,
-      date,
+      date: normDate,
       status,
       reason: reasonText,
       group,
@@ -907,7 +940,7 @@ function saveStatusEdit() {
   }
 
   // Sync to Firebase Cloud
-  teacherStore.syncAttendanceLogToCloud(date, name, status, group, reasonText);
+  teacherStore.syncAttendanceLogToCloud(normDate, name, status, group, reasonText);
 
   showEditModal.value = false;
 }

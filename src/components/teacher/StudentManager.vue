@@ -2113,17 +2113,84 @@
                 />
               </div>
 
-              <!-- Book / Darslik -->
-              <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1">📚 Kitob / Darslik:</label>
-                <select
-                  v-model="manualTestBook"
-                  class="w-full rounded-2xl border border-white/15 bg-black/60 px-3 py-2 text-xs font-bold text-cyan-300 outline-none focus:border-purple-500 cursor-pointer"
+              <!-- Book / Darslik (Multi-select) -->
+              <div class="relative">
+                <div class="flex items-center justify-between mb-1">
+                  <label class="text-xs font-bold text-slate-300">📚 Darsliklar:</label>
+                  <div class="flex items-center gap-1.5 text-[10px]">
+                    <button
+                      type="button"
+                      @click="selectAllBooks"
+                      class="text-cyan-400 hover:text-cyan-300 font-bold hover:underline"
+                    >
+                      Barchasi
+                    </button>
+                    <span class="text-slate-600">•</span>
+                    <button
+                      type="button"
+                      @click="clearBooks"
+                      class="text-slate-400 hover:text-slate-200 font-bold hover:underline"
+                    >
+                      Tozalash
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Multi-select trigger button -->
+                <button
+                  type="button"
+                  @click="showBookDropdown = !showBookDropdown"
+                  class="w-full rounded-2xl border border-white/15 bg-black/60 px-3 py-2 text-xs font-bold text-cyan-300 outline-none focus:border-purple-500 flex items-center justify-between gap-2 text-left"
                 >
-                  <option value="">Umumiy darslik</option>
-                  <option v-for="b in BOOK_LIST" :key="b" :value="b">{{ b }}</option>
-                  <option value="Boshqa">Boshqa manba</option>
-                </select>
+                  <span class="truncate">{{ getSelectedBooksLabel() }}</span>
+                  <span class="text-[10px] text-slate-400 shrink-0">{{ showBookDropdown ? '▲' : '▼' }}</span>
+                </button>
+
+                <!-- Multi-select dropdown panel -->
+                <div
+                  v-if="showBookDropdown"
+                  class="absolute top-full left-0 mt-1.5 w-72 sm:w-80 rounded-2xl border border-cyan-500/30 bg-slate-950 p-3 shadow-2xl z-50 space-y-2 backdrop-blur-2xl"
+                >
+                  <div class="flex items-center justify-between border-b border-white/10 pb-1.5">
+                    <span class="text-[11px] font-bold text-slate-300">Darsliklarni tanlang (multi-select):</span>
+                    <button
+                      type="button"
+                      @click="showBookDropdown = false"
+                      class="text-xs text-slate-400 hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <!-- Book Pills Grid -->
+                  <div class="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                    <button
+                      v-for="b in BOOK_LIST"
+                      :key="b"
+                      type="button"
+                      @click="toggleBookSelection(b)"
+                      class="flex items-center gap-1.5 px-2 py-1.5 rounded-xl text-[11px] font-bold border transition text-left"
+                      :class="
+                        isBookSelected(b)
+                          ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300 shadow-sm'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                      "
+                    >
+                      <span class="text-xs">{{ isBookSelected(b) ? '✓' : '○' }}</span>
+                      <span class="truncate">{{ b }}</span>
+                    </button>
+                  </div>
+
+                  <!-- Custom Source input -->
+                  <div class="pt-1.5 border-t border-white/10 flex items-center gap-1.5">
+                    <input
+                      v-model="manualTestCustomBook"
+                      type="text"
+                      placeholder="Boshqa manba (ixtiyoriy)..."
+                      class="w-full rounded-xl border border-white/15 bg-black/70 px-2.5 py-1 text-[11px] text-white placeholder-slate-500 outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
               </div>
 
               <!-- Topic / Mavzu -->
@@ -2137,19 +2204,18 @@
                 />
               </div>
 
-              <!-- Test Turi -->
+              <!-- Test Turi (5 ta rasmiy test turi) -->
               <div>
                 <label class="block text-xs font-bold text-slate-300 mb-1">🏷️ Test Turi:</label>
                 <select
                   v-model="manualTestType"
                   class="w-full rounded-2xl border border-white/15 bg-black/60 px-3 py-2 text-xs font-bold text-amber-300 outline-none focus:border-purple-500 cursor-pointer"
                 >
-                  <option value="Mavzulashtirilgan Test">Mavzulashtirilgan Test</option>
-                  <option value="Blok / Katta Test">Blok / Katta Test</option>
-                  <option value="Nazorat Ishi">Nazorat Ishi</option>
-                  <option value="DTM / Attestatsiya Simulyatsiyasi">DTM / Attestatsiya</option>
-                  <option value="Haftalik Imtihon">Haftalik Imtihon</option>
-                  <option value="Oylik Imtihon">Oylik Imtihon</option>
+                  <option value="Mavzulashgan">🎯 Mavzulashgan</option>
+                  <option value="DTM">🏛️ DTM</option>
+                  <option value="MOCK">⚡ MOCK</option>
+                  <option value="Oylik imtihon">📅 Oylik imtihon</option>
+                  <option value="Konkurs test">🏆 Konkurs test</option>
                 </select>
               </div>
 
@@ -3010,7 +3076,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { Chart, registerables } from "chart.js";
-import { useTeacherStore, Student, TeacherReminder, GroupMeta, GroupReminder, BOOK_LIST, LessonSessionRecord } from "../../composables/useTeacherStore";
+import { useTeacherStore, Student, TeacherReminder, GroupMeta, GroupReminder, BOOK_LIST, LessonSessionRecord, normalizeDateToDDMM } from "../../composables/useTeacherStore";
 import { callApi } from "../../services/api";
 import { getStudentDefaultPin } from "../../composables/useStudentStore";
 import BaseModal from "../common/BaseModal.vue";
@@ -4337,13 +4403,49 @@ function setPaymentStatus(studentName: string, status: "paid" | "pending" | "deb
 // MANUAL TEST ENTRY & LESSON HISTORY METHODS
 // ========================================================
 const manualTestDate = ref(new Date().toISOString().split("T")[0]);
-const manualTestBook = ref("");
-const manualTestTitle = ref("Mavzulashtirilgan Test");
-const manualTestType = ref("Mavzulashtirilgan Test");
+const manualTestBooks = ref<string[]>([]);
+const manualTestCustomBook = ref("");
+const showBookDropdown = ref(false);
+const manualTestTitle = ref("Mavzulashgan Test");
+const manualTestType = ref("Mavzulashgan");
 const manualTestMaxQ = ref(30);
 const manualTestScores = ref<Record<string, { correct: number; attStatus: string }>>({});
 const sendingManualTestTg = ref(false);
 const manualTestSent = ref(false);
+
+function toggleBookSelection(b: string) {
+  const idx = manualTestBooks.value.indexOf(b);
+  if (idx > -1) {
+    manualTestBooks.value.splice(idx, 1);
+  } else {
+    manualTestBooks.value.push(b);
+  }
+}
+
+function isBookSelected(b: string): boolean {
+  return manualTestBooks.value.includes(b);
+}
+
+function selectAllBooks() {
+  manualTestBooks.value = [...BOOK_LIST];
+}
+
+function clearBooks() {
+  manualTestBooks.value = [];
+  manualTestCustomBook.value = "";
+}
+
+function getSelectedBooksLabel(): string {
+  const list = [...manualTestBooks.value];
+  if (manualTestCustomBook.value.trim()) {
+    list.push(manualTestCustomBook.value.trim());
+  }
+  if (list.length === 0) return "Umumiy darslik";
+  if (list.length === BOOK_LIST.length && !manualTestCustomBook.value.trim()) {
+    return "Barcha darsliklar (6-11)";
+  }
+  return list.join(", ");
+}
 
 const historyModeFilter = ref<"all" | "lessons" | "tests">("all");
 const historyMonthFilter = ref<string>("all");
@@ -4701,10 +4803,10 @@ function calcManualTestPercent(studentName: string) {
 
 function buildManualTestTelegramText(): string {
   const group = selectedGroupHubName.value;
-  const date = manualTestDate.value;
-  const book = manualTestBook.value ? `📚 Kitob: ${manualTestBook.value}\n` : "";
-  const title = manualTestTitle.value || "Test Natijasi";
-  const type = manualTestType.value || "Mavzulashtirilgan Test";
+  const normDate = normalizeDateToDDMM(manualTestDate.value);
+  const effectiveBook = getSelectedBooksLabel();
+  const title = manualTestTitle.value || "Mavzulashgan Test";
+  const type = manualTestType.value || "Mavzulashgan";
   const maxQ = manualTestMaxQ.value;
 
   const present: { name: string; correct: number; percent: number }[] = [];
@@ -4725,19 +4827,39 @@ function buildManualTestTelegramText(): string {
 
   present.sort((a, b) => b.percent - a.percent || b.correct - a.correct);
 
+  const sumPercent = present.reduce((acc, p) => acc + p.percent, 0);
+  const avgPercent = present.length > 0 ? Math.round(sumPercent / present.length) : 0;
+
+  // AI Pedagogical Summary
+  let aiSummary = "";
+  if (present.length === 0) {
+    aiSummary = "Darsda o'quvchilar qatnashmadi.";
+  } else if (avgPercent >= 85) {
+    const topScorers = present.filter((p) => p.percent >= 90).map((p) => p.name).slice(0, 3).join(", ");
+    aiSummary = `Guruh o'rtacha ${avgPercent}% yuqori ko'rsatkich qayd etdi. ${topScorers ? `${topScorers} mavzuni a'lo darajada o'zlashtirgan.` : "Mavzu to'liq o'zlashtirilgan."} Yangi mavzuga o'tish tavsiya etiladi.`;
+  } else if (avgPercent >= 70) {
+    aiSummary = `Guruh o'rtacha ${avgPercent}% barqaror natija ko'rsatdi. Asosiy test savollari muvaffaqiyatli topshirildi, xato qilingan savollar ustida ishlash tavsiya etiladi.`;
+  } else {
+    const lowCount = present.filter((p) => p.percent < 60).length;
+    aiSummary = `Guruh o'rtacha ${avgPercent}% natija bilan diqqat talab holatda (${lowCount} nafar o'quvchi 60% dan past). Ushbu mavzu bo'yicha mustahkamlovchi tahlil darsi o'tkazish tavsiya etiladi.`;
+  }
+
   let msg = `📝 <b>«${group}» — ${title}</b>\n`;
-  msg += `🎯 Maks: ${maxQ} ta | 📅 ${date}\n\n`;
+  msg += `🏷️ Test turi: <b>${type}</b> | 📚 Darslik: <b>${effectiveBook}</b>\n`;
+  msg += `🎯 Maks: <b>${maxQ} ta</b> | 📅 Sana: <b>${normDate}</b>\n\n`;
 
   present.forEach((p, idx) => {
     const num = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
     msg += `${num} <b>${p.name}</b>: ${p.correct}/${maxQ} (${p.percent}%)\n`;
   });
 
-  if (absent.length > 0 || excused.length > 0) {
-    msg += `\n`;
-    if (absent.length > 0) msg += `❌ Kelmadi: ${absent.join(", ")}\n`;
-    if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
-  }
+  msg += `\n📅 <b>DAVOMAT:</b>\n`;
+  msg += `✅ Qatnashdi: ${present.length} nafar\n`;
+  if (absent.length > 0) msg += `❌ Kelmadi: ${absent.join(", ")}\n`;
+  if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
+
+  msg += `\n🧠 <b>Ustoz AI Xulosasi:</b>\n${aiSummary}\n`;
+  msg += `\n🌐 <b>history-pro.uz</b>`;
 
   return msg.trim();
 }
@@ -4781,6 +4903,7 @@ async function submitManualTestResults() {
     const sessionStudentResults: any[] = [];
     let sumPercent = 0;
     let presentCount = 0;
+    const normDate = normalizeDateToDDMM(manualTestDate.value);
 
     currentGroupStudents.value.forEach((s) => {
       const sc = getManualTestScore(s.name);
@@ -4798,9 +4921,20 @@ async function submitManualTestResults() {
         correct: sc.correct,
         total: manualTestMaxQ.value,
         percent: p,
+        coin: isPresent ? coinsEarned : 0,
         coins: isPresent ? coinsEarned : 0,
+        strike: 0,
         attStatus: sc.attStatus || "Keldi",
       });
+
+      // Save attendance to localAttendanceLogs & cloud
+      teacherStore.recordAttendanceLog(
+        normDate,
+        s.name,
+        sc.attStatus || "Keldi",
+        selectedGroupHubName.value,
+        "Test davomati"
+      );
 
       // Update in master registry
       const reg = teacherStore.allStudentsRegistry.value.find((item) => item.name === s.name);
@@ -4814,14 +4948,15 @@ async function submitManualTestResults() {
       }
     });
 
+    const effectiveBook = getSelectedBooksLabel();
     const sessionRecord: LessonSessionRecord = {
       id: "sess-test-" + Date.now(),
-      date: manualTestDate.value,
+      date: normDate,
       time: new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
       teacher: teacherStore.teacherName.value || "Ustoz",
       group: selectedGroupHubName.value,
-      mode: manualTestType.value || "Yozma Test",
-      book: manualTestBook.value || "",
+      mode: manualTestType.value || "Mavzulashgan",
+      book: effectiveBook,
       topic: manualTestTitle.value,
       maxQuestions: manualTestMaxQ.value,
       avgPercent: presentCount > 0 ? Math.round(sumPercent / presentCount) : 0,
@@ -4831,11 +4966,19 @@ async function submitManualTestResults() {
 
     teacherStore.saveLessonSession(sessionRecord);
 
-    // 3. Save to Google Apps Script without 'text' to prevent duplicate telegram sending
+    // 3. Save to Google Apps Script with proper student test records
     await callApi("save", {
       teacher: teacherStore.teacherName.value,
-      mode: "manual_test",
-      students: currentGroupStudents.value,
+      mode: manualTestType.value || "manual_test",
+      students: sessionStudentResults.map((s) => ({
+        name: s.name,
+        correct: s.correct,
+        total: s.total,
+        percent: s.percent,
+        coin: s.coins,
+        strike: 0,
+        attStatus: s.attStatus,
+      })),
     });
 
     manualTestSent.value = true;

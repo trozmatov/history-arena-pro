@@ -189,7 +189,7 @@ async function sendTelegram() {
     msg += `🔴 <b>${p1?.name || "1-O'quvchi"}</b>: ${s1} ball\n`;
     msg += `🔵 <b>${p2?.name || "2-O'quvchi"}</b>: ${s2} ball\n\n`;
     msg += `${winnerText}\n`;
-    msg += `⏰ Vaqt: ${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
+    msg += `\n⏰ Vaqt: ${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}\n\n🌐 <b>history-pro.uz</b>`;
   }
   // 2. Team Battle Mode Message Format
   else if (teacherStore.currentMode.value === "Jamoalar") {
@@ -211,21 +211,44 @@ async function sendTelegram() {
     const listB = teacherStore.teamBStudents.value.map((s) => s.name).join(", ");
     if (listA) msg += `\n👥 <b>${t1}:</b> ${listA}`;
     if (listB) msg += `\n👥 <b>${t2}:</b> ${listB}`;
-    msg += `\n\n⏰ Vaqt: ${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
+    msg += `\n\n⏰ Vaqt: ${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}\n\n🌐 <b>history-pro.uz</b>`;
   }
-  // 3. Standard Lesson Message Format (Short & NO stars)
+  // 3. Standard Lesson Message Format (Clean, with Davomat, AI Summary & URL)
   else {
+    const sumPercent = present.reduce((acc, s) => acc + teacherStore.calcPercent(s), 0);
+    const avgPercent = present.length > 0 ? Math.round(sumPercent / present.length) : 0;
+
+    let aiSummary = "";
+    if (present.length === 0) {
+      aiSummary = "Darsda o'quvchilar qatnashmadi.";
+    } else if (avgPercent >= 85) {
+      const topScorers = present
+        .filter((s) => teacherStore.calcPercent(s) >= 90)
+        .map((s) => s.name)
+        .slice(0, 3)
+        .join(", ");
+      aiSummary = `Bugungi darsda o'quvchilar yuqori faollik ko'rsatishdi (o'rtacha ${avgPercent}%). ${
+        topScorers ? `${topScorers} eng yuqori natijalarni qayd etdi.` : "Mavzu to'liq mustahkamlangan."
+      }`;
+    } else if (avgPercent >= 70) {
+      aiSummary = `Sinf bo'yicha o'rtacha o'zlashtirish ${avgPercent}%. Asosiy savollar yaxshi o'zlashtirildi, qiyin savollar bo'yicha mustahkamlash davom ettiriladi.`;
+    } else {
+      aiSummary = `Bugungi savol-javobda o'rtacha natija ${avgPercent}%. Mavzuning muhim sanalari va faktlarini keyingi darsda qo'shimcha takrorlash tavsiya etiladi.`;
+    }
+
     msg = `📊 <b>DARS NATIJALARI</b>\n\n`;
     present.forEach((s, idx) => {
       const p = teacherStore.calcPercent(s);
       msg += `${idx + 1}. <b>${s.name}</b>: ${p}% (${s.correct}/${s.total})\n`;
     });
 
-    if (absent.length > 0 || excused.length > 0) {
-      msg += `\n`;
-      if (absent.length > 0) msg += `❌ Kelmadi: ${absent.join(", ")}\n`;
-      if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
-    }
+    msg += `\n📅 <b>DAVOMAT:</b>\n`;
+    msg += `✅ Keldi: ${present.length} nafar\n`;
+    if (absent.length > 0) msg += `❌ Kelmadi: ${absent.join(", ")}\n`;
+    if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
+
+    msg += `\n🧠 <b>Ustoz AI Xulosasi:</b>\n${aiSummary}\n`;
+    msg += `\n🌐 <b>history-pro.uz</b>`;
   }
 
   // Ensure attendance stats and logs are committed

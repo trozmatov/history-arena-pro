@@ -93,13 +93,36 @@ export function syncGroupTransferToCloud(studentName: string, newGroup: string) 
   }
 }
 
+export function normalizeDateToDDMM(dStr: string): string {
+  if (!dStr) return "";
+  const s = dStr.trim();
+  if (s.includes("-")) {
+    const parts = s.split("-");
+    if (parts.length === 3) {
+      const day = parts[2].padStart(2, "0");
+      const month = parts[1].padStart(2, "0");
+      return `${day}.${month}`;
+    }
+  }
+  if (s.includes(".")) {
+    const parts = s.split(".");
+    if (parts.length >= 2) {
+      const day = parts[0].padStart(2, "0");
+      const month = parts[1].padStart(2, "0");
+      return `${day}.${month}`;
+    }
+  }
+  return s;
+}
+
 export function syncAttendanceLogToCloud(date: string, studentName: string, status: string, group: string = "", reason: string = "") {
   try {
-    const safeDate = date.replace(/\./g, "_").replace(/\//g, "_").replace(/-/g, "_");
+    const normDate = normalizeDateToDDMM(date);
+    const safeDate = normDate.replace(/\./g, "_").replace(/\//g, "_").replace(/-/g, "_");
     const safeName = sanitizeFbKey(studentName);
     const key = `${safeDate}___${safeName}`;
     fbSet(fbRef(db, `attendance_logs/${key}`), {
-      date,
+      date: normDate,
       name: studentName,
       status,
       group: group || "",
@@ -111,6 +134,33 @@ export function syncAttendanceLogToCloud(date: string, studentName: string, stat
   }
 }
 
+export function recordAttendanceLog(
+  date: string,
+  studentName: string,
+  status: "Keldi" | "Sababsiz" | "Sababli",
+  group: string = "",
+  reason: string = ""
+) {
+  const normDate = normalizeDateToDDMM(date);
+  const existing = localAttendanceLogs.value.find(
+    (l) => l.name.toLowerCase().trim() === studentName.toLowerCase().trim() && normalizeDateToDDMM(l.date) === normDate
+  );
+  if (existing) {
+    existing.date = normDate;
+    existing.status = status;
+    if (group) existing.group = group;
+    if (reason) existing.reason = reason;
+  } else {
+    localAttendanceLogs.value.push({
+      date: normDate,
+      name: studentName,
+      status,
+      group: group || "",
+      reason: reason || "",
+    });
+  }
+  syncAttendanceLogToCloud(normDate, studentName, status, group, reason);
+}
 
 export interface Student {
   id?: string;
@@ -232,6 +282,16 @@ export const BOOK_LIST = [
   "11-O'zT",
   "11-Jahon",
 ];
+
+export const TEST_TYPES = [
+  "Mavzulashgan",
+  "DTM",
+  "MOCK",
+  "Oylik imtihon",
+  "Konkurs test",
+] as const;
+
+export type TestType = (typeof TEST_TYPES)[number];
 
 function loadInitialStudents(): Student[] {
   const saved = localStorage.getItem("st");
@@ -435,6 +495,7 @@ watch(
 
 export function syncLessonSessionToCloud(session: LessonSessionRecord) {
   try {
+    if (!session || !session.id) return;
     fbSet(fbRef(db, `lesson_sessions/${session.id}`), session).catch((e: any) =>
       console.warn("Firebase session sync error:", e)
     );
@@ -442,6 +503,42 @@ export function syncLessonSessionToCloud(session: LessonSessionRecord) {
     console.warn("syncLessonSessionToCloud error:", e);
   }
 }
+
+export function syncAllExistingLessonSessionsToCloud() {
+  try {
+    if (!lessonSessions.value || !Array.isArray(lessonSessions.value)) return;
+    lessonSessions.value.forEach((s) => {
+      if (s && s.id) {
+        syncLessonSessionToCloud(s);
+      }
+    });
+  } catch (e) {
+    console.warn("syncAllExistingLessonSessionsToCloud error:", e);
+  }
+}
+
+// Auto-sync all existing local sessions to cloud on load
+if (typeof window !== "undefined") {
+  if (lessonSessions.value.length > 0) {
+    syncAllExistingLessonSessionsToCloud();
+  }
+
+  // Listen for real-time lesson / test sessions in Firebase
+  const sessionsFbRef = fbRef(db, "lesson_sessions");
+  onChildAdded(sessionsFbRef, (snap: any) => {
+    const s = snap.val();
+    if (s && s.id) {
+      const idx = lessonSessions.value.findIndex((x) => x.id === s.id);
+      if (idx === -1) {
+        lessonSessions.value.unshift(s);
+      } else {
+        lessonSessions.value[idx] = s;
+      }
+    }
+  });
+}
+
+
 
 const currentMode = ref<"standard" | "Duel" | "Jamoalar">("standard");
 const team1Name = ref<string>("🔴 Qizillar Jamoasi");
@@ -1499,8 +1596,12 @@ export function useTeacherStore() {
     sessionFinalized,
     syncGroupTransferToCloud,
     syncAttendanceLogToCloud,
+    recordAttendanceLog,
+    normalizeDateToDDMM,
+    TEST_TYPES,
     syncGroupFreezeToCloud,
     cloudFrozenGroups,
     isGroupFrozen,
+    syncAllExistingLessonSessionsToCloud,
   };
 }

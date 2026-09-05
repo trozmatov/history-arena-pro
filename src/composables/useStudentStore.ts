@@ -85,7 +85,16 @@ const activeMonthKey = ref<string>("");
 const leaderboardData = ref<LeaderboardItem[]>([]);
 const isLoading = ref<boolean>(false);
 const serverAttendanceLogs = ref<any[]>([]);
-const cloudSessions = ref<any[]>([]);
+
+const initialCachedSessions = (() => {
+  try {
+    const s = localStorage.getItem("ha_lesson_sessions");
+    return s ? JSON.parse(s) : [];
+  } catch {
+    return [];
+  }
+})();
+const cloudSessions = ref<any[]>(initialCachedSessions);
 
 const studentLevel = ref<string>("Boshlovchi 🌱");
 const studentAvatar = ref<string>("🌱");
@@ -211,6 +220,25 @@ function initFreezeListener() {
         }
       }
     });
+
+    // Realtime Cloud synchronization for lesson/test sessions
+    const lsRef = fbRef(db, "lesson_sessions");
+    const handleLessonSessionSnap = (snap: any) => {
+      const val = snap.val();
+      if (val && val.id) {
+        const idx = cloudSessions.value.findIndex((s) => s.id === val.id);
+        if (idx > -1) {
+          cloudSessions.value[idx] = val;
+        } else {
+          cloudSessions.value.unshift(val);
+        }
+        try {
+          localStorage.setItem("ha_lesson_sessions", JSON.stringify(cloudSessions.value));
+        } catch {}
+      }
+    };
+    onChildAdded(lsRef, handleLessonSessionSnap);
+    onChildChanged(lsRef, handleLessonSessionSnap);
   } catch (e) {
     console.warn("initFreezeListener error:", e);
   }
@@ -731,6 +759,9 @@ export function useStudentStore() {
       if (snap.exists()) {
         const val = snap.val();
         cloudSessions.value = Object.values(val);
+        try {
+          localStorage.setItem("ha_lesson_sessions", JSON.stringify(cloudSessions.value));
+        } catch {}
       }
     } catch (e) {
       console.warn("fetch cloud sessions error:", e);
@@ -992,13 +1023,16 @@ export function useStudentStore() {
             (r: any) => r.name?.toLowerCase().trim() === studentName.value.toLowerCase().trim()
           );
           if (res && rawBook) {
-            const matched = allBooksList.find(
-              (item) => item.id.toLowerCase() === rawBook.toLowerCase() || rawBook.toLowerCase().includes(item.id.toLowerCase())
-            );
-            const bookKey = matched ? matched.id : rawBook;
-            if (!bookScores[bookKey]) bookScores[bookKey] = { totalScore: 0, count: 0 };
-            bookScores[bookKey].totalScore += parseFloat(String(res.percent)) || 0;
-            bookScores[bookKey].count++;
+            const rawBookList = rawBook.includes(",") ? rawBook.split(",").map((b: string) => b.trim()) : [rawBook];
+            rawBookList.forEach((rb: string) => {
+              const matched = allBooksList.find(
+                (item) => item.id.toLowerCase() === rb.toLowerCase() || rb.toLowerCase().includes(item.id.toLowerCase())
+              );
+              const bookKey = matched ? matched.id : rb;
+              if (!bookScores[bookKey]) bookScores[bookKey] = { totalScore: 0, count: 0 };
+              bookScores[bookKey].totalScore += parseFloat(String(res.percent)) || 0;
+              bookScores[bookKey].count++;
+            });
           }
         }
       });
@@ -1315,51 +1349,120 @@ export function useStudentStore() {
     };
   });
 
-  // --- 4. Standalone Test History (Mavzulashtirilgan / Blok testlar) ---
+  // --- 4. Standalone Test History (Mavzulashtirilgan / DTM / MOCK / Oylik imtihon / Konkurs testlar) ---
   const studentTestHistory = computed(() => {
     const list: any[] = [];
+    const seenIds = new Set<string>();
+
+    if (!studentName.value) return list;
+    const target = studentName.value.toLowerCase().trim();
+
+    // 1. Gather all sessions from Firebase cloudSessions and localStorage
+    const allSessions: any[] = [...cloudSessions.value];
     try {
       const saved = localStorage.getItem("ha_lesson_sessions");
-      if (saved && studentName.value) {
-        const sessions: any[] = JSON.parse(saved);
-        sessions.forEach((s) => {
-          if (
-            s.mode === "manual_test" ||
-            s.mode?.toLowerCase().includes("test") ||
-            s.topic?.toLowerCase().includes("test")
-          ) {
-            if (s.studentResults && Array.isArray(s.studentResults)) {
-              const res = s.studentResults.find(
-                (r: any) => r.name?.toLowerCase() === studentName.value.toLowerCase()
-              );
-              if (res) {
-                const p = parseFloat(String(res.percent)) || 0;
-                list.push({
-                  id: s.id,
-                  date: s.date || "Yaqinda",
-                  time: s.time || "",
-                  book: s.book || "Tarix",
-                  topic: s.topic || "Mavzulashtirilgan Test",
-                  testType: s.topic || "Mavzulashtirilgan Test",
-                  correct: res.correct || 0,
-                  total: res.total || s.maxQuestions || 30,
-                  percent: p,
-                  coins: res.coins || 0,
-                  strikes: res.strikes || 0,
-                  statusBadge: p >= 90 ? "Mukammal 🎯" : p >= 70 ? "Yaxshi ✅" : "Qayta topshirish ⚠️",
-                  badgeClass:
-                    p >= 90
-                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                      : p >= 70
-                      ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                      : "bg-rose-500/20 text-rose-300 border-rose-500/30",
-                });
-              }
-            }
+      if (saved) {
+        const localList: any[] = JSON.parse(saved);
+        localList.forEach((ls) => {
+          if (!allSessions.some((s) => s.id === ls.id)) {
+            allSessions.push(ls);
           }
         });
       }
     } catch {}
+
+    allSessions.forEach((s) => {
+      const mode = (s.mode || "").toLowerCase();
+      const topic = (s.topic || "").toLowerCase();
+      const isTestSession =
+        mode === "manual_test" ||
+        mode.includes("test") ||
+        mode.includes("dtm") ||
+        mode.includes("mock") ||
+        mode.includes("imtihon") ||
+        mode.includes("konkurs") ||
+        topic.includes("test") ||
+        topic.includes("dtm") ||
+        topic.includes("mock") ||
+        topic.includes("imtihon");
+
+      if (isTestSession && s.studentResults && Array.isArray(s.studentResults)) {
+        const res = s.studentResults.find(
+          (r: any) => r.name?.toLowerCase().trim() === target
+        );
+        if (res) {
+          const itemKey = s.id || `${s.date}_${s.topic}_${target}`;
+          if (!seenIds.has(itemKey)) {
+            seenIds.add(itemKey);
+            const p = parseFloat(String(res.percent)) || 0;
+            const totalQ = res.total || s.maxQuestions || 30;
+            const correctQ = typeof res.correct === "number" ? res.correct : Math.round((p / 100) * totalQ);
+            list.push({
+              id: itemKey,
+              date: s.date || "Yaqinda",
+              time: s.time || "",
+              book: s.book || "Tarix",
+              topic: s.topic || "Mavzulashgan Test",
+              testType: s.mode || "Mavzulashgan",
+              correct: correctQ,
+              total: totalQ,
+              percent: p,
+              coins: res.coins || res.coin || (p >= 80 ? 20 : 5),
+              strikes: res.strikes || res.strike || 0,
+              statusBadge: p >= 90 ? "Mukammal 🎯" : p >= 70 ? "Yaxshi ✅" : "Qayta topshirish ⚠️",
+              badgeClass:
+                p >= 90
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                  : p >= 70
+                  ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                  : "bg-rose-500/20 text-rose-300 border-rose-500/30",
+            });
+          }
+        }
+      }
+    });
+
+    // 2. Also check historyData from Google Sheets for any recorded test rows
+    historyData.value.forEach((h, idx) => {
+      const mode = (h.mode || "").toLowerCase();
+      const isTestRow =
+        mode.includes("test") ||
+        mode.includes("dtm") ||
+        mode.includes("mock") ||
+        mode.includes("imtihon") ||
+        mode.includes("konkurs") ||
+        mode === "manual_test";
+
+      if (isTestRow) {
+        const itemKey = `sheet-test-${h.date}-${idx}`;
+        if (!seenIds.has(itemKey) && !list.some((item) => item.date === h.date)) {
+          seenIds.add(itemKey);
+          const p = parseFloat(String(h.percent)) || 0;
+          const totalQ = h.total || 30;
+          const correctQ = h.correct || Math.round((p / 100) * totalQ);
+          list.push({
+            id: itemKey,
+            date: h.date || "Yaqinda",
+            time: "",
+            book: h.book || "Tarix",
+            topic: h.mode || "Mavzulashgan Test",
+            testType: h.mode || "Mavzulashgan",
+            correct: correctQ,
+            total: totalQ,
+            percent: p,
+            coins: parseInt(String(h.coin)) || (p >= 80 ? 20 : 5),
+            strikes: parseInt(String(h.strike)) || 0,
+            statusBadge: p >= 90 ? "Mukammal 🎯" : p >= 70 ? "Yaxshi ✅" : "Qayta topshirish ⚠️",
+            badgeClass:
+              p >= 90
+                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                : p >= 70
+                ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                : "bg-rose-500/20 text-rose-300 border-rose-500/30",
+          });
+        }
+      }
+    });
 
     return list.sort((a, b) => (b.date > a.date ? 1 : -1));
   });

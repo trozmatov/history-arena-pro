@@ -352,8 +352,11 @@
             class="rounded-2xl border border-white/10 bg-black/30 p-3 flex items-center justify-between gap-3 hover:bg-black/50 transition"
           >
             <div class="space-y-0.5 min-w-0 truncate">
-              <div class="text-xs font-bold text-white truncate">
-                {{ t.topic }}
+              <div class="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                <span v-if="t.testType" class="rounded bg-purple-500/20 text-purple-300 px-1.5 py-0.5 text-[9px] font-bold border border-purple-500/30 shrink-0">
+                  {{ t.testType }}
+                </span>
+                <span class="truncate">{{ t.topic }}</span>
               </div>
               <div class="text-[10px] text-slate-400 flex items-center gap-2">
                 <span>📅 {{ t.date }}</span>
