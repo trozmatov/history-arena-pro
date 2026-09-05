@@ -469,6 +469,14 @@ onMounted(() => {
   };
   onChildAdded(groupsMetaRef, handleGroupMetaSnap);
   onChildChanged(groupsMetaRef, handleGroupMetaSnap);
+  onChildRemoved(groupsMetaRef, (snap: any) => {
+    const val = snap.val();
+    const gName = val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."));
+    if (gName && teacherStore.groupsMeta.value[gName]) {
+      delete teacherStore.groupsMeta.value[gName];
+      localStorage.setItem("ha_groups_meta", JSON.stringify(teacherStore.groupsMeta.value));
+    }
+  });
 
   // Realtime Cloud synchronization for student patterns
   const studentPatternsRef = fbRef(db, "student_patterns");

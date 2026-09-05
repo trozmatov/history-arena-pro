@@ -1,14 +1,18 @@
 <template>
   <div class="space-y-6 w-full mx-auto pb-12">
-    <!-- Top Header Bar -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/80 p-5 sm:p-6 shadow-2xl backdrop-blur-2xl">
-      <div class="flex items-center gap-3">
-        <button
-          type="button"
-          @click="$emit('back')"
-          class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-base text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition"
-          title="Bosh menyuga qaytish"
-        >
+    <!-- ======================================================== -->
+    <!-- VIEW 1: MAIN CRM VIEW -->
+    <!-- ======================================================== -->
+    <div v-if="managerView === 'main'" class="space-y-6">
+      <!-- Top Header Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/80 p-5 sm:p-6 shadow-2xl backdrop-blur-2xl">
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            @click="$emit('back')"
+            class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-base text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition"
+            title="Bosh menyuga qaytish"
+          >
           ⬅️
         </button>
         <div>
@@ -168,8 +172,8 @@
           <p class="text-xs text-slate-400">Guruh ichiga kirish, dars jadvali, eslatmalar, o'zlashtirish va login-parollar</p>
         </div>
 
-        <!-- Group Status Filter Tabs -->
-        <div class="flex items-center gap-2 self-start sm:self-auto">
+        <!-- Group Status Filter Tabs & Add Group Button -->
+        <div class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
           <div class="flex rounded-2xl bg-black/50 p-1 border border-white/10 text-xs">
             <button
               type="button"
@@ -196,6 +200,17 @@
               ❄️ Muzlagan ({{ frozenGroupsCount }})
             </button>
           </div>
+
+          <!-- + Create New Group Button -->
+          <button
+            type="button"
+            @click="openCreateGroupModal"
+            class="flex items-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-500/25 hover:from-emerald-400 hover:to-teal-500 active:scale-95 transition"
+            title="Yangi dars guruhi ochish"
+          >
+            <span>➕</span>
+            <span>Yangi Guruh Ochish</span>
+          </button>
         </div>
       </div>
 
@@ -666,6 +681,8 @@
           </div>
         </div>
       </div>
+    </div>
+    <!-- /VIEW 1: MAIN CRM VIEW -->
     </div>
 
     <!-- ======================================================== -->
@@ -1591,14 +1608,37 @@
     </BaseModal>
 
     <!-- ======================================================== -->
-    <!-- MODAL 7: DEDICATED GROUP CRM HUB MODAL -->
+    <!-- VIEW 2: DEDICATED GROUP CRM HUB FULL-PAGE VIEW -->
     <!-- ======================================================== -->
-    <BaseModal
-      v-model="showGroupHubModal"
-      :title="`📚 «${selectedGroupHubName}» Guruhi Boshqaruv Markazi`"
-      custom-class="max-w-5xl sm:max-w-6xl w-full"
-    >
-      <div v-if="selectedGroupHubName" class="space-y-4 py-1">
+    <div v-if="managerView === 'group-hub' && selectedGroupHubName" class="space-y-6 animate-fade-in">
+      <!-- Dedicated Group Hub Navigation Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/80 p-5 sm:p-6 shadow-2xl backdrop-blur-2xl">
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            @click="closeGroupHub"
+            class="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-black text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition shadow"
+            title="Guruhlar ro'yxatiga qaytish"
+          >
+            <span>⬅️</span>
+            <span>Guruhlar Ro'yxatiga Qaytish</span>
+          </button>
+          <div>
+            <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+              <span>📚</span> «{{ selectedGroupHubName }}» Guruhi Boshqaruv Markazi
+            </h2>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+              <span>O'quvchilar CRM</span>
+              <span>/</span>
+              <span>Guruhlar</span>
+              <span>/</span>
+              <span class="text-indigo-400 font-bold">{{ selectedGroupHubName }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-4 py-1">
         <!-- Group Header Card with Quick Stats & Actions -->
         <div class="rounded-3xl border border-white/10 bg-slate-950/90 p-4 sm:p-5 space-y-4 shadow-xl">
           <!-- Top Hero Action Row -->
@@ -2661,13 +2701,306 @@
         </div>
       </div>
 
+      <!-- Bottom Return Button -->
+      <div class="flex justify-end pt-2 pb-6">
+        <button
+          type="button"
+          @click="closeGroupHub"
+          class="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition shadow"
+        >
+          <span>⬅️</span>
+          <span>Guruhlar Ro'yxatiga Qaytish</span>
+        </button>
+      </div>
+    </div>
+    <!-- /VIEW 2: DEDICATED GROUP CRM HUB FULL-PAGE VIEW -->
+
+    <!-- ======================================================== -->
+    <!-- MODAL 7: CREATE NEW GROUP MODAL -->
+    <!-- ======================================================== -->
+    <BaseModal
+      v-model="showCreateGroupModal"
+      title="➕ Yangi Guruh Ochish"
+      custom-class="max-w-2xl w-full"
+    >
+      <div class="space-y-4 py-1">
+        <!-- 1. Group Core Info Card -->
+        <div class="rounded-3xl border border-white/10 bg-slate-950/60 p-4 sm:p-5 space-y-4">
+          <h4 class="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+            <span>🏷️</span> Guruh Asosiy Ma'lumotlari
+          </h4>
+
+          <!-- Group Name -->
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">Guruh Nomi *</label>
+            <input
+              v-model="newGroupForm.name"
+              type="text"
+              required
+              placeholder="Masalan: 10-A Tarix yoki Target 2026"
+              class="w-full rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-xs font-bold text-white placeholder-slate-500 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+            />
+          </div>
+
+          <!-- Schedule Days: Presets & Chips -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-bold text-slate-300">Dars kunlari:</label>
+              <!-- Quick Presets -->
+              <div class="flex items-center gap-1 text-[10px]">
+                <button
+                  type="button"
+                  @click="setNewGroupDaysPreset('toq')"
+                  class="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-slate-300 hover:bg-emerald-600 hover:text-white transition"
+                >
+                  Toq kunlar
+                </button>
+                <button
+                  type="button"
+                  @click="setNewGroupDaysPreset('juft')"
+                  class="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-slate-300 hover:bg-emerald-600 hover:text-white transition"
+                >
+                  Juft kunlar
+                </button>
+                <button
+                  type="button"
+                  @click="setNewGroupDaysPreset('har_kuni')"
+                  class="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-slate-300 hover:bg-emerald-600 hover:text-white transition"
+                >
+                  Har kuni
+                </button>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="d in ['Du', 'Se', 'Chor', 'Pay', 'Juma', 'Shan', 'Yak']"
+                :key="d"
+                type="button"
+                @click="toggleNewGroupDay(d)"
+                class="rounded-xl px-3.5 py-2 text-xs font-bold border transition"
+                :class="
+                  newGroupForm.days.includes(d)
+                    ? 'bg-emerald-600 border-emerald-400 text-white shadow-md shadow-emerald-600/30'
+                    : 'bg-black/40 border-white/10 text-slate-400 hover:text-white'
+                "
+              >
+                {{ d }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Time, Room, Subject Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 mb-1">Dars vaqti:</label>
+              <input
+                v-model="newGroupForm.time"
+                type="text"
+                placeholder="14:00 - 15:30"
+                class="w-full rounded-2xl border border-white/15 bg-black/50 px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 mb-1">Xona / Manzil:</label>
+              <input
+                v-model="newGroupForm.room"
+                type="text"
+                placeholder="1-xona"
+                class="w-full rounded-2xl border border-white/15 bg-black/50 px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 mb-1">Fan / Darslik:</label>
+              <input
+                v-model="newGroupForm.subject"
+                type="text"
+                placeholder="O'zbekiston Tarixi"
+                class="w-full rounded-2xl border border-white/15 bg-black/50 px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          <!-- Monthly Fee & Note -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-300 mb-1">Oylik to'lov summasi (so'm):</label>
+              <input
+                v-model.number="newGroupForm.paymentFee"
+                type="number"
+                step="10000"
+                placeholder="300000"
+                class="w-full rounded-2xl border border-white/15 bg-black/50 px-3.5 py-2.5 text-xs font-bold text-amber-300 outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-300 mb-1">Guruh izohi (ixtiyoriy):</label>
+              <input
+                v-model="newGroupForm.note"
+                type="text"
+                placeholder="Masalan: Katta imtihonga tayyorgarlik"
+                class="w-full rounded-2xl border border-white/15 bg-black/50 px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Students Assignment Section -->
+        <div class="rounded-3xl border border-white/10 bg-slate-950/60 p-4 sm:p-5 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+            <h4 class="text-xs font-black uppercase tracking-wider text-indigo-300 flex items-center gap-2">
+              <span>👥</span> Guruhga O'quvchilarni Biriktirish
+            </h4>
+
+            <!-- Mode Selector Tabs -->
+            <div class="flex rounded-xl bg-black/60 p-1 border border-white/10 text-xs">
+              <button
+                type="button"
+                @click="newGroupStudentMode = 'existing'"
+                class="rounded-lg px-3 py-1 font-bold transition"
+                :class="newGroupStudentMode === 'existing' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+              >
+                Mavjud o'quvchilardan ({{ newGroupSelectedExistingStudents.length }})
+              </button>
+              <button
+                type="button"
+                @click="newGroupStudentMode = 'new'"
+                class="rounded-lg px-3 py-1 font-bold transition"
+                :class="newGroupStudentMode === 'new' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+              >
+                Yangi o'quvchi qo'shish ({{ newGroupDirectStudents.length }})
+              </button>
+            </div>
+          </div>
+
+          <!-- TAB A: Existing Students Multi-select -->
+          <div v-if="newGroupStudentMode === 'existing'" class="space-y-3">
+            <div class="flex items-center justify-between gap-2">
+              <input
+                v-model="newGroupExistingSearch"
+                type="text"
+                placeholder="🔍 Qidirish (ism yoki guruh)..."
+                class="flex-1 rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
+              />
+              <button
+                type="button"
+                @click="toggleSelectAllExistingForNewGroup"
+                class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/10 shrink-0 transition"
+              >
+                {{ newGroupSelectedExistingStudents.length === filteredExistingStudentsForNewGroup.length && filteredExistingStudentsForNewGroup.length > 0 ? 'Tozalash' : 'Barchasini tanlash' }}
+              </button>
+            </div>
+
+            <!-- List of existing students with checkboxes -->
+            <div class="max-h-56 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+              <div
+                v-for="st in filteredExistingStudentsForNewGroup"
+                :key="st.name"
+                @click="toggleSelectExistingForNewGroup(st.name)"
+                class="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition select-none"
+                :class="
+                  newGroupSelectedExistingStudents.includes(st.name)
+                    ? 'border-indigo-500 bg-indigo-950/40 shadow-sm'
+                    : 'border-white/5 bg-black/30 hover:bg-white/5'
+                "
+              >
+                <div class="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    :checked="newGroupSelectedExistingStudents.includes(st.name)"
+                    class="rounded border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer h-4 w-4"
+                  />
+                  <span class="font-bold text-xs text-white">{{ st.name }}</span>
+                </div>
+                <span class="text-[11px] text-slate-400 rounded-md bg-white/5 px-2 py-0.5 border border-white/5">
+                  Hozirgi: <b class="text-slate-200">{{ st.group || 'Umumiy' }}</b>
+                </span>
+              </div>
+              <div v-if="filteredExistingStudentsForNewGroup.length === 0" class="text-center py-4 text-xs text-slate-500">
+                O'quvchi topilmadi
+              </div>
+            </div>
+            <div class="text-[11px] text-indigo-300 bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-2 flex items-center gap-1.5">
+              <span>💡</span>
+              <span>Tanlangan <b>{{ newGroupSelectedExistingStudents.length }} ta</b> o'quvchi guruh yaratilgach, avtomatik ravishda yangi guruhga ko'chiriladi.</span>
+            </div>
+          </div>
+
+          <!-- TAB B: Add Brand New Student directly -->
+          <div v-if="newGroupStudentMode === 'new'" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input
+                v-model="directStudentName"
+                type="text"
+                placeholder="F.I.Sh *"
+                class="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+                @keyup.enter="addDirectStudentToNewGroup"
+              />
+              <input
+                v-model="directStudentPhone"
+                type="text"
+                placeholder="Telefon (+998...)"
+                class="rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+                @keyup.enter="addDirectStudentToNewGroup"
+              />
+              <div class="flex gap-2">
+                <input
+                  v-model="directStudentParentPhone"
+                  type="text"
+                  placeholder="Ota-ona tel"
+                  class="flex-1 rounded-xl border border-white/10 bg-black/50 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+                  @keyup.enter="addDirectStudentToNewGroup"
+                />
+                <button
+                  type="button"
+                  @click="addDirectStudentToNewGroup"
+                  class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500 shrink-0 transition"
+                >
+                  ➕ Qo'shish
+                </button>
+              </div>
+            </div>
+
+            <!-- List of directly added new students -->
+            <div v-if="newGroupDirectStudents.length > 0" class="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+              <div
+                v-for="(st, idx) in newGroupDirectStudents"
+                :key="idx"
+                class="flex items-center justify-between p-2.5 rounded-xl border border-emerald-500/20 bg-emerald-950/20 text-xs"
+              >
+                <div>
+                  <span class="font-bold text-white">{{ st.name }}</span>
+                  <span v-if="st.phone" class="text-slate-400 ml-2 font-mono text-[11px]">{{ st.phone }}</span>
+                </div>
+                <button
+                  type="button"
+                  @click="removeDirectStudentFromNewGroup(idx)"
+                  class="text-red-400 hover:text-red-300 text-xs px-2 py-1"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+            <div v-else class="text-center py-4 text-xs text-slate-500">
+              Hozircha yangi o'quvchi kiritilmadi. Yuqoridagi maydonga ismini yozib "Qo'shish" tugmasini bosing.
+            </div>
+          </div>
+        </div>
+      </div>
+
       <template #footer>
         <button
           type="button"
-          @click="showGroupHubModal = false"
+          @click="showCreateGroupModal = false"
           class="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/10"
         >
-          Yopish
+          Bekor qilish
+        </button>
+        <button
+          type="button"
+          @click="saveNewGroup"
+          class="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-xl shadow-emerald-500/30 hover:from-emerald-400 hover:to-teal-500 active:scale-95 transition"
+        >
+          💾 Guruhni Yaratish va Saqlash
         </button>
       </template>
     </BaseModal>
@@ -2679,6 +3012,7 @@ import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { Chart, registerables } from "chart.js";
 import { useTeacherStore, Student, TeacherReminder, GroupMeta, GroupReminder, BOOK_LIST, LessonSessionRecord } from "../../composables/useTeacherStore";
 import { callApi } from "../../services/api";
+import { getStudentDefaultPin } from "../../composables/useStudentStore";
 import BaseModal from "../common/BaseModal.vue";
 
 Chart.register(...registerables);
@@ -2689,6 +3023,14 @@ const emit = defineEmits<{
 }>();
 
 const teacherStore = useTeacherStore();
+
+// View Navigation State (Main CRM vs Group Hub)
+const managerView = ref<"main" | "group-hub">("main");
+
+function closeGroupHub() {
+  managerView.value = "main";
+  selectedGroupHubName.value = "";
+}
 
 // Search & Filter & Selection
 const searchQuery = ref("");
@@ -2701,6 +3043,186 @@ const selectedStudentNames = ref<string[]>([]);
 // Pagination State
 const currentPage = ref(1);
 const pageSize = ref(15);
+
+// Create New Group State
+const showCreateGroupModal = ref(false);
+const newGroupForm = ref({
+  name: "",
+  days: ["Du", "Chor", "Juma"],
+  time: "14:00 - 15:30",
+  room: "1-xona",
+  subject: "O'zbekiston Tarixi",
+  note: "",
+  paymentFee: 300000,
+});
+const newGroupStudentMode = ref<"existing" | "new">("existing");
+const newGroupSelectedExistingStudents = ref<string[]>([]);
+const newGroupExistingSearch = ref("");
+const newGroupDirectStudents = ref<Array<{ name: string; phone: string; parentPhone: string }>>([]);
+const directStudentName = ref("");
+const directStudentPhone = ref("");
+const directStudentParentPhone = ref("");
+
+const filteredExistingStudentsForNewGroup = computed(() => {
+  const query = newGroupExistingSearch.value.toLowerCase().trim();
+  const all = teacherStore.allStudentsRegistry.value;
+  if (!query) return all;
+  return all.filter(
+    (s) =>
+      s.name.toLowerCase().includes(query) ||
+      (s.group || "").toLowerCase().includes(query)
+  );
+});
+
+function openCreateGroupModal() {
+  newGroupForm.value = {
+    name: "",
+    days: ["Du", "Chor", "Juma"],
+    time: "14:00 - 15:30",
+    room: "1-xona",
+    subject: "O'zbekiston Tarixi",
+    note: "",
+    paymentFee: 300000,
+  };
+  newGroupStudentMode.value = "existing";
+  newGroupSelectedExistingStudents.value = [];
+  newGroupExistingSearch.value = "";
+  newGroupDirectStudents.value = [];
+  directStudentName.value = "";
+  directStudentPhone.value = "";
+  directStudentParentPhone.value = "";
+  showCreateGroupModal.value = true;
+}
+
+function toggleNewGroupDay(d: string) {
+  if (newGroupForm.value.days.includes(d)) {
+    newGroupForm.value.days = newGroupForm.value.days.filter((day) => day !== d);
+  } else {
+    newGroupForm.value.days.push(d);
+  }
+}
+
+function setNewGroupDaysPreset(preset: "toq" | "juft" | "har_kuni") {
+  if (preset === "toq") {
+    newGroupForm.value.days = ["Du", "Chor", "Juma"];
+  } else if (preset === "juft") {
+    newGroupForm.value.days = ["Se", "Pay", "Shan"];
+  } else if (preset === "har_kuni") {
+    newGroupForm.value.days = ["Du", "Se", "Chor", "Pay", "Juma", "Shan", "Yak"];
+  }
+}
+
+function toggleSelectExistingForNewGroup(name: string) {
+  if (newGroupSelectedExistingStudents.value.includes(name)) {
+    newGroupSelectedExistingStudents.value = newGroupSelectedExistingStudents.value.filter((n) => n !== name);
+  } else {
+    newGroupSelectedExistingStudents.value.push(name);
+  }
+}
+
+function toggleSelectAllExistingForNewGroup() {
+  const allFilteredNames = filteredExistingStudentsForNewGroup.value.map((s) => s.name);
+  const allSelected =
+    allFilteredNames.length > 0 &&
+    allFilteredNames.every((n) => newGroupSelectedExistingStudents.value.includes(n));
+  if (allSelected) {
+    newGroupSelectedExistingStudents.value = newGroupSelectedExistingStudents.value.filter(
+      (n) => !allFilteredNames.includes(n)
+    );
+  } else {
+    const combined = new Set([...newGroupSelectedExistingStudents.value, ...allFilteredNames]);
+    newGroupSelectedExistingStudents.value = Array.from(combined);
+  }
+}
+
+function addDirectStudentToNewGroup() {
+  const name = directStudentName.value.trim();
+  if (!name) return;
+  newGroupDirectStudents.value.push({
+    name,
+    phone: directStudentPhone.value.trim(),
+    parentPhone: directStudentParentPhone.value.trim(),
+  });
+  directStudentName.value = "";
+  directStudentPhone.value = "";
+  directStudentParentPhone.value = "";
+}
+
+function removeDirectStudentFromNewGroup(idx: number) {
+  newGroupDirectStudents.value.splice(idx, 1);
+}
+
+function saveNewGroup() {
+  const gName = newGroupForm.value.name.trim();
+  if (!gName) {
+    alert("Iltimos, guruh nomini kiriting!");
+    return;
+  }
+  const exists = groupsList.value.some(
+    (g) => g.name.toLowerCase().trim() === gName.toLowerCase().trim()
+  );
+  if (exists) {
+    alert(`«${gName}» nomli guruh allaqachon mavjud! Iltimos, boshqa nom kiriting.`);
+    return;
+  }
+
+  // 1. Create and save GroupMeta (syncs to Firebase groups_meta)
+  const meta: GroupMeta = {
+    name: gName,
+    days: [...newGroupForm.value.days],
+    time: newGroupForm.value.time.trim() || "14:00 - 15:30",
+    room: newGroupForm.value.room.trim() || "1-xona",
+    subject: newGroupForm.value.subject.trim() || "O'zbekiston Tarixi",
+    note: newGroupForm.value.note.trim() || "",
+    paymentFee: Number(newGroupForm.value.paymentFee) || 300000,
+    reminders: [],
+    studentPayments: {},
+  };
+  teacherStore.saveGroupMeta(meta);
+
+  // 2. Transfer selected existing students to this new group
+  if (newGroupSelectedExistingStudents.value.length > 0) {
+    newGroupSelectedExistingStudents.value.forEach((sName) => {
+      const target = teacherStore.allStudentsRegistry.value.find((s) => s.name === sName);
+      if (target) {
+        target.group = gName;
+      }
+      teacherStore.syncGroupTransferToCloud(sName, gName);
+    });
+    teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(teacherStore.allStudentsRegistry.value));
+  }
+
+  // 3. Add directly added new students
+  if (newGroupDirectStudents.value.length > 0) {
+    newGroupDirectStudents.value.forEach((ds) => {
+      const pin = getStudentDefaultPin(ds.name);
+      const studentObj: Student = {
+        name: ds.name.trim(),
+        group: gName,
+        status: "active",
+        phone: ds.phone.trim(),
+        parentPhone: ds.parentPhone.trim(),
+        login: ds.name.trim().toLowerCase().replace(/\s+/g, ""),
+        password: pin,
+        pin: pin,
+        coins: 0,
+        avgAccuracy: 0,
+        totalBattles: 0,
+        victories: 0,
+      };
+      teacherStore.saveStudent(studentObj);
+    });
+  }
+
+  showCreateGroupModal.value = false;
+  openGroupHub(gName);
+  alert(
+    `🎉 «${gName}» guruhi muvaffaqiyatli ochildi va ${
+      newGroupSelectedExistingStudents.value.length + newGroupDirectStudents.value.length
+    } nafar o'quvchi biriktirildi!`
+  );
+}
 
 // Group Hub State
 const showGroupHubModal = ref(false);
@@ -2850,6 +3372,28 @@ const groupsList = computed(() => {
     }
   > = {};
 
+  // 1. Seed with groups from groupsMeta so newly created or cloud-synced empty groups are always listed!
+  for (const [gName, meta] of Object.entries(teacherStore.groupsMeta.value)) {
+    if (gName && gName.trim()) {
+      const cleanName = gName.trim();
+      map[cleanName] = {
+        name: cleanName,
+        count: 0,
+        activeCount: 0,
+        frozenCount: 0,
+        isAllFrozen: teacherStore.isGroupFrozen(cleanName),
+        totalAccuracy: 0,
+        avgAccuracy: 0,
+        days: meta?.days || ["Du", "Chor", "Juma"],
+        time: meta?.time || "14:00 - 15:30",
+        room: meta?.room || "",
+        subject: meta?.subject || "Tarix",
+        note: meta?.note || "",
+      };
+    }
+  }
+
+  // 2. Count students for each group
   teacherStore.allStudentsRegistry.value.forEach((s) => {
     const g = s.group || "Umumiy";
     if (!map[g]) {
@@ -3687,7 +4231,8 @@ function openGroupHub(groupName: string) {
   activeGroupTab.value = "schedule";
   const meta = teacherStore.getGroupMeta(groupName);
   groupScheduleForm.value = JSON.parse(JSON.stringify(meta));
-  showGroupHubModal.value = true;
+  managerView.value = "group-hub";
+  showGroupHubModal.value = false;
 }
 
 function toggleScheduleDay(day: string) {
@@ -3758,6 +4303,7 @@ function startLessonWithGroup(groupName: string) {
   }
   teacherStore.students.value = [];
   teacherStore.addFromDb(students.map((s) => s.name), "standard");
+  closeGroupHub();
   showGroupHubModal.value = false;
   emit("back");
 }
@@ -4179,28 +4725,21 @@ function buildManualTestTelegramText(): string {
 
   present.sort((a, b) => b.percent - a.percent || b.correct - a.correct);
 
-  let msg = `📝 <b>«${group.toUpperCase()}» GURUHI — ${type.toUpperCase()} NATIJALARI</b>\n`;
-  msg += `📅 Sana: ${date}\n`;
-  if (book) msg += `${book}`;
-  msg += `📖 Mavzu: ${title}\n`;
-  msg += `🎯 Maksimal ball: ${maxQ} ta savol\n`;
-  msg += `👨‍🏫 Ustoz: ${teacherStore.teacherName.value || "Tarix o'qituvchisi"}\n\n`;
-  msg += `🏆 <b>O'QUVCHILAR REYTINGI:</b>\n`;
+  let msg = `📝 <b>«${group}» — ${title}</b>\n`;
+  msg += `🎯 Maks: ${maxQ} ta | 📅 ${date}\n\n`;
 
   present.forEach((p, idx) => {
-    const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
-    const stars = p.percent >= 90 ? "⭐⭐⭐" : p.percent >= 75 ? "⭐⭐" : p.percent >= 50 ? "⭐" : "";
-    msg += `${medal} 👤 <b>${p.name}</b> — ${p.correct}/${maxQ} (${p.percent}%) ${stars}\n`;
+    const num = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+    msg += `${num} <b>${p.name}</b>: ${p.correct}/${maxQ} (${p.percent}%)\n`;
   });
 
   if (absent.length > 0 || excused.length > 0) {
-    msg += `\n📅 <b>DAVOMAT:</b>\n`;
+    msg += `\n`;
     if (absent.length > 0) msg += `❌ Kelmadi: ${absent.join(", ")}\n`;
     if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
   }
 
-  msg += `\nBarcha o'quvchilarga keyingi darslarda muvaffaqiyat tilaymiz! 🚀`;
-  return msg;
+  return msg.trim();
 }
 
 function copyManualTestTelegramText() {
@@ -4227,7 +4766,7 @@ async function submitManualTestResults() {
   const msgText = buildManualTestTelegramText();
 
   try {
-    // 1. Send to Telegram bot
+    // 1. Send direct to Telegram bot
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4292,9 +4831,8 @@ async function submitManualTestResults() {
 
     teacherStore.saveLessonSession(sessionRecord);
 
-    // 3. Save to Google Apps Script
+    // 3. Save to Google Apps Script without 'text' to prevent duplicate telegram sending
     await callApi("save", {
-      text: msgText,
       teacher: teacherStore.teacherName.value,
       mode: "manual_test",
       students: currentGroupStudents.value,

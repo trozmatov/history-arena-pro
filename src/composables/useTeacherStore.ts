@@ -369,6 +369,15 @@ export function syncGroupMetaToCloud(meta: GroupMeta) {
   }
 }
 
+export function deleteGroupMetaFromCloud(groupName: string) {
+  try {
+    const key = sanitizeFbKey(groupName);
+    fbRemove(fbRef(db, `groups_meta/${key}`)).catch(() => {});
+  } catch (e) {
+    console.warn("deleteGroupMetaFromCloud error:", e);
+  }
+}
+
 export function syncAllExistingGroupsToCloud() {
   try {
     allStudentsRegistry.value.forEach((s) => {
@@ -1285,6 +1294,14 @@ export function useTeacherStore() {
     syncGroupMetaToCloud(meta);
   }
 
+  function deleteGroup(groupName: string) {
+    if (groupsMeta.value[groupName]) {
+      delete groupsMeta.value[groupName];
+      deleteGroupMetaFromCloud(groupName);
+      localStorage.setItem("ha_groups_meta", JSON.stringify(groupsMeta.value));
+    }
+  }
+
   function addGroupReminder(groupName: string, text: string, date: string, time: string = "14:00") {
     const meta = getGroupMeta(groupName);
     if (!meta.reminders) meta.reminders = [];
@@ -1440,6 +1457,7 @@ export function useTeacherStore() {
     suggestedLiveDuel,
     getGroupMeta,
     saveGroupMeta,
+    deleteGroup,
     addGroupReminder,
     toggleCompleteGroupReminder,
     deleteGroupReminder,

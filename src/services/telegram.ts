@@ -117,3 +117,78 @@ export async function notifyDuelDeclined(
 
   await sendTelegramMessage(text);
 }
+
+/**
+ * Notify Telegram channel when a duel battle finishes
+ */
+export async function notifyDuelResult(
+  p1Name: string,
+  p1Score: number,
+  p2Name: string,
+  p2Score: number
+): Promise<boolean> {
+  const time = new Date().toLocaleTimeString("uz-UZ", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  let winnerText = "";
+  if (p1Score > p2Score) {
+    winnerText = `🏆 G'olib: <b>${p1Name}</b>! 🎉`;
+  } else if (p2Score > p1Score) {
+    winnerText = `🏆 G'olib: <b>${p2Name}</b>! 🎉`;
+  } else {
+    winnerText = `🤝 Durrang! Har ikki raqib munosib kurashdi.`;
+  }
+
+  const text =
+    `⚔️ <b>DUEL YAKUNLANDI!</b>\n\n` +
+    `🔴 <b>${p1Name}</b>: ${p1Score} ball\n` +
+    `🔵 <b>${p2Name}</b>: ${p2Score} ball\n\n` +
+    `${winnerText}\n` +
+    `⏰ Vaqt: ${time}`;
+
+  return await sendTelegramMessage(text);
+}
+
+/**
+ * Notify Telegram channel when a team battle finishes
+ */
+export async function notifyTeamBattleResult(
+  team1Name: string,
+  score1: number,
+  team2Name: string,
+  score2: number,
+  team1Members?: string[],
+  team2Members?: string[]
+): Promise<boolean> {
+  const time = new Date().toLocaleTimeString("uz-UZ", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  let winnerText = "";
+  if (score1 > score2) {
+    winnerText = `🏆 G'olib jamoa: <b>${team1Name}</b>! 🎉`;
+  } else if (score2 > score1) {
+    winnerText = `🏆 G'olib jamoa: <b>${team2Name}</b>! 🎉`;
+  } else {
+    winnerText = `🤝 Durrang! Har ikki jamoa teng natija ko'rsatdi.`;
+  }
+
+  let text =
+    `🚩 <b>JAMOAVIY JANG YAKUNLANDI!</b>\n\n` +
+    `🔴 <b>${team1Name}</b>: ${score1} ball\n` +
+    `🔵 <b>${team2Name}</b>: ${score2} ball\n\n` +
+    `${winnerText}\n`;
+
+  if (team1Members && team1Members.length > 0) {
+    text += `\n👥 <b>${team1Name}:</b> ${team1Members.join(", ")}`;
+  }
+  if (team2Members && team2Members.length > 0) {
+    text += `\n👥 <b>${team2Name}:</b> ${team2Members.join(", ")}`;
+  }
+  text += `\n\n⏰ Vaqt: ${time}`;
+
+  return await sendTelegramMessage(text);
+}

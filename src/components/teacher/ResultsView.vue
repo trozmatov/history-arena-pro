@@ -117,6 +117,7 @@
 import { ref, computed } from "vue";
 import { useTeacherStore, Student } from "../../composables/useTeacherStore";
 import { callApi } from "../../services/api";
+import { sendTelegramMessage } from "../../services/telegram";
 import BaseModal from "../common/BaseModal.vue";
 
 const emit = defineEmits<{
@@ -171,18 +172,60 @@ async function sendTelegram() {
     }
   });
 
-  let msg = `📊 <b>NATIJALAR (${teacherStore.currentMode.value})</b>\n\n`;
-  present.forEach((s) => {
-    const p = teacherStore.calcPercent(s);
-    const st = s.strikes > 0 ? `⭐` : "";
-    const pn = s.penalties > 0 ? `⚠️` : "";
-    msg += `👤 ${s.name} ${st}${pn}: ${p}% (${s.correct}/${s.total})\n`;
-  });
+  let msg = "";
 
-  if (absent.length > 0 || excused.length > 0) {
-    msg += `\n📅 <b>DAVOMAT (Kelmadi):</b>\n`;
-    if (absent.length > 0) msg += `❌ Sababsiz: ${absent.join(", ")}\n`;
-    if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
+  // 1. Duel Mode Message Format
+  if (teacherStore.currentMode.value === "Duel") {
+    const p1 = teacherStore.duelStudents.value[0];
+    const p2 = teacherStore.duelStudents.value[1];
+    const s1 = p1?.correct || 0;
+    const s2 = p2?.correct || 0;
+    let winnerText = "";
+    if (s1 > s2) winnerText = `🏆 G'olib: <b>${p1?.name}</b>! 🎉`;
+    else if (s2 > s1) winnerText = `🏆 G'olib: <b>${p2?.name}</b>! 🎉`;
+    else winnerText = `🤝 Durrang! Teng natija.`;
+
+    msg = `⚔️ <b>DUEL YAKUNLANDI!</b>\n\n`;
+    msg += `🔴 <b>${p1?.name || "1-O'quvchi"}</b>: ${s1} ball\n`;
+    msg += `🔵 <b>${p2?.name || "2-O'quvchi"}</b>: ${s2} ball\n\n`;
+    msg += `${winnerText}\n`;
+    msg += `⏰ Vaqt: ${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
+  }
+  // 2. Team Battle Mode Message Format
+  else if (teacherStore.currentMode.value === "Jamoalar") {
+    const t1 = teacherStore.team1Name.value || "Qizillar";
+    const t2 = teacherStore.team2Name.value || "Ko'klar";
+    const s1 = teacherStore.teamAScore.value;
+    const s2 = teacherStore.teamBScore.value;
+    let winnerText = "";
+    if (s1 > s2) winnerText = `🏆 G'olib: <b>${t1}</b> jamoasi! 🎉`;
+    else if (s2 > s1) winnerText = `🏆 G'olib: <b>${t2}</b> jamoasi! 🎉`;
+    else winnerText = `🤝 Durrang! Teng natija.`;
+
+    msg = `🚩 <b>JAMOAVIY JANG YAKUNLANDI!</b>\n\n`;
+    msg += `🔴 <b>${t1}</b>: ${s1} ball\n`;
+    msg += `🔵 <b>${t2}</b>: ${s2} ball\n\n`;
+    msg += `${winnerText}\n`;
+
+    const listA = teacherStore.teamAStudents.value.map((s) => s.name).join(", ");
+    const listB = teacherStore.teamBStudents.value.map((s) => s.name).join(", ");
+    if (listA) msg += `\n👥 <b>${t1}:</b> ${listA}`;
+    if (listB) msg += `\n👥 <b>${t2}:</b> ${listB}`;
+    msg += `\n\n⏰ Vaqt: ${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
+  }
+  // 3. Standard Lesson Message Format (Short & NO stars)
+  else {
+    msg = `📊 <b>DARS NATIJALARI</b>\n\n`;
+    present.forEach((s, idx) => {
+      const p = teacherStore.calcPercent(s);
+      msg += `${idx + 1}. <b>${s.name}</b>: ${p}% (${s.correct}/${s.total})\n`;
+    });
+
+    if (absent.length > 0 || excused.length > 0) {
+      msg += `\n`;
+      if (absent.length > 0) msg += `❌ Kelmadi: ${absent.join(", ")}\n`;
+      if (excused.length > 0) msg += `🟡 Sababli: ${excused.join(", ")}\n`;
+    }
   }
 
   // Ensure attendance stats and logs are committed
@@ -190,13 +233,25 @@ async function sendTelegram() {
 
   sendingTg.value = true;
   try {
-    await callApi("save", {
-      text: msg,
-      teacher: teacherStore.teacherName.value,
-      mode: teacherStore.currentMode.value,
-      students: players,
-    });
-    tgSent.value = true;
+    // 1. Direct Telegram Bot API send
+    const ok = await sendTelegramMessage(msg);
+
+    // 2. Save session data to GAS without 'text' to prevent duplicate telegram send
+    try {
+      await callApi("save", {
+        teacher: teacherStore.teacherName.value,
+        mode: teacherStore.currentMode.value,
+        students: players,
+      });
+    } catch (gasErr) {
+      console.warn("GAS save error:", gasErr);
+    }
+
+    if (ok) {
+      tgSent.value = true;
+    } else {
+      alert("Telegramga yuborishda xatolik yuz berdi!");
+    }
   } catch (e) {
     alert("Telegramga yuborishda xatolik yuz berdi!");
   } finally {

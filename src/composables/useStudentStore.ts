@@ -176,6 +176,13 @@ function initFreezeListener() {
     };
     onChildAdded(gmRef, handleGroupMetaSnap);
     onChildChanged(gmRef, handleGroupMetaSnap);
+    onChildRemoved(gmRef, (snap: any) => {
+      const val = snap.val();
+      const gName = val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."));
+      if (gName && cloudGroupsMeta.value[gName]) {
+        delete cloudGroupsMeta.value[gName];
+      }
+    });
 
     // Realtime Cloud synchronization for student patterns
     const spRef = fbRef(db, "student_patterns");
