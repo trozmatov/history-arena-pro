@@ -85,14 +85,24 @@
         </div>
       </div>
 
-      <!-- Quick Duel Button (Wrap-friendly on mobile) -->
-      <button
-        type="button"
-        @click="showDuelModal = true"
-        class="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 py-3 px-3 text-xs font-black uppercase text-white shadow-xl shadow-purple-600/30 hover:from-purple-500 hover:to-blue-500 active:scale-95 transition text-center leading-snug break-words"
-      >
-        <span class="text-base">⚔️</span> <span>Boshqa o'quvchini Duelga chorlash (+15 🪙)</span>
-      </button>
+      <!-- Quick Actions Grid: Duel + AI Oral Exam -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <button
+          type="button"
+          @click="showDuelModal = true"
+          class="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 py-3 px-3 text-xs font-black uppercase text-white shadow-xl shadow-purple-600/30 hover:from-purple-500 hover:to-blue-500 active:scale-95 transition text-center leading-snug break-words"
+        >
+          <span class="text-base">⚔️</span> <span>Duelga chorlash (+15 🪙)</span>
+        </button>
+
+        <button
+          type="button"
+          @click="showChallengeModal = true"
+          class="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 py-3 px-3 text-xs font-black uppercase text-white shadow-xl shadow-amber-500/30 hover:from-amber-400 hover:to-orange-400 active:scale-95 transition text-center leading-snug break-words"
+        >
+          <span class="text-base animate-pulse">🏆</span> <span>Chellenjlar (Sovrinlar!)</span>
+        </button>
+      </div>
     </div>
 
     <!-- 1. Barcha Kitoblar O'zlashtirilishi (PieChart Cardbox) -->
@@ -487,6 +497,9 @@
 
     <!-- Duel Modal -->
     <StudentDuelModal v-model="showDuelModal" />
+
+    <!-- AI Challenge Modal (Gemini 3.8 Flash) -->
+    <StudentChallengeModal v-model="showChallengeModal" />
   </div>
 </template>
 
@@ -497,6 +510,7 @@ import { useStudentStore } from "../../composables/useStudentStore";
 import BadgesList from "./BadgesList.vue";
 import StudentLeaderboard from "./StudentLeaderboard.vue";
 import StudentDuelModal from "./StudentDuelModal.vue";
+import StudentChallengeModal from "./StudentChallengeModal.vue";
 import PatternLock from "./PatternLock.vue";
 import BaseModal from "../common/BaseModal.vue";
 import { soundManager, fireConfetti } from "../../composables/useAudio";
@@ -505,6 +519,7 @@ Chart.register(...registerables);
 
 const studentStore = useStudentStore();
 const showDuelModal = ref(false);
+const showChallengeModal = ref(false);
 const studentChartRef = ref<HTMLCanvasElement | null>(null);
 let chartInst: Chart | null = null;
 

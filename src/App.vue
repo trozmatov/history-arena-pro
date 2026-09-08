@@ -61,6 +61,10 @@
               @back="teacherSubview = 'setup'"
               @nav="teacherSubview = $event"
             />
+            <AIChallengeManager
+              v-else-if="teacherSubview === 'challenge' || teacherSubview === 'ai-exam'"
+              @back="teacherSubview = 'setup'"
+            />
           </div>
         </Transition>
       </template>
@@ -227,6 +231,7 @@ import StatsAnalytics from "./components/teacher/StatsAnalytics.vue";
 import MarketManager from "./components/teacher/MarketManager.vue";
 import LiveChat from "./components/teacher/LiveChat.vue";
 import StudentManager from "./components/teacher/StudentManager.vue";
+import AIChallengeManager from "./components/teacher/AIChallengeManager.vue";
 
 // Student components
 import StudentLogin from "./components/student/StudentLogin.vue";
@@ -244,12 +249,12 @@ const studentStore = useStudentStore();
 
 const activeRole = ref<"teacher" | "student">("teacher");
 const teacherSubview = ref<
-  "setup" | "game" | "results" | "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students"
+  "setup" | "game" | "results" | "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students" | "challenge" | "ai-exam"
 >("setup");
 
 const isWideView = computed(() => {
   if (activeRole.value === "student") return false;
-  return ["attendance", "leaderboard", "stats", "market", "chat", "students"].includes(teacherSubview.value);
+  return ["attendance", "leaderboard", "stats", "market", "chat", "students", "challenge", "ai-exam"].includes(teacherSubview.value);
 });
 
 const showNotifModal = ref(false);

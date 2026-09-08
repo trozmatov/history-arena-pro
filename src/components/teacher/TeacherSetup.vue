@@ -310,10 +310,10 @@
       </button>
       <button
         type="button"
-        @click="$emit('nav', 'market')"
-        class="glass-card glass-card-hover flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold text-emerald-300 border-emerald-500/20"
+        @click="$emit('nav', 'challenge')"
+        class="glass-card glass-card-hover flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold text-amber-300 border-amber-500/30 bg-amber-950/20 shadow-lg shadow-amber-500/10"
       >
-        <span class="text-lg">🛒</span> <span>Do'kon</span>
+        <span class="text-lg animate-pulse">⚔️</span> <span>Chellenjlar</span>
       </button>
       <button
         type="button"
@@ -346,7 +346,7 @@ import DbImportModal from "./DbImportModal.vue";
 
 const emit = defineEmits<{
   (e: "startGame"): void;
-  (e: "nav", view: "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students"): void;
+  (e: "nav", view: "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students" | "challenge" | "ai-exam"): void;
 }>();
 
 const teacherStore = useTeacherStore();

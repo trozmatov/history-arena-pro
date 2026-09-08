@@ -192,3 +192,106 @@ export async function notifyTeamBattleResult(
 
   return await sendTelegramMessage(text);
 }
+
+/**
+ * Notify Telegram channel/group when a new AI Challenge is launched
+ */
+export async function notifyChallengeLaunched(params: {
+  title: string;
+  topic: string;
+  group?: string;
+  questionCount: number;
+  deadlineFormatted: string;
+  rewards: {
+    cashPrize?: string;
+    coins?: number;
+    specialPerk?: string;
+  };
+}): Promise<boolean> {
+  const time = new Date().toLocaleTimeString("uz-UZ", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  let rewardLines = "";
+  if (params.rewards.cashPrize) {
+    rewardLines += `\n💰 <b>Pul mukofoti:</b> ${params.rewards.cashPrize}`;
+  }
+  if (params.rewards.coins) {
+    rewardLines += `\n🪙 <b>Tangalar:</b> +${params.rewards.coins} coin`;
+  }
+  if (params.rewards.specialPerk) {
+    rewardLines += `\n🛡️ <b>Maxsus Imtiyoz:</b> ${params.rewards.specialPerk}`;
+  }
+  if (!rewardLines) {
+    rewardLines = "\n🎁 Faxriy sertifikat va guruh reytingi!";
+  }
+
+  const text =
+    `🔥 <b>YANGI CHELLENJ E'LON QILINDI!</b> 🏆\n\n` +
+    `📌 <b>Mavzu:</b> ${params.title}\n` +
+    `📖 <b>Bo'lim:</b> ${params.topic}\n` +
+    `👥 <b>Guruh:</b> ${params.group || "Barcha guruhlar"}\n` +
+    `❓ <b>Savollar:</b> ${params.questionCount} ta test\n` +
+    `⏳ <b>Muddati (Deadline):</b> <b>${params.deadlineFormatted}</b> gacha\n\n` +
+    `🎁 <b>G'OLIBLAR UCHUN MUKOFOT:</b>${rewardLines}\n\n` +
+    `⚡️ <i>O'quvchilar o'z shaxsiy kabinetiga kirib, chellenjda qatnashishi va peshqadamlar jadvalida (Leaderboard) 1-o'rinni egallashi mumkin! Shoshiling!</i> 🚀\n` +
+    `⏰ E'lon vaqti: ${time}`;
+
+  return await sendTelegramMessage(text);
+}
+
+/**
+ * Notify Telegram channel/group when a Challenge finishes and winners are determined
+ */
+export async function notifyChallengeCompleted(params: {
+  title: string;
+  topic: string;
+  group?: string;
+  rewards: {
+    cashPrize?: string;
+    coins?: number;
+    specialPerk?: string;
+  };
+  topParticipants: {
+    rank: number;
+    studentName: string;
+    score: number;
+    timeFormatted: string;
+  }[];
+}): Promise<boolean> {
+  const time = new Date().toLocaleTimeString("uz-UZ", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  let winnersText = "";
+  const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
+  if (params.topParticipants.length > 0) {
+    params.topParticipants.forEach((p, idx) => {
+      const medal = medals[idx] || "🎖️";
+      winnersText += `\n${medal} <b>${p.studentName}</b> — ${p.score} ball (${p.timeFormatted})`;
+    });
+  } else {
+    winnersText = "\n<i>Hech kim ushbu chellenjda qatnashmadi.</i>";
+  }
+
+  let prizeSummary = "";
+  if (params.topParticipants.length > 0) {
+    const winner = params.topParticipants[0];
+    prizeSummary = `\n\n👑 <b>Bosh sovrin sohibi:</b> <b>${winner.studentName}</b>! 🎉`;
+    if (params.rewards.cashPrize) prizeSummary += `\n💰 Pul mukofoti: ${params.rewards.cashPrize}`;
+    if (params.rewards.specialPerk) prizeSummary += `\n🛡️ Imtiyoz: ${params.rewards.specialPerk}`;
+  }
+
+  const text =
+    `🏁 <b>CHELLENJ YAKUNLANDI! G'OLIBLAR ANIQLANDI!</b> 🏆\n\n` +
+    `📌 <b>Chellenj:</b> ${params.title}\n` +
+    `📖 <b>Mavzu:</b> ${params.topic}\n\n` +
+    `📊 <b>Peshqadamlar Natijasi:</b>${winnersText}${prizeSummary}\n\n` +
+    `👏 <i>Barcha ishtirokchilarga tashakkur! Keyingi chellenjlarda g'olib bo'lishga harakat qiling!</i> 🚀\n` +
+    `⏰ Yakunlangan vaqt: ${time}`;
+
+  return await sendTelegramMessage(text);
+}
+

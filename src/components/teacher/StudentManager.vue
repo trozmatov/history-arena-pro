@@ -48,6 +48,17 @@
           <span>{{ syncingDb ? "Yuklanmoqda..." : "Bazadan Sinxronlash" }}</span>
         </button>
 
+        <!-- Store/Market Button -->
+        <button
+          type="button"
+          @click="$emit('nav', 'market')"
+          class="flex items-center gap-1.5 rounded-2xl border border-emerald-500/30 bg-emerald-600/20 px-3.5 py-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-600/30 active:scale-95 transition shadow-md"
+          title="O'quvchilar do'koni va tangalar boshqaruvi"
+        >
+          <span>🛒</span>
+          <span>Do'kon Boshqaruvi</span>
+        </button>
+
         <!-- Reminders Button -->
         <button
           type="button"
@@ -4119,13 +4130,35 @@ function handleRegeneratePin(student: Student) {
 }
 
 function saveStudentData() {
-  if (!formStudent.value.name?.trim()) return;
-  if (!formStudent.value.pin) {
-    formStudent.value.pin = teacherStore.generateUnique6DigitPin(teacherStore.allStudentsRegistry.value);
+  const name = formStudent.value.name?.trim();
+  if (!name) {
+    alert("Iltimos, o'quvchining to'liq F.I.Sh ni kiriting!");
+    return;
+  }
+  const group = formStudent.value.group?.trim() || "Umumiy";
+
+  if (!formStudent.value.pin || !/^\d{6}$/.test(formStudent.value.pin)) {
+    formStudent.value.pin = teacherStore.generateUnique6DigitPin(name);
     formStudent.value.password = formStudent.value.pin;
   }
-  teacherStore.saveStudent(formStudent.value as any);
+
+  teacherStore.saveStudent({
+    ...formStudent.value,
+    name,
+    group,
+    pin: formStudent.value.pin,
+    password: formStudent.value.password || formStudent.value.pin,
+  } as any);
+
+  // Auto-switch group filter so the teacher immediately sees the newly added student!
+  if (selectedGroupFilter.value && selectedGroupFilter.value !== group) {
+    selectedGroupFilter.value = group;
+  }
+  searchQuery.value = "";
+  currentPage.value = 1;
   showAddEditModal.value = false;
+
+  alert(`✅ "${name}" muvaffaqiyatli saqlandi!\n👥 Guruhi: ${group}\n🔢 6 xonali PIN kod: ${formStudent.value.pin}`);
 }
 
 function toggleFreeze(student: Student) {

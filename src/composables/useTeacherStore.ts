@@ -42,6 +42,42 @@ export function syncGroupFreezeToCloud(groupName: string, isFrozen: boolean) {
   }
 }
 
+export function syncStudentToCloud(student: Student) {
+  try {
+    const key = sanitizeFbKey(student.name);
+    fbSet(fbRef(db, `master_students/${key}`), {
+      id: student.id,
+      name: student.name,
+      group: student.group || "Umumiy",
+      status: student.status || "active",
+      phone: student.phone || "",
+      parentName: student.parentName || "",
+      parentPhone: student.parentPhone || "",
+      parentTg: student.parentTg || "",
+      login: student.login || student.name.toLowerCase().replace(/\s+/g, "_"),
+      pin: student.pin,
+      password: student.password || student.pin,
+      pattern: student.pattern || "",
+      notes: student.notes || "",
+      coins: student.coins || 0,
+      totalTests: student.totalTests || 0,
+      avgAccuracy: student.avgAccuracy || 0,
+      updatedAt: Date.now(),
+    }).catch((e: any) => console.warn("Firebase master_students sync error:", e));
+  } catch (e) {
+    console.warn("syncStudentToCloud error:", e);
+  }
+}
+
+export function deleteStudentFromCloud(studentName: string) {
+  try {
+    const key = sanitizeFbKey(studentName);
+    fbRemove(fbRef(db, `master_students/${key}`)).catch(() => {});
+  } catch (e) {
+    console.warn("deleteStudentFromCloud error:", e);
+  }
+}
+
 // Realtime Cloud synchronization for frozen groups
 export const cloudFrozenGroups = ref<string[]>(["arxiv"]); // 'arxiv' is always frozen
 
@@ -320,11 +356,11 @@ function loadInitialMasterStudents(): Student[] {
   if (!saved) return [];
   try {
     const list: Student[] = JSON.parse(saved);
-    const sampleNames = new Set(["Ali Valiyev", "Madina Karimova", "Jasur Rahimov", "Zuhra Yusupova", "Bekzod Rustamov"]);
     let needsSave = false;
     const filtered = list.filter(
       (s) =>
-        !sampleNames.has(s.name) &&
+        s &&
+        s.name &&
         s.id !== "std-1" &&
         s.id !== "std-2" &&
         s.id !== "std-3" &&
@@ -332,10 +368,10 @@ function loadInitialMasterStudents(): Student[] {
         s.id !== "std-5"
     );
 
-    // Auto-migrate: ensure every student has their universal deterministic 6-digit PIN so it matches student devices
+    // Auto-migrate: ensure every student has a valid 6-digit PIN
     filtered.forEach((s) => {
-      const defPin = getStudentDefaultPin(s.name);
-      if (!s.pin || !/^\d{6}$/.test(s.pin) || s.pin !== defPin) {
+      if (!s.pin || !/^\d{6}$/.test(s.pin)) {
+        const defPin = getStudentDefaultPin(s.name);
         s.pin = defPin;
         s.password = s.pin;
         needsSave = true;
@@ -374,6 +410,66 @@ watch(
   },
   { deep: true }
 );
+
+let masterStudentsListenerActive = false;
+function initMasterStudentsListener() {
+  if (masterStudentsListenerActive || typeof window === "undefined") return;
+  masterStudentsListenerActive = true;
+  try {
+    const msRef = fbRef(db, "master_students");
+    onChildAdded(msRef, (snap: any) => {
+      const data = snap.val();
+      if (!data || !data.name) return;
+      const cleanName = data.name.toLowerCase().trim();
+      const existing = allStudentsRegistry.value.find(
+        (s) => s.name.toLowerCase().trim() === cleanName
+      );
+      if (!existing) {
+        allStudentsRegistry.value.push({
+          id: data.id || "std-" + Date.now(),
+          name: data.name,
+          group: data.group || "Umumiy",
+          status: data.status || "active",
+          phone: data.phone || "",
+          parentName: data.parentName || "",
+          parentPhone: data.parentPhone || "",
+          parentTg: data.parentTg || "",
+          login: data.login || data.name.toLowerCase().replace(/\s+/g, "_"),
+          pin: data.pin || getStudentDefaultPin(data.name),
+          password: data.password || data.pin || getStudentDefaultPin(data.name),
+          pattern: data.pattern || "",
+          notes: data.notes || "",
+          joinedDate: new Date().toISOString().split("T")[0],
+          correct: 0,
+          total: 0,
+          sess: 0,
+          strikes: 0,
+          penalties: 0,
+          bonus: 0,
+          coins: data.coins || 0,
+          totalTests: data.totalTests || 0,
+          avgAccuracy: data.avgAccuracy || 0,
+          attendanceStats: { present: 0, excused: 0, unexcused: 0 },
+        });
+        allStudentsRegistry.value = [...allStudentsRegistry.value];
+        localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+      }
+    });
+
+    onChildRemoved(msRef, (snap: any) => {
+      const data = snap.val();
+      if (!data || !data.name) return;
+      const cleanName = data.name.toLowerCase().trim();
+      allStudentsRegistry.value = allStudentsRegistry.value.filter(
+        (s) => s.name.toLowerCase().trim() !== cleanName
+      );
+      localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    });
+  } catch (e) {
+    console.warn("initMasterStudentsListener error:", e);
+  }
+}
+initMasterStudentsListener();
 
 function loadInitialReminders(): TeacherReminder[] {
   const saved = localStorage.getItem("ha_reminders");
@@ -879,6 +975,13 @@ export function useTeacherStore() {
       allStudentsRegistry.value.unshift(fullData);
     }
 
+    // Force Vue reactivity update & persist to localStorage
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+    // Realtime Cloud synchronization for student master record
+    syncStudentToCloud(fullData);
+
     // Realtime Cloud synchronization for student group
     if (fullData.group && fullData.group.trim() && fullData.group.trim() !== "Umumiy") {
       syncGroupTransferToCloud(fullData.name, fullData.group.trim());
@@ -1000,13 +1103,19 @@ export function useTeacherStore() {
   }
 
   function deleteStudentPermanently(studentName: string) {
+    const clean = studentName.toLowerCase().trim();
     allStudentsRegistry.value = allStudentsRegistry.value.filter(
-      (s) => s.name !== studentName
+      (s) => s.name.toLowerCase().trim() !== clean
     );
-    students.value = students.value.filter((s) => s.name !== studentName);
+    students.value = students.value.filter(
+      (s) => s.name.toLowerCase().trim() !== clean
+    );
     reminders.value = reminders.value.filter(
-      (r) => r.studentName !== studentName
+      (r) => (r.studentName || "").toLowerCase().trim() !== clean
     );
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    deleteStudentFromCloud(studentName);
   }
 
   // --- Teacher Reminders Management ---
@@ -1603,5 +1712,7 @@ export function useTeacherStore() {
     cloudFrozenGroups,
     isGroupFrozen,
     syncAllExistingLessonSessionsToCloud,
+    syncStudentToCloud,
+    deleteStudentFromCloud,
   };
 }

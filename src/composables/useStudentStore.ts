@@ -513,6 +513,51 @@ export function useStudentStore() {
       console.warn("loginWithPin local check error:", e);
     }
 
+    // 1.5 Check Firebase Cloud Database (master_students)
+    try {
+      const snap = await fbGet(fbRef(db, "master_students"));
+      if (snap.exists()) {
+        const val = snap.val();
+        const list = Object.values(val) as any[];
+        const cloudMatch = list.find(
+          (s) =>
+            (s.pin && s.pin.trim() === trimmed) ||
+            (s.password && s.password.trim() === trimmed) ||
+            (s.name && getStudentDefaultPin(s.name) === trimmed)
+        );
+
+        if (cloudMatch) {
+          const effectiveGroup = getEffectiveStudentGroup(cloudMatch.name, cloudMatch.group || "Umumiy");
+          cloudMatch.group = effectiveGroup;
+          if (cloudMatch.status === "frozen" || isStudentFrozen(cloudMatch.name, effectiveGroup)) {
+            return {
+              success: false,
+              message: "❄️ Hisobingiz vaqtincha muzlatilgan. Iltimos, o'qituvchingiz bilan bog'laning.",
+            };
+          }
+
+          const devInfo: DeviceStudent = {
+            name: cloudMatch.name,
+            pin: cloudMatch.pin || trimmed,
+            pattern: cloudMatch.pattern || "",
+          };
+          deviceStudent.value = devInfo;
+          localStorage.setItem("ha_device_student", JSON.stringify(devInfo));
+
+          setStudent(cloudMatch.name);
+          await fetchStudentHistory();
+
+          return {
+            success: true,
+            student: cloudMatch,
+            needsPattern: !cloudMatch.pattern,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("loginWithPin firebase master_students check error:", e);
+    }
+
     // 2. Student device has no local master list - fetch live students from Google Sheets
     try {
       const res = await callApi("get_student_list");
