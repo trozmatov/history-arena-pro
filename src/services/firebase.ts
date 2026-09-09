@@ -8,6 +8,7 @@ import {
   onChildAdded,
   onChildChanged,
   onChildRemoved,
+  onValue,
   update,
   remove,
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
@@ -33,6 +34,7 @@ export {
   onChildAdded,
   onChildChanged,
   onChildRemoved,
+  onValue,
   update,
   remove,
 };

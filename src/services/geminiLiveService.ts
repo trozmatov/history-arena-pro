@@ -31,14 +31,26 @@ const AUDIO_MODEL_STORAGE = "ha_gemini_audio_model";
 
 // --- API Key & Model Management ---
 export function getGeminiApiKey(): string {
-  // 1. Priority: System-wide .env variable (works automatically for teacher & student)
+  // 1. Priority: System-wide environment variable (Vite environment built into Netlify/Local)
   const envKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
-  if (envKey && typeof envKey === "string" && envKey.trim().length > 5) {
+  if (
+    envKey &&
+    typeof envKey === "string" &&
+    envKey.trim().length > 5 &&
+    !envKey.includes("YOUR_GEMINI_API_KEY")
+  ) {
     return envKey.trim();
   }
+
   // 2. Fallback: Browser localStorage (if manually configured in UI)
-  if (typeof window === "undefined") return "";
-  return localStorage.getItem(API_KEY_STORAGE) || "";
+  if (typeof window !== "undefined") {
+    const local = localStorage.getItem(API_KEY_STORAGE);
+    if (local && local.trim().length > 5) {
+      return local.trim();
+    }
+  }
+
+  return "";
 }
 
 export function setGeminiApiKey(key: string) {

@@ -394,7 +394,7 @@
             class="w-full rounded-2xl border border-white/15 bg-black/50 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-500"
           />
           <p class="text-[10px] text-slate-400">
-            Google AI Studio'dan olingan bepul API kalit. Brauzeringiz xotirasida xavfsiz saqlanadi.
+            Google AI Studio'dan olingan bepul API kalit. Ushbu brauzer xotirasida xavfsiz saqlanadi.
           </p>
         </div>
 
