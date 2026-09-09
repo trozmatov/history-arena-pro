@@ -214,14 +214,17 @@ export async function notifyChallengeLaunched(params: {
   });
 
   let rewardLines = "";
-  if (params.rewards.cashPrize) {
-    rewardLines += `\n💰 <b>Pul mukofoti:</b> ${params.rewards.cashPrize}`;
+  const cp = (params.rewards.cashPrize || "").trim();
+  const isValidCash = cp && cp !== "0" && cp !== "0 so'm" && cp !== "0 som" && !cp.toLowerCase().startsWith("yo'q");
+  if (isValidCash) {
+    rewardLines += `\n💰 <b>Pul mukofoti:</b> ${cp}`;
   }
   if (params.rewards.coins) {
     rewardLines += `\n🪙 <b>Tangalar:</b> +${params.rewards.coins} coin`;
   }
-  if (params.rewards.specialPerk) {
-    rewardLines += `\n🛡️ <b>Maxsus Imtiyoz:</b> ${params.rewards.specialPerk}`;
+  const perk = (params.rewards.specialPerk || "").trim();
+  if (perk && !perk.toLowerCase().startsWith("yo'q")) {
+    rewardLines += `\n🛡️ <b>Maxsus Imtiyoz:</b> ${perk}`;
   }
   if (!rewardLines) {
     rewardLines = "\n🎁 Faxriy sertifikat va guruh reytingi!";
@@ -280,8 +283,14 @@ export async function notifyChallengeCompleted(params: {
   if (params.topParticipants.length > 0) {
     const winner = params.topParticipants[0];
     prizeSummary = `\n\n👑 <b>Bosh sovrin sohibi:</b> <b>${winner.studentName}</b>! 🎉`;
-    if (params.rewards.cashPrize) prizeSummary += `\n💰 Pul mukofoti: ${params.rewards.cashPrize}`;
-    if (params.rewards.specialPerk) prizeSummary += `\n🛡️ Imtiyoz: ${params.rewards.specialPerk}`;
+    const cp = (params.rewards.cashPrize || "").trim();
+    if (cp && cp !== "0" && cp !== "0 so'm" && cp !== "0 som" && !cp.toLowerCase().startsWith("yo'q")) {
+      prizeSummary += `\n💰 Pul mukofoti: ${cp}`;
+    }
+    const perk = (params.rewards.specialPerk || "").trim();
+    if (perk && !perk.toLowerCase().startsWith("yo'q")) {
+      prizeSummary += `\n🛡️ Imtiyoz: ${perk}`;
+    }
   }
 
   const text =

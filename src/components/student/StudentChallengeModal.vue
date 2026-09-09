@@ -114,13 +114,13 @@
                 <span>🎁</span> G'olib Uchun Sovrinlar:
               </div>
               <div class="flex flex-wrap gap-2 text-xs">
-                <span v-if="chal.rewards?.cashPrize" class="rounded-xl bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 text-emerald-300 font-bold flex items-center gap-1">
+                <span v-if="chal.rewards?.cashPrize && chal.rewards.cashPrize !== '0' && chal.rewards.cashPrize !== '0 so\'m' && chal.rewards.cashPrize !== '0 som' && !chal.rewards.cashPrize.toLowerCase().startsWith('yo\'q')" class="rounded-xl bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 text-emerald-300 font-bold flex items-center gap-1">
                   <span>💰</span> {{ chal.rewards.cashPrize }}
                 </span>
                 <span v-if="chal.rewards?.coins" class="rounded-xl bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 text-amber-300 font-bold flex items-center gap-1">
                   <span>🪙</span> +{{ chal.rewards.coins }} coin
                 </span>
-                <span v-if="chal.rewards?.specialPerk" class="rounded-xl bg-purple-500/20 border border-purple-500/30 px-2.5 py-1 text-purple-300 font-bold flex items-center gap-1">
+                <span v-if="chal.rewards?.specialPerk && !chal.rewards.specialPerk.toLowerCase().startsWith('yo\'q')" class="rounded-xl bg-purple-500/20 border border-purple-500/30 px-2.5 py-1 text-purple-300 font-bold flex items-center gap-1">
                   <span>🛡️</span> {{ chal.rewards.specialPerk }}
                 </span>
               </div>

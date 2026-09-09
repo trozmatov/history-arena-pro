@@ -292,6 +292,21 @@ export async function saveDraftTestBank(
   return newId;
 }
 
+export async function updateDraftTestBank(
+  bankId: string,
+  title: string,
+  topic: string,
+  questions: ChallengeQuestion[]
+): Promise<void> {
+  const bankRef = fbRef(db, `ai_test_banks/${bankId}`);
+  await update(bankRef, {
+    title,
+    topic,
+    questions,
+    updatedAt: Date.now(),
+  });
+}
+
 export async function fetchDraftTestBanks(): Promise<DraftTestBank[]> {
   try {
     const snapshot = await get(fbRef(db, "ai_test_banks"));

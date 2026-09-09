@@ -147,13 +147,13 @@
               <span>🎁</span> E'lon Qilingan Mukofotlar:
             </div>
             <div class="flex flex-wrap gap-2 text-xs">
-              <span v-if="chal.rewards.cashPrize" class="rounded-xl bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 text-emerald-300 font-bold flex items-center gap-1">
+              <span v-if="chal.rewards?.cashPrize && chal.rewards.cashPrize !== '0' && chal.rewards.cashPrize !== '0 so\'m' && chal.rewards.cashPrize !== '0 som' && !chal.rewards.cashPrize.toLowerCase().startsWith('yo\'q')" class="rounded-xl bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 text-emerald-300 font-bold flex items-center gap-1">
                 <span>💰</span> {{ chal.rewards.cashPrize }}
               </span>
-              <span v-if="chal.rewards.coins" class="rounded-xl bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 text-amber-300 font-bold flex items-center gap-1">
+              <span v-if="chal.rewards?.coins" class="rounded-xl bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 text-amber-300 font-bold flex items-center gap-1">
                 <span>🪙</span> +{{ chal.rewards.coins }} coin
               </span>
-              <span v-if="chal.rewards.specialPerk" class="rounded-xl bg-purple-500/20 border border-purple-500/30 px-2.5 py-1 text-purple-300 font-bold flex items-center gap-1">
+              <span v-if="chal.rewards?.specialPerk && !chal.rewards.specialPerk.toLowerCase().startsWith('yo\'q')" class="rounded-xl bg-purple-500/20 border border-purple-500/30 px-2.5 py-1 text-purple-300 font-bold flex items-center gap-1">
                 <span>🛡️</span> {{ chal.rewards.specialPerk }}
               </span>
             </div>
@@ -680,25 +680,53 @@
           </div>
 
           <!-- Cash Prize -->
-          <div class="space-y-1">
-            <label class="text-[11px] font-bold text-slate-300">💰 Naqd Pul Mukofoti (Ixtiyoriy)</label>
-            <div class="flex gap-2">
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-[11px] font-bold text-slate-300">💰 Naqd Pul Mukofoti (Ixtiyoriy)</label>
+              <button
+                v-if="launchForm.cashPrize"
+                type="button"
+                @click="launchForm.cashPrize = ''"
+                class="text-[10px] text-amber-400 hover:text-amber-300 font-semibold"
+              >
+                Bekor qilish ✕
+              </button>
+            </div>
+            <div class="flex flex-wrap sm:flex-nowrap gap-2">
               <input
                 v-model="launchForm.cashPrize"
                 type="text"
-                class="flex-1 rounded-xl border border-white/15 bg-black/50 px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500"
-                placeholder="Masalan: 50 000 so'm"
+                class="flex-1 min-w-[140px] rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-xs text-white outline-none focus:border-emerald-500 placeholder-slate-500"
+                placeholder="Pul mukofoti yo'q (Ixtiyoriy)"
               />
-              <button
-                v-for="amt in ['20 000', '50 000', '100 000']"
-                :key="amt"
-                type="button"
-                @click="launchForm.cashPrize = `${amt} so'm`"
-                class="rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold text-slate-300 hover:bg-white/10 shrink-0"
-              >
-                {{ amt }}
-              </button>
+              <div class="flex gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  @click="launchForm.cashPrize = ''"
+                  class="rounded-xl border px-2.5 py-1 text-[10px] font-bold transition"
+                  :class="!launchForm.cashPrize || launchForm.cashPrize === '0' || launchForm.cashPrize === '0 so\'m'
+                    ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-300'
+                    : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'"
+                >
+                  Pulsiz
+                </button>
+                <button
+                  v-for="amt in ['20 000', '50 000', '100 000']"
+                  :key="amt"
+                  type="button"
+                  @click="launchForm.cashPrize = `${amt} so'm`"
+                  class="rounded-xl border px-2.5 py-1 text-[10px] font-bold transition"
+                  :class="launchForm.cashPrize && launchForm.cashPrize.includes(amt)
+                    ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-300'
+                    : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'"
+                >
+                  {{ amt }}
+                </button>
+              </div>
             </div>
+            <p class="text-[10px] text-slate-400">
+              * Bo'sh qoldirsangiz yoki "Pulsiz"ni tanlasangiz, Telegram va o'quvchilarda "0 so'm" deb ko'rinmaydi.
+            </p>
           </div>
 
           <!-- Coins -->
@@ -723,27 +751,51 @@
             </div>
           </div>
 
-          <!-- Special Perk / Joke Right -->
+          <!-- Special Perk / Custom Right -->
           <div class="space-y-1.5">
-            <label class="text-[11px] font-bold text-slate-300">🛡️ Maxsus Huquq / Hazilomuz Imtiyoz (Ixtiyoriy)</label>
+            <div class="flex items-center justify-between">
+              <label class="text-[11px] font-bold text-slate-300">🛡️ Maxsus Huquq / Hazilomuz Imtiyoz (Ixtiyoriy)</label>
+              <button
+                v-if="launchForm.specialPerk"
+                type="button"
+                @click="launchForm.specialPerk = ''"
+                class="text-[10px] text-purple-400 hover:text-purple-300 font-semibold"
+              >
+                Imtiyozsiz ✕
+              </button>
+            </div>
             <input
               v-model="launchForm.specialPerk"
               type="text"
-              class="w-full rounded-xl border border-white/15 bg-black/50 px-3 py-1.5 text-xs text-white outline-none focus:border-purple-500"
-              placeholder="Masalan: 1 kun darsga kelmaslik (qonuniy dam olish huquqi)"
+              class="w-full rounded-xl border border-white/15 bg-black/50 px-3.5 py-2 text-xs text-white outline-none focus:border-purple-500 placeholder-slate-500"
+              placeholder="O'zingiz xohlagan huquqni erkin yozing (masalan: 1 kun doskaga chiqmaslik)..."
             />
 
             <!-- Perk presets -->
-            <div class="flex flex-wrap gap-1.5 pt-1">
-              <button
-                v-for="perk in perkPresets"
-                :key="perk"
-                type="button"
-                @click="launchForm.specialPerk = perk"
-                class="rounded-lg border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-300 hover:bg-purple-500/20 text-left"
-              >
-                {{ perk }}
-              </button>
+            <div class="space-y-1 pt-1">
+              <span class="text-[10px] text-slate-400 font-medium">Tavsiya etilgan namunalar (bosib tanlashingiz mumkin):</span>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="perk in perkPresets"
+                  :key="perk"
+                  type="button"
+                  @click="launchForm.specialPerk = perk"
+                  class="rounded-lg border px-2 py-1 text-[10px] text-left transition"
+                  :class="launchForm.specialPerk === perk
+                    ? 'border-purple-500 bg-purple-500/30 text-purple-200 font-bold shadow-sm shadow-purple-500/20'
+                    : 'border-purple-500/20 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20'"
+                >
+                  {{ perk }}
+                </button>
+                <button
+                  v-if="launchForm.specialPerk"
+                  type="button"
+                  @click="launchForm.specialPerk = ''"
+                  class="rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] text-red-300 hover:bg-red-500/20"
+                >
+                  ❌ Imtiyozsiz
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -832,6 +884,7 @@ import {
   fetchChallenges,
   fetchDraftTestBanks,
   saveDraftTestBank,
+  updateDraftTestBank,
   deleteDraftTestBank,
   deleteChallengeFromFirebase,
   finalizeChallengeInFirebase,
@@ -879,6 +932,7 @@ const progressStatus = ref("");
 // Editor Modal State
 const showEditorModal = ref(false);
 const editableQuestions = ref<ChallengeQuestion[]>([]);
+const currentEditingBankId = ref<string | null>(null);
 
 // Launch Modal State
 const showLaunchModal = ref(false);
@@ -888,9 +942,9 @@ const launchForm = ref({
   topic: "",
   group: "Barcha guruhlar",
   deadlineString: "",
-  cashPrize: "50 000 so'm",
+  cashPrize: "", // Ixtiyoriy, default bo'sh (0 so'm emas)
   coins: 50,
-  specialPerk: "1 kun darsga kelmaslik (qonuniy dam olish huquqi)",
+  specialPerk: "", // Ixtiyoriy, default bo'sh
 });
 
 // Leaderboard Modal State
@@ -990,10 +1044,13 @@ async function startTestGeneration() {
       },
     });
 
+    currentEditingBankId.value = null; // Yangi test
     editableQuestions.value = questions;
     launchForm.value.title = createForm.value.topic;
     launchForm.value.topic = createForm.value.topic;
     launchForm.value.group = createForm.value.group || "Barcha guruhlar";
+    launchForm.value.cashPrize = "";
+    launchForm.value.specialPerk = "";
 
     // Open Test Editor Modal immediately!
     showEditorModal.value = true;
@@ -1022,12 +1079,28 @@ function removeQuestion(index: number) {
 async function handleSaveToBank() {
   if (editableQuestions.value.length === 0) return;
   try {
-    await saveDraftTestBank(
-      createForm.value.topic || "Nomsiz test",
-      createForm.value.topic,
-      editableQuestions.value
-    );
-    alert("✅ Testlar bankiga muvaffaqiyatli saqlandi!");
+    const title = createForm.value.topic || "Nomsiz test";
+    const topic = createForm.value.topic || title;
+
+    if (currentEditingBankId.value) {
+      // Mavjud to'plamni yangilash (duplikat qilmasdan)
+      await updateDraftTestBank(
+        currentEditingBankId.value,
+        title,
+        topic,
+        editableQuestions.value
+      );
+      alert("✅ Testlar bankidagi mavjud to'plam muvaffaqiyatli yangilandi!");
+    } else {
+      // Yangi to'plam yaratish
+      const newId = await saveDraftTestBank(
+        title,
+        topic,
+        editableQuestions.value
+      );
+      currentEditingBankId.value = newId;
+      alert("✅ Testlar bankiga muvaffaqiyatli saqlandi!");
+    }
     showEditorModal.value = false;
     activeTab.value = "bank";
     await loadAllData();
@@ -1042,13 +1115,17 @@ function openLaunchModalFromEditor() {
 }
 
 function openLaunchModalFromBank(bank: DraftTestBank) {
+  currentEditingBankId.value = bank.id;
   editableQuestions.value = [...bank.questions];
   launchForm.value.title = bank.title;
   launchForm.value.topic = bank.topic;
+  launchForm.value.cashPrize = "";
+  launchForm.value.specialPerk = "";
   showLaunchModal.value = true;
 }
 
 function openEditorFromBank(bank: DraftTestBank) {
+  currentEditingBankId.value = bank.id;
   editableQuestions.value = JSON.parse(JSON.stringify(bank.questions));
   createForm.value.topic = bank.topic;
   showEditorModal.value = true;
@@ -1076,6 +1153,31 @@ async function submitLaunchChallenge() {
 
   isLaunching.value = true;
   try {
+    // Sanitize cash prize: agar 0, "0 so'm", bo'sh yoki "yo'q" bo'lsa, undefined qilinadi (0 so'm deb e'lon qilinmaydi)
+    let finalCashPrize: string | undefined = undefined;
+    const rawCash = (launchForm.value.cashPrize || "").trim();
+    if (
+      rawCash &&
+      rawCash !== "0" &&
+      rawCash !== "0 so'm" &&
+      rawCash !== "0 som" &&
+      !rawCash.toLowerCase().startsWith("yo'q") &&
+      !rawCash.toLowerCase().startsWith("yoq")
+    ) {
+      if (/^\d+$/.test(rawCash)) {
+        finalCashPrize = Number(rawCash).toLocaleString("ru-RU") + " so'm";
+      } else {
+        finalCashPrize = rawCash;
+      }
+    }
+
+    // Sanitize special perk: agar bo'sh yoki "yo'q" bo'lsa, undefined qilinadi
+    let finalPerk: string | undefined = undefined;
+    const rawPerk = (launchForm.value.specialPerk || "").trim();
+    if (rawPerk && !rawPerk.toLowerCase().startsWith("yo'q") && !rawPerk.toLowerCase().startsWith("yoq")) {
+      finalPerk = rawPerk;
+    }
+
     await createChallengeInFirebase({
       title: launchForm.value.title,
       topic: launchForm.value.topic || launchForm.value.title,
@@ -1083,9 +1185,9 @@ async function submitLaunchChallenge() {
       deadline: deadlineMs,
       questions: editableQuestions.value,
       rewards: {
-        cashPrize: launchForm.value.cashPrize,
-        coins: launchForm.value.coins,
-        specialPerk: launchForm.value.specialPerk,
+        cashPrize: finalCashPrize,
+        coins: launchForm.value.coins || 0,
+        specialPerk: finalPerk,
       },
     });
 
