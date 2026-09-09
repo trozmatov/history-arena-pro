@@ -14,8 +14,10 @@ export const PRIMARY_CHALLENGE_MODEL = "gemini-3.8-flash";
 export const FALLBACK_CHALLENGE_MODELS = [
   "gemini-3.8-flash",
   "gemini-3.7-flash",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemma-4-26b-a4b-it",
   "gemini-2.5-flash",
-  "gemini-1.5-flash",
 ];
 
 export interface ChallengeQuestion {
@@ -65,11 +67,12 @@ export interface DraftTestBank {
   questions: ChallengeQuestion[];
 }
 
-// --- 1. Extract Text from PDF File ---
+// --- 1. PDF Parser Service ---
 export async function extractTextFromPdf(
   file: File,
   onProgress?: (percent: number, status: string) => void
 ): Promise<{ text: string; pageCount: number }> {
+  onProgress?.(10, "PDF fayli yuklanmoqda...");
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdf = await loadingTask.promise;
@@ -94,7 +97,7 @@ export async function extractTextFromPdf(
   return { text: fullText.trim(), pageCount: numPages };
 }
 
-// --- 2. Generate Test Questions using Gemini 3.8 Flash (Supports 50-60+ questions) ---
+// --- 2. Generate Test Questions using Gemini Flash (Supports 50-60+ questions safely) ---
 export async function generateTestQuestionsWithAi(params: {
   topic: string;
   pdfText?: string;
@@ -107,7 +110,6 @@ export async function generateTestQuestionsWithAi(params: {
     throw new Error("Gemini API kaliti topilmadi. Tizim sozlamalarini tekshiring.");
   }
 
-  // Select relevant context of PDF (up to 40,000 characters)
   let textContext = "";
   if (params.pdfText && params.pdfText.trim().length > 0) {
     const raw = params.pdfText.trim();
@@ -149,15 +151,8 @@ TALABLAR:
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         const payload = {
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: prompt }],
-            },
-          ],
-          systemInstruction: {
-            parts: [{ text: systemInstruction }],
-          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          systemInstruction: { parts: [{ text: systemInstruction }] },
           generationConfig: {
             temperature: 0.3,
             maxOutputTokens: 8192,
@@ -165,15 +160,31 @@ TALABLAR:
           },
         };
 
-        const res = await fetch(url, {
+        let res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
 
+        // If 503 high demand, short delay and retry once
+        if (res.status === 503) {
+          console.warn(`Model ${model} 503 (high demand), 800ms kutib qayta urinilmoqda...`);
+          await new Promise((r) => setTimeout(r, 800));
+          res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+        }
+
         if (res.ok) {
           const data = await res.json();
-          const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const candParts = data.candidates?.[0]?.content?.parts || [];
+          const rawContent =
+            candParts
+              .filter((p: any) => !p.thought)
+              .map((p: any) => p.text)
+              .join("\n") || candParts[0]?.text || "";
           const parsed = extractAndParseJson<ChallengeQuestion[]>(rawContent, []);
 
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -205,32 +216,61 @@ TALABLAR:
     throw lastError || new Error("Gemini orqali test tuzishda xatolik yuz berdi.");
   }
 
-  // Handle large test counts (e.g. 50-60) via parallel chunking to avoid token truncation
+  // Handle test counts safely via parallel 10-question chunks to prevent token truncation
   const requestedCount = Math.max(1, Math.min(100, params.questionCount || 10));
+  const CHUNK_SIZE = 10;
+  const chunkList: { count: number; offset: number; focus: string }[] = [];
+  let remaining = requestedCount;
+  let offset = 0;
+  let chunkIndex = 1;
 
-  if (requestedCount > 30) {
-    params.onProgress?.(85, `Gemini 3.8 Flash ${requestedCount} ta testni parallel oqimlarda tuzmoqda...`);
-    const count1 = Math.ceil(requestedCount / 2);
-    const count2 = Math.floor(requestedCount / 2);
+  const focusThemes = [
+    "Asosiy sana, xronologiya va muhim tarixiy voqealar",
+    "Tarixiy shaxslar, davlat arboblari va ularning siyosati",
+    "Sabab-oqibat tahlili, urushlar, muzokaralar va shartnomalar",
+    "Geografik hududlar, davlat tuzilishi va qonunlar",
+    "Madaniyat, iqtisodiy islohotlar va tarixiy atamalar",
+    "Chuqur mantiqiy xulosalar va faktologik savollar",
+  ];
 
-    const [part1, part2] = await Promise.all([
-      requestChunk(count1, "1-qism: Asosiy sana, faktlar va tarixiy shaxslar bo'yicha savollar", 0),
-      requestChunk(count2, "2-qism: Chuqur mantiqiy tahlil, sabab-oqibat va atamalar bo'yicha savollar", count1),
-    ]);
-
-    const combined = [...part1, ...part2].map((q, idx) => ({
-      ...q,
-      id: `q_${idx + 1}`,
-    }));
-
-    params.onProgress?.(100, `${combined.length} ta test savoli tayyor!`);
-    return combined;
-  } else {
-    params.onProgress?.(85, `Gemini 3.8 Flash ${requestedCount} ta test savolini tuzmoqda...`);
-    const singleBatch = await requestChunk(requestedCount, "Barcha asosiy faktlar", 0);
-    params.onProgress?.(100, `${singleBatch.length} ta test savoli tayyor!`);
-    return singleBatch;
+  while (remaining > 0) {
+    const count = Math.min(CHUNK_SIZE, remaining);
+    const focus = focusThemes[(chunkIndex - 1) % focusThemes.length] || `Mavzu bo'yicha ${chunkIndex}-qism`;
+    chunkList.push({
+      count,
+      offset,
+      focus: `${chunkIndex}-qism (${count} ta savol): ${focus}`,
+    });
+    offset += count;
+    remaining -= count;
+    chunkIndex++;
   }
+
+  params.onProgress?.(85, `Gemini Flash ${requestedCount} ta testni ${chunkList.length} ta parallel oqimda tezkor tuzmoqda...`);
+
+  // Run all chunks in parallel with graceful error isolation
+  const chunkPromises = chunkList.map((c) =>
+    requestChunk(c.count, c.focus, c.offset).catch((err) => {
+      console.warn(`Chunk "${c.focus}" muammosi:`, err);
+      return [] as ChallengeQuestion[];
+    })
+  );
+
+  const chunkResults = await Promise.all(chunkPromises);
+  const combined = chunkResults.flat();
+
+  if (combined.length === 0) {
+    throw new Error("Gemini orqali test tuzib bo'lmadi. Iltimos, qaytadan urinib ko'ring.");
+  }
+
+  // Re-index all collected questions cleanly
+  const finalQuestions = combined.map((q, idx) => ({
+    ...q,
+    id: `q_${idx + 1}`,
+  }));
+
+  params.onProgress?.(100, `${finalQuestions.length} ta test savoli tayyor!`);
+  return finalQuestions;
 }
 
 // --- 3. Firebase: Save & Fetch Draft Test Banks ---

@@ -10,11 +10,14 @@ import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 // Primary Models from Google AI Studio
-export const PRIMARY_TEXT_MODEL = "gemini-3.7-flash";
+export const PRIMARY_TEXT_MODEL = "gemini-3.8-flash";
 export const FALLBACK_TEXT_MODELS = [
+  "gemini-3.8-flash",
   "gemini-3.7-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemma-4-26b-a4b-it",
+  "gemini-2.5-flash",
 ];
 
 export const PRIMARY_AUDIO_MODEL = "gemini-2.5-flash-native-audio-latest";
@@ -154,6 +157,23 @@ export function extractAndParseJson<T>(rawText: string, fallback: T): T {
         }
       }
     }
+
+    // 3. Smart Recovery for Truncated JSON Arrays (e.g. cut off mid-response)
+    if (firstSquare !== -1) {
+      const lastCloseCurly = textToParse.lastIndexOf("}");
+      if (lastCloseCurly > firstSquare) {
+        const repaired = textToParse.slice(firstSquare, lastCloseCurly + 1) + "]";
+        try {
+          const sanitized = repaired.replace(/,\s*([\]}])/g, "$1");
+          const parsed = JSON.parse(sanitized);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            console.log(`extractAndParseJson: Truncated JSON array repaired with ${parsed.length} valid items.`);
+            return parsed as T;
+          }
+        } catch (_) {}
+      }
+    }
+
     console.warn("extractAndParseJson: Could not parse response as JSON:", rawText);
     return fallback;
   }
