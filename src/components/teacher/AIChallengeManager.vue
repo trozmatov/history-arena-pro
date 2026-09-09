@@ -1178,17 +1178,23 @@ async function submitLaunchChallenge() {
       finalPerk = rawPerk;
     }
 
+    const cleanRewards: Record<string, any> = {
+      coins: Number(launchForm.value.coins) || 0,
+    };
+    if (finalCashPrize) {
+      cleanRewards.cashPrize = finalCashPrize;
+    }
+    if (finalPerk) {
+      cleanRewards.specialPerk = finalPerk;
+    }
+
     await createChallengeInFirebase({
       title: launchForm.value.title,
       topic: launchForm.value.topic || launchForm.value.title,
       group: launchForm.value.group || "Barcha guruhlar",
       deadline: deadlineMs,
       questions: editableQuestions.value,
-      rewards: {
-        cashPrize: finalCashPrize,
-        coins: launchForm.value.coins || 0,
-        specialPerk: finalPerk,
-      },
+      rewards: cleanRewards as any,
     });
 
     alert("🎉 Chellenj muvaffaqiyatli e'lon qilindi va Telegram guruhga yuborildi!");

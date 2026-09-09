@@ -340,7 +340,9 @@ export async function createChallengeInFirebase(
     participants: {},
   };
 
-  await set(chalRef, fullChallenge);
+  // Firebase Realtime DB does not accept undefined values in objects
+  const payload = JSON.parse(JSON.stringify(fullChallenge));
+  await set(chalRef, payload);
 
   // Send automatic Telegram announcement
   try {
