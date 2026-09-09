@@ -135,6 +135,7 @@
             />
             <!-- Progress arc -->
             <circle
+              v-if="allBooksData.overallAverage > 0"
               cx="56"
               cy="56"
               r="44"

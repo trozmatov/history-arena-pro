@@ -1020,7 +1020,7 @@ export function useStudentStore() {
       { id: "11-Jahon", name: "11-sinf Jahon", short: "11-Jahon", color: "#f43f5e" },
     ];
 
-    let currentStudentBook = "8-O'zT";
+    let currentStudentBook = "";
     let studentAvgAcc = 0;
     let customBooksMastery: Record<string, { percent?: number; lessons?: number }> | null = null;
 
@@ -1147,7 +1147,7 @@ export function useStudentStore() {
 
     const overallAverage = booksWithActivityCount > 0
       ? Math.round(totalPercentSum / booksWithActivityCount)
-      : (studentAvgAcc || 66);
+      : (studentAvgAcc || 0);
 
     return {
       currentStudentBook,
@@ -1159,14 +1159,14 @@ export function useStudentStore() {
   // Backward compatibility alias for single book
   const studentBookMastery = computed(() => {
     const all = studentAllBooksMastery.value;
-    const current = all.books.find((b) => b.isCurrent) || all.books[3];
+    const current = all.books.find((b) => b.isCurrent) || all.books[0];
     return {
-      bookName: current.name,
-      percent: current.percent,
-      testsCount: current.testsCount,
-      lessonsCount: current.lessonsCount,
-      rating: current.badge,
-      badgeClass: current.badgeClass,
+      bookName: current?.name || "",
+      percent: current?.percent || 0,
+      testsCount: current?.testsCount || 0,
+      lessonsCount: current?.lessonsCount || 0,
+      rating: current?.badge || "Boshlanmagan",
+      badgeClass: current?.badgeClass || "text-slate-500 bg-white/5 border-white/5",
     };
   });
 
@@ -1294,7 +1294,7 @@ export function useStudentStore() {
     });
 
     const total = present + excused + unexcused;
-    const percent = total > 0 ? Math.round((present / total) * 100) : 100;
+    const percent = total > 0 ? Math.round((present / total) * 100) : 0;
 
     let badge = "Darslar boshlanmoqda";
     if (total > 0) {
