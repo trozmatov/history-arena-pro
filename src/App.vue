@@ -434,26 +434,40 @@ onMounted(() => {
   const handleStudentGroupSnap = (snap: any) => {
     const val = snap.val();
     if (val && val.name && val.group) {
+      const cleanName = val.name.toLowerCase().trim();
+      const isNewGroupFrozen = teacherStore.isGroupFrozen(val.group);
       const target = teacherStore.allStudentsRegistry.value.find(
-        (s) => s.name.toLowerCase().trim() === val.name.toLowerCase().trim()
+        (s) => s.name.toLowerCase().trim() === cleanName
       );
       if (target) {
         if (target.group !== val.group) {
           target.group = val.group;
+          if (isNewGroupFrozen) {
+            target.status = "frozen";
+          } else if (target.group?.toLowerCase().trim() !== "arxiv") {
+            target.status = "active";
+          }
           teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
         }
       } else {
         teacherStore.saveStudent({
           name: val.name,
           group: val.group,
-          status: "active",
+          status: isNewGroupFrozen ? "frozen" : "active",
         });
       }
       const inSession = teacherStore.students.value.find(
-        (s) => s.name.toLowerCase().trim() === val.name.toLowerCase().trim()
+        (s) => s.name.toLowerCase().trim() === cleanName
       );
       if (inSession && inSession.group !== val.group) {
         inSession.group = val.group;
+        if (isNewGroupFrozen) {
+          teacherStore.students.value = teacherStore.students.value.filter(
+            (s) => s.name.toLowerCase().trim() !== cleanName
+          );
+        } else {
+          inSession.status = "active";
+        }
       }
     }
   };

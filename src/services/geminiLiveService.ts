@@ -10,14 +10,15 @@ import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 // Primary Models from Google AI Studio
-export const PRIMARY_TEXT_MODEL = "gemini-3.8-flash";
+export const PRIMARY_TEXT_MODEL = "gemini-2.5-flash";
 export const FALLBACK_TEXT_MODELS = [
-  "gemini-3.8-flash",
-  "gemini-3.7-flash",
+  "gemini-2.5-flash",
   "gemini-3.6-flash",
+  "gemini-3.7-flash",
+  "gemini-2.5-pro",
+  "gemini-3.8-flash",
   "gemini-3.5-flash",
   "gemma-4-26b-a4b-it",
-  "gemini-2.5-flash",
 ];
 
 export const PRIMARY_AUDIO_MODEL = "gemini-2.5-flash-native-audio-latest";
@@ -1775,5 +1776,102 @@ VAZIFA:
       isExamFinished: isFinal,
     };
   }
+}
+
+// --- Ustoz AI Xulosasi (Gemini orqali o'quvchilarning ota-onalariga) ---
+export interface TeacherAiSummaryInput {
+  groupName: string;
+  testTitle: string;
+  testType: string;
+  bookName: string;
+  maxQuestions: number;
+  totalPresent: number;
+  totalAbsent: number;
+  averagePercent: number;
+  topScorers: { name: string; score: number; percent: number }[];
+  strugglingStudents: { name: string; score: number; percent: number }[];
+  absentStudents: string[];
+}
+
+export async function generateTeacherAiSummary(
+  params: TeacherAiSummaryInput,
+  customApiKey?: string
+): Promise<string> {
+  if (params.totalPresent === 0) {
+    return "Hurmatli ota-onalar! Bugungi dars va test mashg'ulotida guruh o'quvchilari qatnashmadi.";
+  }
+
+  const topText = params.topScorers.length > 0
+    ? `- A'lo natijalar (85%+): ${params.topScorers.map((s) => `${s.name} (${s.score}/${params.maxQuestions}, ${s.percent}%)`).join(", ")}`
+    : "- A'lo natijalar: Bugun 85% dan yuqori ball to'plaganlar bo'lmadi.";
+
+  const strugglingText = params.strugglingStudents.length > 0
+    ? `- Mustahkamlash talab etiladiganlar (<65%): ${params.strugglingStudents.map((s) => `${s.name} (${s.score}/${params.maxQuestions}, ${s.percent}%)`).join(", ")}`
+    : "- Barcha o'quvchilar minimal chegaradan muvaffaqiyatli o'tishdi.";
+
+  const absentText = params.absentStudents.length > 0
+    ? `- Darsga kelmaganlar: ${params.absentStudents.join(", ")}`
+    : "- Davomat: Barcha o'quvchilar darsda to'liq qatnashdi.";
+
+  const prompt = `Sen tajribali, talabchan va mehribon Tarix fani ustozisan.
+Quyidagi test natijalarini chuqur o'rganib, Telegram guruhdagi O'QUVCHILARNING OTA-ONALARIGA qaratilgan pedagogik, samimiy va lo'nda xulosa (3-5 jumla, 50-80 so'z) yozib ber.
+
+Ma'lumotlar:
+- Guruh: ${params.groupName}
+- Test mavzusi: ${params.testTitle}
+- Test turi: ${params.testType}
+- Darslik: ${params.bookName}
+- Maksimal savollar soni: ${params.maxQuestions} ta
+- Qatnashganlar soni: ${params.totalPresent} nafar
+- Guruhning o'rtacha ko'rsatkichi: ${params.averagePercent}%
+${topText}
+${strugglingText}
+${absentText}
+
+Qat'iy ko'rsatmalar:
+1. Murojaat bevosita o'quvchilarning OTA-ONALARIGA qaratilgan bo'lsin («Hurmatli ota-onalar...» tarzida boshlansin).
+2. Xuddi o'z o'quvchilarining bilimiga jon kuydiruvchi haqiqiy ustoz kabi yoz: yuqori natija ko'rsatganlarni e'tirof etib ota-onalariga rahmat ayt, oqsagan o'quvchilar ota-onalariga esa tushkunlikka tushmasdan mavzuni darslikdan qayta takrorlash va uyda qo'llab-quvvatlash bo'yicha amaliy tavsiya ber.
+3. Agar darsga kelmaganlar bo'lsa, ota-onalarga mashg'ulotlarni qoldirmaslik muhimligini muloyim eslat.
+4. Telegram formatida bo'lsin: kerakli joylarda <b> va <i> teglaridan foydalanishing mumkin. Markdown (**) belgilarini aslo ishlatma.
+5. Xulosa oxiriga shaxsiy imzo («Hurmat bilan, ...», «[Ismingiz]») yoki sanani QO'YMA, chunki bu xulosa Telegram bot orqali guruhga ketadi. Faqat ota-onalarga yo'naltirilgan xulosaning o'zini ber.`;
+
+  const systemInstruction = "Sen History Arena PRO o'quv markazining bosh Tarix fani ustozi va tajribali mentorsan. Vazifang — test natijalarini tahlil qilib, o'quvchilarning ota-onalariga samimiy, dalda beruvchi va yo'naltiruvchi pedagogik xulosa yozib berish.";
+
+  try {
+    const { text } = await callGeminiTextApi(prompt, systemInstruction, customApiKey, false);
+    let cleaned = text.trim();
+
+    // Convert any stray markdown bold/italic to HTML tags for Telegram
+    cleaned = cleaned.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+    cleaned = cleaned.replace(/\*(.*?)\*/g, "<i>$1</i>");
+
+    // Remove any trailing placeholders or signatures if model added them
+    cleaned = cleaned.replace(/\[\s*ismingiz\s*\]/gi, "");
+    cleaned = cleaned.replace(/\[\s*o'qituvchi\s*.*?\]/gi, "");
+    cleaned = cleaned.replace(/hurmat bilan,?\s*$/gi, "").trim();
+
+    if (cleaned.length > 20) {
+      return cleaned;
+    }
+  } catch (e) {
+    console.warn("Gemini orqali Ustoz xulosasi olishda xatolik, zaxira pedagogik xulosaga o'tiladi:", e);
+  }
+
+  // Pedagogical fallback addressed to parents if network is offline or Gemini unavailable
+  let fallback = "";
+  if (params.averagePercent >= 85) {
+    const topNames = params.topScorers.map((s) => s.name).slice(0, 3).join(", ");
+    fallback = `Hurmatli ota-onalar! Bugungi ${params.testTitle} bo'yicha guruhimiz <b>${params.averagePercent}%</b> a'lo ko'rsatkich qayd etdi. ${topNames ? `Ayniqsa, <b>${topNames}</b> mavzuni mustahkam o'zlashtirib, yuqori natija ko'rsatishdi.` : ""} Farzandlarimizning ushbu muvaffaqiyati bilan sizlarni tabriklayman!`;
+  } else if (params.averagePercent >= 70) {
+    fallback = `Hurmatli ota-onalar! Bugungi ${params.testTitle} mavzusi bo'yicha o'quvchilarimiz <b>${params.averagePercent}%</b> barqaror natija ko'rsatishdi. Asosiy tushunchalar o'zlashtirilgan, biroq xato qilingan savollar ustida yana ishlashimiz lozim. Farzandingiz darslikdagi mavzuni uyda qayta takrorlashini nazorat qilishingizni so'rayman.`;
+  } else {
+    fallback = `Hurmatli ota-onalar! Bugungi test natijalari guruh bo'yicha o'rtacha <b>${params.averagePercent}%</b> bo'lib, diqqat talab holatda. O'quvchilarimiz tushkunlikka tushmasdan xatolar ustida ishlashlari kerak. Mavzuni darslikdan qayta o'qib, konspekt qilishlarida ularni qo'llab-quvvatlashingiz juda muhimdir.`;
+  }
+
+  if (params.absentStudents.length > 0) {
+    fallback += ` Darsga kelmagan o'quvchilarimiz mavzudan ortda qolmasliklari uchun keyingi darslarni qoldirmasliklarini so'rab qolamiz.`;
+  }
+
+  return fallback.trim();
 }
 

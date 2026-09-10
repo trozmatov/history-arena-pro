@@ -560,9 +560,6 @@ export function syncAllExistingGroupsMetaToCloud() {
 }
 
 if (typeof window !== "undefined") {
-  if (allStudentsRegistry.value.length > 0) {
-    syncAllExistingGroupsToCloud();
-  }
   if (Object.keys(groupsMeta.value).length > 0) {
     syncAllExistingGroupsMetaToCloud();
   }
@@ -687,11 +684,14 @@ watch(
 export function useTeacherStore() {
   const isTeacherLoggedIn = computed(() => !!teacherName.value);
 
-  const isStudentFrozen = (name: string): boolean => {
+  const isStudentFrozen = (name: string, group?: string): boolean => {
     if (!name) return false;
+    const cleanName = name.toLowerCase().trim();
     const target = allStudentsRegistry.value.find(
-      (s) => s.name.toLowerCase().trim() === name.toLowerCase().trim()
+      (s) => s.name.toLowerCase().trim() === cleanName
     );
+    const grp = (group || target?.group || "").toLowerCase().trim();
+    if (grp && isGroupFrozen(grp)) return true;
     return target?.status === "frozen";
   };
 
@@ -982,6 +982,9 @@ export function useTeacherStore() {
     // Realtime Cloud synchronization for student master record
     syncStudentToCloud(fullData);
 
+    // Realtime Cloud synchronization for student freeze status
+    syncFreezeToCloud(fullData.name, fullData.status === "frozen", fullData.group || "");
+
     // Realtime Cloud synchronization for student group
     if (fullData.group && fullData.group.trim() && fullData.group.trim() !== "Umumiy") {
       syncGroupTransferToCloud(fullData.name, fullData.group.trim());
@@ -1059,12 +1062,21 @@ export function useTeacherStore() {
     const cleanName = studentName.toLowerCase().trim();
     const trimmedGroup = newGroup.trim();
     if (!trimmedGroup || !cleanName) return;
+    const isNewGroupFrozen = isGroupFrozen(trimmedGroup);
 
     const target = allStudentsRegistry.value.find(
       (s) => s.name.toLowerCase().trim() === cleanName
     );
     if (target) {
       target.group = trimmedGroup;
+      if (isNewGroupFrozen) {
+        target.status = "frozen";
+        syncFreezeToCloud(target.name, true, trimmedGroup);
+      } else {
+        target.status = "active";
+        syncFreezeToCloud(target.name, false, trimmedGroup);
+      }
+      syncStudentToCloud(target);
     }
 
     const inSession = students.value.find(
@@ -1072,15 +1084,24 @@ export function useTeacherStore() {
     );
     if (inSession) {
       inSession.group = trimmedGroup;
+      if (isNewGroupFrozen) {
+        students.value = students.value.filter(
+          (s) => s.name.toLowerCase().trim() !== cleanName
+        );
+      } else {
+        inSession.status = "active";
+      }
     }
 
     allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
     syncGroupTransferToCloud(target?.name || studentName, trimmedGroup);
   }
 
   function transferMultipleStudentsGroup(studentNames: string[], newGroup: string) {
     const trimmedGroup = newGroup.trim();
     if (!trimmedGroup || studentNames.length === 0) return;
+    const isNewGroupFrozen = isGroupFrozen(trimmedGroup);
 
     studentNames.forEach((name) => {
       const cleanName = name.toLowerCase().trim();
@@ -1089,17 +1110,33 @@ export function useTeacherStore() {
       );
       if (target) {
         target.group = trimmedGroup;
+        if (isNewGroupFrozen) {
+          target.status = "frozen";
+          syncFreezeToCloud(target.name, true, trimmedGroup);
+        } else {
+          target.status = "active";
+          syncFreezeToCloud(target.name, false, trimmedGroup);
+        }
+        syncStudentToCloud(target);
       }
       const inSession = students.value.find(
         (s) => s.name.toLowerCase().trim() === cleanName
       );
       if (inSession) {
         inSession.group = trimmedGroup;
+        if (isNewGroupFrozen) {
+          students.value = students.value.filter(
+            (s) => s.name.toLowerCase().trim() !== cleanName
+          );
+        } else {
+          inSession.status = "active";
+        }
       }
       syncGroupTransferToCloud(target?.name || name, trimmedGroup);
     });
 
     allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
   }
 
   function deleteStudentPermanently(studentName: string) {

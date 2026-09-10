@@ -928,6 +928,107 @@
     </BaseModal>
 
     <!-- ======================================================== -->
+    <!-- MODAL: ADD GUEST STUDENT TO TEST MODAL -->
+    <!-- ======================================================== -->
+    <BaseModal
+      v-model="showAddGuestModal"
+      title="➕ Boshqa guruhdan o'quvchi chaqirish (Mehmon)"
+    >
+      <div class="py-2 space-y-3">
+        <p class="text-xs text-slate-400">
+          Ushbu testda boshqa guruh o'quvchilari ham qatnashishi uchun ularni ro'yxatga vaqtincha taklif qilishingiz mumkin. Ularning o'z guruhi o'zgarmaydi, ammo test natijasi o'z profiliga to'liq yoziladi.
+        </p>
+
+        <!-- Search and Group Filter -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <input
+            v-model="guestSearchQuery"
+            type="text"
+            placeholder="Ism bo'yicha qidirish..."
+            class="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-purple-500"
+          />
+          <select
+            v-model="guestGroupFilter"
+            class="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs text-white outline-none focus:border-purple-500"
+          >
+            <option value="all">Barcha boshqa guruhlar</option>
+            <option
+              v-for="g in groupsList.filter((x) => x.name !== selectedGroupHubName)"
+              :key="g.name"
+              :value="g.name"
+            >
+              {{ g.name }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Candidate Students List -->
+        <div class="max-h-60 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar border border-white/5 rounded-2xl p-2 bg-black/30">
+          <div
+            v-for="cand in availableGuestStudents"
+            :key="cand.name"
+            class="flex items-center justify-between p-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs transition"
+          >
+            <div>
+              <div class="font-bold text-white">{{ cand.name }}</div>
+              <div class="text-[10px] text-purple-300">Guruhi: {{ cand.group || 'Umumiy' }}</div>
+            </div>
+            <button
+              type="button"
+              @click="addGuestStudent(cand)"
+              class="rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold px-2.5 py-1 text-xs transition active:scale-95"
+            >
+              + Chaqirish
+            </button>
+          </div>
+          <div v-if="availableGuestStudents.length === 0" class="text-center py-6 text-xs text-slate-500">
+            Mos keluvchi faol o'quvchilar topilmadi
+          </div>
+        </div>
+
+        <!-- Currently Added Guests summary -->
+        <div v-if="extraTestStudents.length > 0" class="rounded-xl bg-purple-950/30 border border-purple-500/30 p-2.5 space-y-1">
+          <div class="text-[11px] font-bold text-purple-300 flex items-center justify-between">
+            <span>Testga chaqirilgan mehmonlar ({{ extraTestStudents.length }} ta):</span>
+            <button
+              type="button"
+              @click="extraTestStudents = []"
+              class="text-[10px] text-red-400 hover:underline"
+            >
+              Tozalash
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <span
+              v-for="gs in extraTestStudents"
+              :key="gs.name"
+              class="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/20 border border-purple-500/40 px-2 py-0.5 text-xs text-purple-200"
+            >
+              <span>{{ gs.name }} ({{ gs.group }})</span>
+              <button
+                type="button"
+                @click="removeGuestStudent(gs.name)"
+                class="hover:text-red-400 font-bold ml-0.5"
+              >
+                ✕
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <button
+          type="button"
+          @click="showAddGuestModal = false"
+          class="rounded-xl bg-purple-600 px-5 py-2 text-xs font-bold text-white hover:bg-purple-500 transition"
+        >
+          Tayyor ({{ extraTestStudents.length }} kiritildi)
+        </button>
+      </template>
+    </BaseModal>
+
+    <!-- ======================================================== -->
     <!-- MODAL 3: STUDENT DEEP-DIVE ANALYTICS MODAL -->
     <!-- ======================================================== -->
     <BaseModal
@@ -2246,14 +2347,48 @@
 
           <!-- Students Test Entry Table -->
           <div class="rounded-3xl border border-white/10 bg-slate-900/90 p-4 sm:p-5 space-y-3">
-            <div class="flex items-center justify-between">
-              <h5 class="text-xs font-black text-slate-300">O'quvchilarning to'g'ri javoblari soni (ballari):</h5>
-              <span class="text-[11px] text-slate-500">Maksimal: {{ manualTestMaxQ }} ta</span>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h5 class="text-xs font-black text-slate-300">O'quvchilarning to'g'ri javoblari soni (ballari):</h5>
+                <span
+                  v-if="currentGroupStudents.length - currentGroupActiveStudents.length > 0"
+                  class="rounded-lg bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[11px] font-bold text-cyan-300"
+                  title="Muzlatilgan o'quvchilar test ballari va hisobotidan avtomatik chiqarilgan"
+                >
+                  ❄️ {{ currentGroupStudents.length - currentGroupActiveStudents.length }} ta muzlatilgan chetlatildi
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  @click="showAddGuestModal = true"
+                  class="flex items-center gap-1.5 rounded-xl bg-purple-600/20 border border-purple-500/40 px-3 py-1.5 text-xs font-bold text-purple-300 hover:bg-purple-600 hover:text-white transition active:scale-95"
+                >
+                  <span>➕</span>
+                  <span>Boshqa guruhdan chaqirish</span>
+                  <span
+                    v-if="extraTestStudents.length > 0"
+                    class="rounded-full bg-purple-500 text-white px-1.5 py-0.2 text-[10px] font-black"
+                  >
+                    {{ extraTestStudents.length }}
+                  </span>
+                </button>
+                <span class="text-[11px] text-slate-500 font-bold whitespace-nowrap">Maks: {{ manualTestMaxQ }} ta</span>
+              </div>
             </div>
 
             <div class="space-y-2 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
               <div
-                v-for="st in currentGroupStudents"
+                v-if="testEntryStudents.length === 0"
+                class="py-8 text-center text-xs text-slate-500 space-y-1"
+              >
+                <div class="text-2xl">👥</div>
+                <div>Guruhda faol o'quvchilar yo'q yoki barchasi muzlatilgan.</div>
+                <div class="text-[11px] text-purple-400">Yuqoridagi tugma orqali boshqa guruhdan o'quvchi taklif qilishingiz mumkin.</div>
+              </div>
+
+              <div
+                v-for="st in testEntryStudents"
                 :key="st.name"
                 class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border p-3 text-xs transition"
                 :class="
@@ -2264,9 +2399,26 @@
                     : 'border-white/10 bg-black/40'
                 "
               >
-                <!-- Student Name & Status -->
+                <!-- Student Name & Status & Guest Tag -->
                 <div class="space-y-0.5 min-w-[160px]">
-                  <div class="font-bold text-white text-sm">{{ st.name }}</div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-white text-sm">{{ st.name }}</span>
+                    <span
+                      v-if="st.group && st.group.toLowerCase().trim() !== (selectedGroupHubName || '').toLowerCase().trim()"
+                      class="rounded-md bg-purple-500/20 border border-purple-500/40 px-1.5 py-0.5 text-[10px] font-bold text-purple-300 flex items-center gap-1"
+                    >
+                      <span>Mehmon:</span>
+                      <b>{{ st.group }}</b>
+                      <button
+                        type="button"
+                        @click="removeGuestStudent(st.name)"
+                        class="text-red-400 hover:text-red-300 ml-1 font-black text-xs"
+                        title="Ushbu testdan chiqarish"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  </div>
                   <div class="text-[10px] text-slate-400">
                     Avvalgi o'rtacha aniqligi: <b class="text-slate-300">{{ st.avgAccuracy || 0 }}%</b>
                   </div>
@@ -2325,6 +2477,56 @@
                   <div v-else class="text-xs font-bold text-red-400 px-3">
                     Darsda qatnashmadi
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ustoz AI Xulosasi (Gemini orqali o'quvchilarning ota-onalari uchun) -->
+            <div class="rounded-2xl border border-purple-500/30 bg-purple-950/20 p-4 space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">🧠</span>
+                  <div>
+                    <h5 class="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-2">
+                      <span>Ustoz AI Xulosasi (Ota-onalar uchun)</span>
+                      <span class="rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 text-[9px] font-bold lowercase">
+                        gemini
+                      </span>
+                    </h5>
+                    <p class="text-[11px] text-slate-400">
+                      Gemini natijalarni pedagog kabi o'qib, ota-onalar uchun samimiy va tavsiyaviy xulosa yozadi
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  @click="handleGenerateAiSummary"
+                  :disabled="generatingAiSummary || testEntryStudents.length === 0"
+                  class="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-lg shadow-purple-600/25 hover:from-purple-500 hover:to-indigo-500 active:scale-95 disabled:opacity-50 transition"
+                >
+                  <span v-if="generatingAiSummary" class="animate-spin">⏳</span>
+                  <span v-else>✨</span>
+                  <span>{{ generatingAiSummary ? "Gemini tahlil qilmoqda..." : "Gemini orqali xulosa olish" }}</span>
+                </button>
+              </div>
+
+              <div class="relative">
+                <textarea
+                  v-model="manualTestAiSummary"
+                  rows="3"
+                  placeholder="Gemini AI bu yerda natijalarni tahlil qilib, ota-onalar uchun pedagogik xulosa tayyorlaydi. Xabarni yuborishdan oldin ko'rib chiqishingiz yoki o'zingiz tahrirlashingiz mumkin. (Agar bo'sh qoldirilsa, yuborishda avtomatik to'ldiriladi)..."
+                  class="w-full rounded-xl border border-white/10 bg-black/40 p-3 text-xs text-slate-100 placeholder-slate-500 focus:border-purple-500/60 focus:outline-none focus:ring-1 focus:ring-purple-500/60 transition resize-y"
+                ></textarea>
+                <div v-if="manualTestAiSummary" class="mt-1 flex items-center justify-between text-[10px] text-slate-400 px-1">
+                  <span>💡 Ushbu xulosa Telegram xabariga kiritiladi. O'qituvchi sifatida matnni tahrirlashingiz mumkin.</span>
+                  <button
+                    type="button"
+                    @click="manualTestAiSummary = ''"
+                    class="text-rose-400 hover:underline hover:text-rose-300 font-medium"
+                  >
+                    Tozalash
+                  </button>
                 </div>
               </div>
             </div>
@@ -3090,6 +3292,8 @@ import { Chart, registerables } from "chart.js";
 import { useTeacherStore, Student, TeacherReminder, GroupMeta, GroupReminder, BOOK_LIST, LessonSessionRecord, normalizeDateToDDMM } from "../../composables/useTeacherStore";
 import { callApi } from "../../services/api";
 import { getStudentDefaultPin } from "../../composables/useStudentStore";
+import { sendTelegramMessage } from "../../services/telegram";
+import { generateTeacherAiSummary, TeacherAiSummaryInput } from "../../services/geminiLiveService";
 import BaseModal from "../common/BaseModal.vue";
 
 Chart.register(...registerables);
@@ -3259,15 +3463,7 @@ function saveNewGroup() {
 
   // 2. Transfer selected existing students to this new group
   if (newGroupSelectedExistingStudents.value.length > 0) {
-    newGroupSelectedExistingStudents.value.forEach((sName) => {
-      const target = teacherStore.allStudentsRegistry.value.find((s) => s.name === sName);
-      if (target) {
-        target.group = gName;
-      }
-      teacherStore.syncGroupTransferToCloud(sName, gName);
-    });
-    teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(teacherStore.allStudentsRegistry.value));
+    teacherStore.transferMultipleStudentsGroup(newGroupSelectedExistingStudents.value, gName);
   }
 
   // 3. Add directly added new students
@@ -3544,8 +3740,56 @@ const currentGroupStudents = computed(() => {
   );
 });
 
+const currentGroupActiveStudents = computed(() => {
+  return currentGroupStudents.value.filter(
+    (s) => s.status !== "frozen" && !teacherStore.isStudentFrozen(s.name, s.group)
+  );
+});
+
 const currentGroupActiveCount = computed(() => {
-  return currentGroupStudents.value.filter((s) => s.status !== "frozen").length;
+  return currentGroupActiveStudents.value.length;
+});
+
+// Guest students from other groups participating in this group's manual test
+const extraTestStudents = ref<Student[]>([]);
+const showAddGuestModal = ref(false);
+const guestSearchQuery = ref("");
+const guestGroupFilter = ref("all");
+
+const availableGuestStudents = computed(() => {
+  const currentAddedNames = new Set([
+    ...currentGroupActiveStudents.value.map((s) => s.name.toLowerCase().trim()),
+    ...extraTestStudents.value.map((s) => s.name.toLowerCase().trim()),
+  ]);
+  return teacherStore.allStudentsRegistry.value.filter((s) => {
+    const normName = s.name.toLowerCase().trim();
+    const sGroup = (s.group || "Umumiy").toLowerCase().trim();
+    if (currentAddedNames.has(normName)) return false;
+    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name, s.group)) return false;
+    if (guestGroupFilter.value !== "all" && sGroup !== guestGroupFilter.value.toLowerCase().trim()) return false;
+    if (guestSearchQuery.value.trim()) {
+      const q = guestSearchQuery.value.toLowerCase().trim();
+      return normName.includes(q) || sGroup.includes(q);
+    }
+    return true;
+  });
+});
+
+function addGuestStudent(student: Student) {
+  if (!extraTestStudents.value.some((s) => s.name.toLowerCase().trim() === student.name.toLowerCase().trim())) {
+    extraTestStudents.value.push(student);
+  }
+}
+
+function removeGuestStudent(name: string) {
+  extraTestStudents.value = extraTestStudents.value.filter(
+    (s) => s.name.toLowerCase().trim() !== name.toLowerCase().trim()
+  );
+}
+
+// Combined list for Manual Test entry: Active group members + Guest participants
+const testEntryStudents = computed(() => {
+  return [...currentGroupActiveStudents.value, ...extraTestStudents.value];
 });
 
 const currentGroupAvgAccuracy = computed(() => {
@@ -4332,6 +4576,7 @@ function openGroupHub(groupName: string) {
   groupScheduleForm.value = JSON.parse(JSON.stringify(meta));
   managerView.value = "group-hub";
   showGroupHubModal.value = false;
+  manualTestAiSummary.value = "";
 }
 
 function toggleScheduleDay(day: string) {
@@ -4445,6 +4690,8 @@ const manualTestMaxQ = ref(30);
 const manualTestScores = ref<Record<string, { correct: number; attStatus: string }>>({});
 const sendingManualTestTg = ref(false);
 const manualTestSent = ref(false);
+const manualTestAiSummary = ref("");
+const generatingAiSummary = ref(false);
 
 function toggleBookSelection(b: string) {
   const idx = manualTestBooks.value.indexOf(b);
@@ -4568,16 +4815,30 @@ const availableGroupMonths = computed(() => {
   return Object.values(map).sort((a, b) => b.timestamp - a.timestamp);
 });
 
+function isTestSession(s: { mode?: string; topic?: string }): boolean {
+  const m = (s.mode || "").toLowerCase();
+  const t = (s.topic || "").toLowerCase();
+  return (
+    m === "manual_test" ||
+    m.includes("test") ||
+    m.includes("dtm") ||
+    m.includes("mock") ||
+    m.includes("imtihon") ||
+    m.includes("mavzulashgan") ||
+    m.includes("konkurs") ||
+    t.includes("test") ||
+    t.includes("dtm") ||
+    t.includes("mock") ||
+    t.includes("imtihon")
+  );
+}
+
 const historyLessonsCount = computed(() => {
-  return currentGroupSessions.value.filter(
-    (s) => !s.mode?.includes("Test") && s.mode !== "manual_test"
-  ).length;
+  return currentGroupSessions.value.filter((s) => !isTestSession(s)).length;
 });
 
 const historyTestsCount = computed(() => {
-  return currentGroupSessions.value.filter(
-    (s) => s.mode?.includes("Test") || s.mode === "manual_test"
-  ).length;
+  return currentGroupSessions.value.filter((s) => isTestSession(s)).length;
 });
 
 const filteredGroupSessions = computed(() => {
@@ -4585,9 +4846,9 @@ const filteredGroupSessions = computed(() => {
 
   // 1. Filter by mode (all / lessons / tests)
   if (historyModeFilter.value === "lessons") {
-    list = list.filter((s) => !s.mode?.includes("Test") && s.mode !== "manual_test");
+    list = list.filter((s) => !isTestSession(s));
   } else if (historyModeFilter.value === "tests") {
-    list = list.filter((s) => s.mode?.includes("Test") || s.mode === "manual_test");
+    list = list.filter((s) => isTestSession(s));
   }
 
   // 2. Filter by month (all / YYYY-MM)
@@ -4827,11 +5088,12 @@ function setManualTestAtt(studentName: string, status: string) {
   getManualTestScore(studentName).attStatus = status;
 }
 
-function calcManualTestPercent(studentName: string) {
+function calcManualTestPercent(studentName: string): number {
   const score = getManualTestScore(studentName);
   if (score.attStatus === "Sababsiz" || score.attStatus === "Sababli") return 0;
   if (!manualTestMaxQ.value || manualTestMaxQ.value <= 0) return 0;
-  return Math.round((score.correct / manualTestMaxQ.value) * 100);
+  const clampedCorrect = Math.max(0, Math.min(Number(score.correct) || 0, manualTestMaxQ.value));
+  return Math.min(100, Math.round((clampedCorrect / manualTestMaxQ.value) * 100));
 }
 
 function buildManualTestTelegramText(): string {
@@ -4842,19 +5104,29 @@ function buildManualTestTelegramText(): string {
   const type = manualTestType.value || "Mavzulashgan";
   const maxQ = manualTestMaxQ.value;
 
-  const present: { name: string; correct: number; percent: number }[] = [];
+  const present: { name: string; correct: number; percent: number; isGuest?: boolean; originGroup?: string }[] = [];
   const absent: string[] = [];
   const excused: string[] = [];
 
-  currentGroupStudents.value.forEach((s) => {
+  testEntryStudents.value.forEach((s) => {
     const sc = getManualTestScore(s.name);
+    const isGuest = (s.group || "").trim().toLowerCase() !== (group || "").trim().toLowerCase();
+    const guestSuffix = isGuest ? ` [Mehmon: ${s.group || 'Boshqa guruh'}]` : "";
+
     if (sc.attStatus === "Sababsiz") {
-      absent.push(s.name);
+      absent.push(`${s.name}${guestSuffix}`);
     } else if (sc.attStatus === "Sababli") {
-      excused.push(s.name);
+      excused.push(`${s.name}${guestSuffix}`);
     } else {
       const p = calcManualTestPercent(s.name);
-      present.push({ name: s.name, correct: sc.correct, percent: p });
+      const clamped = Math.max(0, Math.min(Number(sc.correct) || 0, maxQ));
+      present.push({
+        name: s.name,
+        correct: clamped,
+        percent: p,
+        isGuest,
+        originGroup: s.group,
+      });
     }
   });
 
@@ -4863,18 +5135,20 @@ function buildManualTestTelegramText(): string {
   const sumPercent = present.reduce((acc, p) => acc + p.percent, 0);
   const avgPercent = present.length > 0 ? Math.round(sumPercent / present.length) : 0;
 
-  // AI Pedagogical Summary
-  let aiSummary = "";
-  if (present.length === 0) {
-    aiSummary = "Darsda o'quvchilar qatnashmadi.";
-  } else if (avgPercent >= 85) {
-    const topScorers = present.filter((p) => p.percent >= 90).map((p) => p.name).slice(0, 3).join(", ");
-    aiSummary = `Guruh o'rtacha ${avgPercent}% yuqori ko'rsatkich qayd etdi. ${topScorers ? `${topScorers} mavzuni a'lo darajada o'zlashtirgan.` : "Mavzu to'liq o'zlashtirilgan."} Yangi mavzuga o'tish tavsiya etiladi.`;
-  } else if (avgPercent >= 70) {
-    aiSummary = `Guruh o'rtacha ${avgPercent}% barqaror natija ko'rsatdi. Asosiy test savollari muvaffaqiyatli topshirildi, xato qilingan savollar ustida ishlash tavsiya etiladi.`;
-  } else {
-    const lowCount = present.filter((p) => p.percent < 60).length;
-    aiSummary = `Guruh o'rtacha ${avgPercent}% natija bilan diqqat talab holatda (${lowCount} nafar o'quvchi 60% dan past). Ushbu mavzu bo'yicha mustahkamlovchi tahlil darsi o'tkazish tavsiya etiladi.`;
+  // AI Pedagogical Summary strictly based on present active attendees & addressed to parents
+  let aiSummary = manualTestAiSummary.value.trim();
+  if (!aiSummary) {
+    if (present.length === 0) {
+      aiSummary = "Hurmatli ota-onalar! Bugungi dars va test mashg'ulotida guruh o'quvchilari qatnashmadi.";
+    } else if (avgPercent >= 85) {
+      const topScorers = present.filter((p) => p.percent >= 85).map((p) => p.name).slice(0, 3).join(", ");
+      aiSummary = `Hurmatli ota-onalar! Guruhimiz bugungi test bo'yicha o'rtacha <b>${avgPercent}%</b> yuqori ko'rsatkich qayd etdi. ${topScorers ? `Ayniqsa, <b>${topScorers}</b> mavzuni mustahkam o'zlashtirib, barchaga o'rnak bo'lishdi.` : ""} Barcha o'quvchilarimiz va sizlarni ushbu muvaffaqiyat bilan tabriklayman!`;
+    } else if (avgPercent >= 70) {
+      aiSummary = `Hurmatli ota-onalar! Guruhimiz bugungi testda o'rtacha <b>${avgPercent}%</b> barqaror natija ko'rsatdi. Asosiy test savollari muvaffaqiyatli topshirildi. O'quvchilar bilan xatolar ustida qo'shimcha ishlaymiz, uyda darslikni yana bir bor takrorlashlarini nazorat qilishingizni so'rayman.`;
+    } else {
+      const lowCount = present.filter((p) => p.percent < 60).length;
+      aiSummary = `Hurmatli ota-onalar! Guruhimiz bugungi testda o'rtacha <b>${avgPercent}%</b> natija bilan diqqat talab holatda (${lowCount} nafar o'quvchi 60% dan past). O'quvchilarimiz tushkunlikka tushmasdan darslik bo'yicha mavzuni qayta mustahkamlashlari va mashg'ulotlarni qoldirmasliklari muhimdir.`;
+    }
   }
 
   let msg = `📝 <b>«${group}» — ${title}</b>\n`;
@@ -4883,7 +5157,8 @@ function buildManualTestTelegramText(): string {
 
   present.forEach((p, idx) => {
     const num = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
-    msg += `${num} <b>${p.name}</b>: ${p.correct}/${maxQ} (${p.percent}%)\n`;
+    const guestLabel = p.isGuest ? ` <i>[Mehmon: ${p.originGroup}]</i>` : "";
+    msg += `${num} <b>${p.name}</b>${guestLabel}: ${p.correct}/${maxQ} (${p.percent}%)\n`;
   });
 
   msg += `\n📅 <b>DAVOMAT:</b>\n`;
@@ -4897,7 +5172,71 @@ function buildManualTestTelegramText(): string {
   return msg.trim();
 }
 
-function copyManualTestTelegramText() {
+function buildTeacherAiParams(): TeacherAiSummaryInput {
+  const group = selectedGroupHubName.value;
+  const effectiveBook = getSelectedBooksLabel();
+  const title = manualTestTitle.value || "Mavzulashgan Test";
+  const type = manualTestType.value || "Mavzulashgan";
+  const maxQ = manualTestMaxQ.value || 1;
+
+  const present: { name: string; score: number; percent: number }[] = [];
+  const absent: string[] = [];
+
+  testEntryStudents.value.forEach((s) => {
+    const sc = getManualTestScore(s.name);
+    if (sc.attStatus === "Sababsiz") {
+      absent.push(s.name);
+    } else if (sc.attStatus === "Sababli") {
+      // excused
+    } else {
+      const p = calcManualTestPercent(s.name);
+      const clamped = Math.max(0, Math.min(Number(sc.correct) || 0, maxQ));
+      present.push({ name: s.name, score: clamped, percent: p });
+    }
+  });
+
+  present.sort((a, b) => b.percent - a.percent || b.score - a.score);
+  const sumPercent = present.reduce((acc, p) => acc + p.percent, 0);
+  const avgPercent = present.length > 0 ? Math.round(sumPercent / present.length) : 0;
+
+  const topScorers = present.filter((p) => p.percent >= 85);
+  const strugglingStudents = present.filter((p) => p.percent < 65);
+
+  return {
+    groupName: group,
+    testTitle: title,
+    testType: type,
+    bookName: effectiveBook,
+    maxQuestions: maxQ,
+    totalPresent: present.length,
+    totalAbsent: absent.length,
+    averagePercent: avgPercent,
+    topScorers,
+    strugglingStudents,
+    absentStudents: absent,
+  };
+}
+
+async function handleGenerateAiSummary() {
+  if (generatingAiSummary.value) return;
+  generatingAiSummary.value = true;
+  try {
+    const params = buildTeacherAiParams();
+    const result = await generateTeacherAiSummary(params);
+    if (result) {
+      manualTestAiSummary.value = result;
+    }
+  } catch (err: any) {
+    console.error("Gemini AI xulosa olishda xatolik:", err);
+  } finally {
+    generatingAiSummary.value = false;
+  }
+}
+
+async function copyManualTestTelegramText() {
+  if (!manualTestAiSummary.value.trim() && testEntryStudents.value.length > 0) {
+    await handleGenerateAiSummary();
+  }
   const text = buildManualTestTelegramText();
   navigator.clipboard.writeText(text);
   alert("Test natijalari matni nusxalandi!");
@@ -4916,31 +5255,32 @@ async function submitManualTestResults() {
   sendingManualTestTg.value = true;
   manualTestSent.value = false;
 
-  const BOT_TOKEN = "7686180552:AAE1qOcFbuoPypIT_SD5T44YUg1R0YnQ8ug";
-  const ADMIN_CHAT_ID = "-1003235272020";
+  // If Ustoz AI summary not generated yet, generate via Gemini before compiling message
+  if (!manualTestAiSummary.value.trim() && testEntryStudents.value.length > 0) {
+    try {
+      const params = buildTeacherAiParams();
+      manualTestAiSummary.value = await generateTeacherAiSummary(params);
+    } catch (e) {
+      console.warn("Auto Gemini summary generation failed:", e);
+    }
+  }
+
   const msgText = buildManualTestTelegramText();
+  const maxQ = manualTestMaxQ.value;
+  const normDate = normalizeDateToDDMM(manualTestDate.value);
+  const effectiveBook = getSelectedBooksLabel();
+  const testType = manualTestType.value || "Mavzulashgan";
 
   try {
-    // 1. Send direct to Telegram bot
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: ADMIN_CHAT_ID,
-        text: msgText,
-        parse_mode: "HTML",
-      }),
-    });
-
-    // 2. Build session record and student updates
+    // 1. Build session record and student updates FIRST to guarantee local & cloud persistence
     const sessionStudentResults: any[] = [];
     let sumPercent = 0;
     let presentCount = 0;
-    const normDate = normalizeDateToDDMM(manualTestDate.value);
 
-    currentGroupStudents.value.forEach((s) => {
+    testEntryStudents.value.forEach((s) => {
       const sc = getManualTestScore(s.name);
       const isPresent = sc.attStatus !== "Sababsiz" && sc.attStatus !== "Sababli";
+      const clampedCorrect = Math.max(0, Math.min(Number(sc.correct) || 0, maxQ));
       const p = isPresent ? calcManualTestPercent(s.name) : 0;
       if (isPresent) {
         sumPercent += p;
@@ -4951,13 +5291,14 @@ async function submitManualTestResults() {
 
       sessionStudentResults.push({
         name: s.name,
-        correct: sc.correct,
-        total: manualTestMaxQ.value,
+        correct: clampedCorrect,
+        total: maxQ,
         percent: p,
         coin: isPresent ? coinsEarned : 0,
         coins: isPresent ? coinsEarned : 0,
         strike: 0,
         attStatus: sc.attStatus || "Keldi",
+        group: s.group || selectedGroupHubName.value,
       });
 
       // Save attendance to localAttendanceLogs & cloud
@@ -4965,59 +5306,81 @@ async function submitManualTestResults() {
         normDate,
         s.name,
         sc.attStatus || "Keldi",
-        selectedGroupHubName.value,
+        s.group || selectedGroupHubName.value,
         "Test davomati"
       );
 
-      // Update in master registry
+      // Update in master registry and sync to master_students in Firebase
       const reg = teacherStore.allStudentsRegistry.value.find((item) => item.name === s.name);
       if (reg && isPresent) {
         reg.totalTests = (reg.totalTests || 0) + 1;
         reg.coins = (reg.coins || 0) + coinsEarned;
-        // Recalculate avgAccuracy
         const oldTotal = reg.totalTests > 1 ? reg.totalTests - 1 : 0;
         const oldSum = (reg.avgAccuracy || 0) * oldTotal;
         reg.avgAccuracy = Math.round((oldSum + p) / reg.totalTests);
+        teacherStore.syncStudentToCloud(reg);
       }
     });
 
-    const effectiveBook = getSelectedBooksLabel();
+    // Commit registry to Vue reactivity and LocalStorage
+    teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(teacherStore.allStudentsRegistry.value));
+
     const sessionRecord: LessonSessionRecord = {
       id: "sess-test-" + Date.now(),
       date: normDate,
       time: new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
       teacher: teacherStore.teacherName.value || "Ustoz",
       group: selectedGroupHubName.value,
-      mode: manualTestType.value || "Mavzulashgan",
+      mode: testType,
       book: effectiveBook,
       topic: manualTestTitle.value,
-      maxQuestions: manualTestMaxQ.value,
+      maxQuestions: maxQ,
       avgPercent: presentCount > 0 ? Math.round(sumPercent / presentCount) : 0,
       studentResults: sessionStudentResults,
       createdAt: Date.now(),
     };
 
+    // Save session record locally and to Firebase lesson_sessions
     teacherStore.saveLessonSession(sessionRecord);
 
-    // 3. Save to Google Apps Script with proper student test records
-    await callApi("save", {
-      teacher: teacherStore.teacherName.value,
-      mode: manualTestType.value || "manual_test",
-      students: sessionStudentResults.map((s) => ({
-        name: s.name,
-        correct: s.correct,
-        total: s.total,
-        percent: s.percent,
-        coin: s.coins,
-        strike: 0,
-        attStatus: s.attStatus,
-      })),
-    });
+    // 2. Safely Send to Telegram Bot (Isolated try/catch so saving is never blocked!)
+    let tgSentSuccess = false;
+    try {
+      tgSentSuccess = await sendTelegramMessage(msgText);
+    } catch (tgErr) {
+      console.warn("Telegram bot send error:", tgErr);
+    }
+
+    // 3. Save to Google Apps Script
+    try {
+      await callApi("save", {
+        teacher: teacherStore.teacherName.value,
+        mode: testType,
+        students: sessionStudentResults.map((s) => ({
+          name: s.name,
+          correct: s.correct,
+          total: s.total,
+          percent: s.percent,
+          coin: s.coins,
+          strike: 0,
+          attStatus: s.attStatus,
+        })),
+      });
+    } catch (gasErr) {
+      console.warn("GAS save error:", gasErr);
+    }
 
     manualTestSent.value = true;
-    alert("Test natijalari muvaffaqiyatli saqlandi va Telegram guruhga yuborildi!");
+    extraTestStudents.value = []; // Reset guest list after saving
+    manualTestAiSummary.value = ""; // Reset AI summary for next test
+
+    const tgNotice = tgSentSuccess
+      ? " va Telegram guruhga yuborildi ✅"
+      : " (Telegram xabarnomada kechikish bo'ldi, ammo barcha natijalar bazaga saqlandi)";
+    alert(`🎉 Test natijalari muvaffaqiyatli saqlandi${tgNotice}!`);
   } catch (e: any) {
-    alert("Saqlashda xatolik yuz berdi: " + (e.message || e));
+    alert("Saqlashda kutilmagan xatolik yuz berdi: " + (e.message || e));
   } finally {
     sendingManualTestTg.value = false;
   }
