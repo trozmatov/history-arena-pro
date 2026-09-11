@@ -106,6 +106,7 @@ let duelListenerActive = false;
 export const cloudFrozenStudents = ref<string[]>([]);
 export const cloudFrozenGroups = ref<string[]>(["arxiv"]); // Arxiv is always frozen
 export const studentGroupMap = ref<Record<string, string>>({});
+export const studentGroupsMap = ref<Record<string, string[]>>({});
 export const cloudGroupsMeta = ref<Record<string, any>>({});
 let freezeListenerActive = false;
 
@@ -113,6 +114,28 @@ export function getEffectiveStudentGroup(name: string, fallbackGroup?: string): 
   if (!name) return fallbackGroup || "Umumiy";
   const clean = name.toLowerCase().trim();
   return studentGroupMap.value[clean] || fallbackGroup || "Umumiy";
+}
+
+export function getStudentEnrolledGroups(name: string): string[] {
+  if (!name) return ["Umumiy"];
+  const clean = name.toLowerCase().trim();
+  if (studentGroupsMap.value[clean] && studentGroupsMap.value[clean].length > 0) {
+    return studentGroupsMap.value[clean];
+  }
+  const single = studentGroupMap.value[clean];
+  if (single) return [single];
+  try {
+    const saved = localStorage.getItem("ha_all_students");
+    if (saved) {
+      const list = JSON.parse(saved);
+      const match = list.find((s: any) => (s.name || "").toLowerCase().trim() === clean);
+      if (match) {
+        if (Array.isArray(match.groups) && match.groups.length > 0) return match.groups;
+        if (match.group) return [match.group];
+      }
+    }
+  } catch (e) {}
+  return ["Umumiy"];
 }
 
 function initFreezeListener() {
@@ -174,6 +197,25 @@ function initFreezeListener() {
     };
     onChildAdded(sgRef, handleGroupSnap);
     onChildChanged(sgRef, handleGroupSnap);
+
+    // Realtime Cloud synchronization for master students (groups & multi-group)
+    const msRef = fbRef(db, "master_students");
+    const handleMasterSnap = (snap: any) => {
+      const val = snap.val();
+      if (val && val.name) {
+        const cleanName = val.name.toLowerCase().trim();
+        if (Array.isArray(val.groups) && val.groups.length > 0) {
+          studentGroupsMap.value[cleanName] = val.groups;
+        } else if (val.group) {
+          studentGroupsMap.value[cleanName] = [val.group];
+        }
+        if (val.group) {
+          studentGroupMap.value[cleanName] = val.group;
+        }
+      }
+    };
+    onChildAdded(msRef, handleMasterSnap);
+    onChildChanged(msRef, handleMasterSnap);
 
     // Realtime Cloud synchronization for groups metadata (schedules, rooms, times)
     const gmRef = fbRef(db, "groups_meta");
@@ -1571,7 +1613,9 @@ export function useStudentStore() {
     acceptDuel,
     declineDuel,
     studentGroupMap,
+    studentGroupsMap,
     cloudGroupsMeta,
     getEffectiveStudentGroup,
+    getStudentEnrolledGroups,
   };
 }

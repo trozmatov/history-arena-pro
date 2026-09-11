@@ -146,7 +146,13 @@
               {{ idx + 1 }}
             </span>
             <div>
-              <div class="text-sm font-bold text-white">{{ s.name }}</div>
+              <div
+                @click="teacherStore.openStudentDoskaGlobal(s.name)"
+                class="text-sm font-bold text-white cursor-pointer hover:text-indigo-400 hover:underline transition"
+                title="O'quvchining shaxsiy doskasini ochish"
+              >
+                {{ s.name }}
+              </div>
               <div v-if="s.book || s.topic" class="text-[11px] text-cyan-400 font-semibold">
                 📖 {{ s.book }} {{ s.topic ? `(${s.topic})` : '' }}
               </div>
@@ -208,7 +214,13 @@
         >
           <div class="flex items-center gap-3">
             <span class="text-base font-black text-purple-400">#{{ idx + 1 }}</span>
-            <span class="text-sm font-bold text-white">{{ s.name }}</span>
+            <span
+              @click="teacherStore.openStudentDoskaGlobal(s.name)"
+              class="text-sm font-bold text-white cursor-pointer hover:text-indigo-400 hover:underline transition"
+              title="O'quvchining shaxsiy doskasini ochish"
+            >
+              {{ s.name }}
+            </span>
           </div>
           <button
             type="button"
@@ -243,7 +255,13 @@
             :key="s.name"
             class="inline-flex items-center gap-1 rounded-xl bg-red-500/20 border border-red-500/40 px-2.5 py-1 text-xs font-bold text-red-200"
           >
-            {{ s.name }}
+            <span
+              @click="teacherStore.openStudentDoskaGlobal(s.name)"
+              class="cursor-pointer hover:text-white hover:underline transition"
+              title="O'quvchining shaxsiy doskasini ochish"
+            >
+              {{ s.name }}
+            </span>
             <button @click="teacherStore.removeStudent(s.name)" class="text-red-400 hover:text-white ml-1">✕</button>
           </span>
         </div>
@@ -269,7 +287,13 @@
             :key="s.name"
             class="inline-flex items-center gap-1 rounded-xl bg-blue-500/20 border border-blue-500/40 px-2.5 py-1 text-xs font-bold text-blue-200"
           >
-            {{ s.name }}
+            <span
+              @click="teacherStore.openStudentDoskaGlobal(s.name)"
+              class="cursor-pointer hover:text-white hover:underline transition"
+              title="O'quvchining shaxsiy doskasini ochish"
+            >
+              {{ s.name }}
+            </span>
             <button @click="teacherStore.removeStudent(s.name)" class="text-blue-400 hover:text-white ml-1">✕</button>
           </span>
         </div>

@@ -19,7 +19,13 @@
           <!-- Name & strikes/penalties -->
           <div class="flex items-center gap-2.5">
             <span class="font-extrabold text-slate-400 w-5">{{ idx + 1 }}.</span>
-            <span class="font-black text-white text-sm">{{ s.name }}</span>
+            <span
+              @click="teacherStore.openStudentDoskaGlobal(s.name)"
+              class="font-black text-white text-sm cursor-pointer hover:text-indigo-400 hover:underline transition"
+              title="O'quvchining shaxsiy doskasini ochish"
+            >
+              {{ s.name }}
+            </span>
             <span v-if="s.strikes > 0" class="rounded-md bg-amber-500/20 px-1.5 py-0.5 font-black text-amber-400 border border-amber-500/30">
               ⭐ {{ s.strikes }}
             </span>

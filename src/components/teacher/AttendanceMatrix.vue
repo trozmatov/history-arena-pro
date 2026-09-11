@@ -215,7 +215,11 @@
             >
               <!-- Sticky Student Name -->
               <td class="sticky left-0 bg-slate-950/95 px-3 py-2.5 text-left font-bold text-white z-10 whitespace-nowrap border-r border-white/10 flex items-center justify-between gap-2">
-                <span class="truncate">
+                <span
+                  @click="teacherStore.openStudentDoskaGlobal(row.name)"
+                  class="truncate cursor-pointer hover:text-indigo-400 hover:underline transition"
+                  title="O'quvchining shaxsiy doskasini ochish"
+                >
                   <span class="text-slate-400 font-normal mr-1.5">{{ idx + 1 }}.</span>
                   {{ row.name }}
                 </span>
@@ -310,7 +314,13 @@
         <div class="rounded-2xl border border-white/10 bg-black/40 p-3.5 space-y-1">
           <div class="flex items-center justify-between text-xs font-bold text-slate-400">
             <span>O'quvchi:</span>
-            <span class="text-white font-black text-sm">{{ editTarget.name }}</span>
+            <span
+              @click="teacherStore.openStudentDoskaGlobal(editTarget.name); showEditModal = false;"
+              class="text-white hover:text-indigo-400 hover:underline cursor-pointer font-black text-sm"
+              title="O'quvchining shaxsiy doskasini ochish"
+            >
+              {{ editTarget.name }} ↗️
+            </span>
           </div>
           <div class="flex items-center justify-between text-xs font-bold text-slate-400">
             <span>Dars sanasi:</span>

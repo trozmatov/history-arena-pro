@@ -280,7 +280,13 @@
 
                 <!-- Name -->
                 <td class="px-3 py-3 text-left font-bold text-white whitespace-nowrap">
-                  {{ row.name }}
+                  <span
+                    @click="teacherStore.openStudentDoskaGlobal(row.name)"
+                    class="cursor-pointer hover:text-indigo-400 hover:underline transition"
+                    title="O'quvchining shaxsiy doskasini ochish"
+                  >
+                    {{ row.name }}
+                  </span>
                 </td>
 
                 <!-- Group -->
@@ -635,7 +641,13 @@
 
                 <!-- Name -->
                 <td class="px-3 py-3 text-left font-bold text-white whitespace-nowrap">
-                  {{ st.name }}
+                  <span
+                    @click="teacherStore.openStudentDoskaGlobal(st.name)"
+                    class="cursor-pointer hover:text-indigo-400 hover:underline transition"
+                    title="O'quvchining shaxsiy doskasini ochish"
+                  >
+                    {{ st.name }}
+                  </span>
                 </td>
 
                 <!-- Group -->
@@ -738,7 +750,15 @@
                   class="border-b border-white/5 hover:bg-white/5 transition"
                 >
                   <td class="px-3 py-2 text-left font-mono text-slate-500">{{ idx + 1 }}</td>
-                  <td class="px-3 py-2 text-left font-bold text-white">{{ r.name }}</td>
+                  <td class="px-3 py-2 text-left font-bold text-white">
+                    <span
+                      @click="teacherStore.openStudentDoskaGlobal(r.name)"
+                      class="cursor-pointer hover:text-indigo-400 hover:underline transition"
+                      title="O'quvchining shaxsiy doskasini ochish"
+                    >
+                      {{ r.name }}
+                    </span>
+                  </td>
                   <td class="px-3 py-2 whitespace-nowrap">
                     <span
                       class="rounded-md px-2 py-0.5 text-[10px] font-bold"

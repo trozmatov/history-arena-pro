@@ -1,7 +1,7 @@
 import { ref, computed, watch } from "vue";
 import { callApi } from "../services/api";
 import { soundManager, fireConfetti, fireVictoryConfetti } from "./useAudio";
-import { db, ref as fbRef, set as fbSet, remove as fbRemove, onChildAdded, onChildRemoved } from "../services/firebase";
+import { db, ref as fbRef, set as fbSet, remove as fbRemove, get as fbGet, onChildAdded, onChildChanged, onChildRemoved } from "../services/firebase";
 import { getStudentDefaultPin } from "./useStudentStore";
 
 
@@ -42,13 +42,35 @@ export function syncGroupFreezeToCloud(groupName: string, isFrozen: boolean) {
   }
 }
 
+export function getStudentGroups(student: Partial<Student>): string[] {
+  if (!student) return ["Umumiy"];
+  if (Array.isArray(student.groups) && student.groups.length > 0) {
+    return Array.from(new Set(student.groups.map((g) => g.trim()).filter(Boolean)));
+  }
+  if (student.group && student.group.trim()) {
+    return [student.group.trim()];
+  }
+  return ["Umumiy"];
+}
+
+export function isStudentInGroup(student: Partial<Student>, groupName: string): boolean {
+  if (!groupName || !student) return false;
+  const cleanTarget = groupName.toLowerCase().trim();
+  const groups = getStudentGroups(student);
+  return groups.some((g) => g.toLowerCase().trim() === cleanTarget);
+}
+
 export function syncStudentToCloud(student: Student) {
   try {
     const key = sanitizeFbKey(student.name);
+    const groupsList = getStudentGroups(student);
+    const primaryGroup = student.group?.trim() || groupsList[0] || "Umumiy";
+
     fbSet(fbRef(db, `master_students/${key}`), {
       id: student.id,
       name: student.name,
-      group: student.group || "Umumiy",
+      group: primaryGroup,
+      groups: groupsList,
       status: student.status || "active",
       phone: student.phone || "",
       parentName: student.parentName || "",
@@ -76,6 +98,56 @@ export function deleteStudentFromCloud(studentName: string) {
   } catch (e) {
     console.warn("deleteStudentFromCloud error:", e);
   }
+}
+
+// Global navigation to student doska from any view
+export const selectedDoskaStudent = ref<Student | null>(null);
+export const requestedTeacherSubview = ref<string | null>(null);
+
+export function openStudentDoskaGlobal(studentOrName: Student | string) {
+  let target: Student | undefined;
+  if (typeof studentOrName === "string") {
+    const clean = studentOrName.trim().toLowerCase();
+    target = allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === clean);
+    if (!target) {
+      target = students.value.find((s) => s.name.toLowerCase().trim() === clean);
+    }
+    if (!target) {
+      const pin = getStudentDefaultPin(studentOrName.trim());
+      target = {
+        id: "temp-" + Date.now(),
+        name: studentOrName.trim(),
+        group: "Umumiy",
+        groups: ["Umumiy"],
+        status: "active",
+        phone: "",
+        parentName: "",
+        parentPhone: "",
+        parentTg: "",
+        login: studentOrName.trim().toLowerCase().replace(/\s+/g, "_"),
+        pin,
+        password: pin,
+        pattern: "",
+        notes: "",
+        joinedDate: new Date().toISOString().split("T")[0],
+        correct: 0,
+        total: 0,
+        sess: 0,
+        strikes: 0,
+        penalties: 0,
+        bonus: 0,
+        coins: 0,
+        totalTests: 0,
+        avgAccuracy: 0,
+        attendanceStats: { present: 0, excused: 0, unexcused: 0 },
+      };
+    }
+  } else {
+    target = studentOrName;
+  }
+
+  selectedDoskaStudent.value = target;
+  requestedTeacherSubview.value = "students";
 }
 
 // Realtime Cloud synchronization for frozen groups
@@ -214,7 +286,8 @@ export interface Student {
   strikeAdded?: boolean;
   penaltyAdded?: boolean;
   status?: "active" | "frozen";
-  group?: string;
+  group?: string; // Birlamchi / asosiy guruh
+  groups?: string[]; // Barcha a'zo bo'lgan guruhlar (Multi-group)
   phone?: string;
   parentName?: string;
   parentPhone?: string;
@@ -352,51 +425,190 @@ export function generateUnique6DigitPin(nameOrList?: string | Student[]): string
 }
 
 function loadInitialMasterStudents(): Student[] {
+  const sampleNames = new Set(["Ali Valiyev", "Madina Karimova", "Jasur Rahimov", "Zuhra Yusupova", "Bekzod Rustamov"]);
+  const sampleIds = new Set(["std-1", "std-2", "std-3", "std-4", "std-5"]);
+  let list: Student[] = [];
+  let needsSave = false;
+
   const saved = localStorage.getItem("ha_all_students");
-  if (!saved) return [];
-  try {
-    const list: Student[] = JSON.parse(saved);
-    let needsSave = false;
-    const filtered = list.filter(
-      (s) =>
-        s &&
-        s.name &&
-        s.id !== "std-1" &&
-        s.id !== "std-2" &&
-        s.id !== "std-3" &&
-        s.id !== "std-4" &&
-        s.id !== "std-5"
-    );
+  if (saved) {
+    try {
+      const parsed: Student[] = JSON.parse(saved);
+      list = parsed.filter(
+        (s) =>
+          s &&
+          s.name &&
+          !sampleNames.has(s.name.trim()) &&
+          !sampleIds.has(s.id || "")
+      );
+    } catch {
+      list = [];
+    }
+  }
 
-    // Auto-migrate: ensure every student has a valid 6-digit PIN
-    filtered.forEach((s) => {
-      if (!s.pin || !/^\d{6}$/.test(s.pin)) {
-        const defPin = getStudentDefaultPin(s.name);
-        s.pin = defPin;
-        s.password = s.pin;
-        needsSave = true;
+  // Self-heal immediately: merge any real students found in localStorage["st"]
+  const savedSt = localStorage.getItem("st");
+  if (savedSt) {
+    try {
+      const stList: Student[] = JSON.parse(savedSt);
+      if (Array.isArray(stList)) {
+        stList.forEach((s) => {
+          if (s && s.name && !sampleNames.has(s.name.trim()) && !sampleIds.has(s.id || "")) {
+            const cleanName = s.name.trim();
+            const existing = list.find((x) => x.name.toLowerCase().trim() === cleanName.toLowerCase());
+            if (!existing) {
+              const pin = s.pin || getStudentDefaultPin(cleanName);
+              const grp = s.group || "Umumiy";
+              list.push({
+                id: s.id || "st-" + Math.random().toString(36).substring(2, 9),
+                name: cleanName,
+                group: grp,
+                groups: Array.isArray(s.groups) && s.groups.length > 0 ? s.groups : [grp],
+                status: s.status || "active",
+                phone: s.phone || "",
+                parentName: s.parentName || "",
+                parentPhone: s.parentPhone || "",
+                parentTg: s.parentTg || "",
+                login: s.login || cleanName.toLowerCase().replace(/\s+/g, "_"),
+                pin,
+                password: s.password || pin,
+                pattern: s.pattern || "",
+                notes: s.notes || "",
+                joinedDate: s.joinedDate || new Date().toISOString().split("T")[0],
+                correct: s.correct || 0,
+                total: s.total || 0,
+                sess: s.sess || 0,
+                strikes: s.strikes || 0,
+                penalties: s.penalties || 0,
+                bonus: s.bonus || 0,
+                coins: s.coins || 0,
+                totalTests: s.totalTests || 0,
+                avgAccuracy: s.avgAccuracy || 0,
+                attendanceStats: s.attendanceStats || { present: 0, excused: 0, unexcused: 0 },
+              });
+              needsSave = true;
+            } else {
+              // Merge contacts from st into existing master student
+              if (s.phone && s.phone.trim() && !existing.phone) { existing.phone = s.phone.trim(); needsSave = true; }
+              if (s.parentPhone && s.parentPhone.trim() && !existing.parentPhone) { existing.parentPhone = s.parentPhone.trim(); needsSave = true; }
+              if (s.parentName && s.parentName.trim() && !existing.parentName) { existing.parentName = s.parentName.trim(); needsSave = true; }
+              if (s.parentTg && s.parentTg.trim() && !existing.parentTg) { existing.parentTg = s.parentTg.trim(); needsSave = true; }
+              if (s.notes && s.notes.trim() && !existing.notes) { existing.notes = s.notes.trim(); needsSave = true; }
+            }
+          }
+        });
       }
-    });
+    } catch {}
+  }
 
-    // Self-healing migration: restore any students incorrectly marked frozen by the runaway loop bug
-    const freezeBugRepaired = localStorage.getItem("ha_freeze_repaired_v3");
-    if (!freezeBugRepaired) {
-      filtered.forEach((s) => {
-        if ((s.group || "").toLowerCase().trim() !== "arxiv") {
-          s.status = "active";
-        }
-      });
-      localStorage.setItem("ha_freeze_repaired_v3", "true");
+  // Self-heal immediately: merge any students from localStorage["ha_lesson_sessions"]
+  const savedSessions = localStorage.getItem("ha_lesson_sessions");
+  if (savedSessions) {
+    try {
+      const sessions = JSON.parse(savedSessions);
+      if (Array.isArray(sessions)) {
+        sessions.forEach((sess: any) => {
+          const sessGroup = sess.group || "Umumiy";
+          const res = sess.studentResults || sess.results || [];
+          if (Array.isArray(res)) {
+            res.forEach((r: any) => {
+              if (r && r.name && !sampleNames.has(r.name.trim())) {
+                const clean = r.name.trim();
+                const existing = list.find((x) => x.name.toLowerCase().trim() === clean.toLowerCase());
+                if (!existing) {
+                  const pin = getStudentDefaultPin(clean);
+                  list.push({
+                    id: "sess-" + Math.random().toString(36).substring(2, 9),
+                    name: clean,
+                    group: sessGroup,
+                    groups: [sessGroup],
+                    status: "active",
+                    phone: r.phone || "",
+                    parentName: r.parentName || "",
+                    parentPhone: r.parentPhone || "",
+                    parentTg: r.parentTg || "",
+                    login: clean.toLowerCase().replace(/\s+/g, "_"),
+                    pin,
+                    password: pin,
+                    pattern: "",
+                    notes: "",
+                    joinedDate: sess.date || new Date().toISOString().split("T")[0],
+                    correct: 0,
+                    total: 0,
+                    sess: 0,
+                    strikes: 0,
+                    penalties: 0,
+                    bonus: 0,
+                    coins: 0,
+                    totalTests: 0,
+                    avgAccuracy: 0,
+                    attendanceStats: { present: 0, excused: 0, unexcused: 0 },
+                  });
+                  needsSave = true;
+                } else {
+                  if (r.phone && r.phone.trim() && !existing.phone) { existing.phone = r.phone.trim(); needsSave = true; }
+                  if (r.parentPhone && r.parentPhone.trim() && !existing.parentPhone) { existing.parentPhone = r.parentPhone.trim(); needsSave = true; }
+                  if (r.parentName && r.parentName.trim() && !existing.parentName) { existing.parentName = r.parentName.trim(); needsSave = true; }
+                  if (r.parentTg && r.parentTg.trim() && !existing.parentTg) { existing.parentTg = r.parentTg.trim(); needsSave = true; }
+                }
+              }
+            });
+          }
+        });
+      }
+    } catch {}
+  }
+
+  // Self-heal: merge any protected contacts backup
+  try {
+    const rawBackup = localStorage.getItem("ha_protected_contacts_backup");
+    if (rawBackup) {
+      const backupMap = JSON.parse(rawBackup);
+      if (backupMap && typeof backupMap === "object") {
+        list.forEach((s) => {
+          const b = backupMap[s.name.trim().toLowerCase()];
+          if (b) {
+            if (b.phone && b.phone.trim() && !s.phone) { s.phone = b.phone.trim(); needsSave = true; }
+            if (b.parentPhone && b.parentPhone.trim() && !s.parentPhone) { s.parentPhone = b.parentPhone.trim(); needsSave = true; }
+            if (b.parentName && b.parentName.trim() && !s.parentName) { s.parentName = b.parentName.trim(); needsSave = true; }
+            if (b.parentTg && b.parentTg.trim() && !s.parentTg) { s.parentTg = b.parentTg.trim(); needsSave = true; }
+            if (b.notes && b.notes.trim() && !s.notes) { s.notes = b.notes.trim(); needsSave = true; }
+          }
+        });
+      }
+    }
+  } catch {}
+
+  // Auto-migrate: ensure every student has a valid 6-digit PIN and groups
+  list.forEach((s) => {
+    if (!s.pin || !/^\d{6}$/.test(s.pin)) {
+      const defPin = getStudentDefaultPin(s.name);
+      s.pin = defPin;
+      s.password = s.pin;
       needsSave = true;
     }
-
-    if (needsSave) {
-      localStorage.setItem("ha_all_students", JSON.stringify(filtered));
+    if (!s.groups || s.groups.length === 0) {
+      s.groups = [s.group || "Umumiy"];
+      needsSave = true;
     }
-    return filtered;
-  } catch {
-    return [];
+  });
+
+  // Self-healing migration: restore any students incorrectly marked frozen by runaway loop
+  const freezeBugRepaired = localStorage.getItem("ha_freeze_repaired_v3");
+  if (!freezeBugRepaired) {
+    list.forEach((s) => {
+      if ((s.group || "").toLowerCase().trim() !== "arxiv") {
+        s.status = "active";
+      }
+    });
+    localStorage.setItem("ha_freeze_repaired_v3", "true");
+    needsSave = true;
   }
+
+  if (needsSave && list.length > 0) {
+    localStorage.setItem("ha_all_students", JSON.stringify(list));
+  }
+  return list;
 }
 
 // All Registered Students Database Registry (Master CRM list)
@@ -424,11 +636,16 @@ function initMasterStudentsListener() {
       const existing = allStudentsRegistry.value.find(
         (s) => s.name.toLowerCase().trim() === cleanName
       );
+      const rawGroups = Array.isArray(data.groups) && data.groups.length > 0
+        ? data.groups
+        : (data.group ? [data.group] : ["Umumiy"]);
+
       if (!existing) {
         allStudentsRegistry.value.push({
           id: data.id || "std-" + Date.now(),
           name: data.name,
-          group: data.group || "Umumiy",
+          group: data.group || rawGroups[0] || "Umumiy",
+          groups: rawGroups,
           status: data.status || "active",
           phone: data.phone || "",
           parentName: data.parentName || "",
@@ -453,6 +670,57 @@ function initMasterStudentsListener() {
         });
         allStudentsRegistry.value = [...allStudentsRegistry.value];
         localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+      } else {
+        // Real-time hydrate missing cloud fields
+        let changed = false;
+        if (data.phone && data.phone.trim() && !existing.phone) { existing.phone = data.phone.trim(); changed = true; }
+        if (data.parentName && data.parentName.trim() && !existing.parentName) { existing.parentName = data.parentName.trim(); changed = true; }
+        if (data.parentPhone && data.parentPhone.trim() && !existing.parentPhone) { existing.parentPhone = data.parentPhone.trim(); changed = true; }
+        if (data.parentTg && data.parentTg.trim() && !existing.parentTg) { existing.parentTg = data.parentTg.trim(); changed = true; }
+        if (data.notes && data.notes.trim() && !existing.notes) { existing.notes = data.notes.trim(); changed = true; }
+        if (Array.isArray(data.groups) && data.groups.length > 0) {
+          existing.groups = data.groups;
+          changed = true;
+        }
+        if (changed) {
+          allStudentsRegistry.value = [...allStudentsRegistry.value];
+          localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+          updateProtectedContactsBackup();
+        }
+      }
+    });
+
+    onChildChanged(msRef, (snap: any) => {
+      const data = snap.val();
+      if (!data || !data.name) return;
+      const cleanName = data.name.toLowerCase().trim();
+      const existingIdx = allStudentsRegistry.value.findIndex(
+        (s) => s.name.toLowerCase().trim() === cleanName
+      );
+      if (existingIdx !== -1) {
+        const rawGroups = Array.isArray(data.groups) && data.groups.length > 0
+          ? data.groups
+          : (data.group ? [data.group] : ["Umumiy"]);
+        allStudentsRegistry.value[existingIdx] = {
+          ...allStudentsRegistry.value[existingIdx],
+          phone: (data.phone && data.phone.trim()) ? data.phone.trim() : (allStudentsRegistry.value[existingIdx].phone || ""),
+          parentName: (data.parentName && data.parentName.trim()) ? data.parentName.trim() : (allStudentsRegistry.value[existingIdx].parentName || ""),
+          parentPhone: (data.parentPhone && data.parentPhone.trim()) ? data.parentPhone.trim() : (allStudentsRegistry.value[existingIdx].parentPhone || ""),
+          parentTg: (data.parentTg && data.parentTg.trim()) ? data.parentTg.trim() : (allStudentsRegistry.value[existingIdx].parentTg || ""),
+          group: data.group || rawGroups[0] || allStudentsRegistry.value[existingIdx].group,
+          groups: rawGroups,
+          status: data.status || allStudentsRegistry.value[existingIdx].status,
+          pin: data.pin || allStudentsRegistry.value[existingIdx].pin,
+          password: data.password || allStudentsRegistry.value[existingIdx].password,
+          pattern: data.pattern !== undefined ? data.pattern : allStudentsRegistry.value[existingIdx].pattern,
+          notes: (data.notes && data.notes.trim()) ? data.notes.trim() : (allStudentsRegistry.value[existingIdx].notes || ""),
+          coins: data.coins !== undefined ? data.coins : allStudentsRegistry.value[existingIdx].coins,
+          avgAccuracy: data.avgAccuracy !== undefined ? data.avgAccuracy : allStudentsRegistry.value[existingIdx].avgAccuracy,
+          totalTests: data.totalTests !== undefined ? data.totalTests : allStudentsRegistry.value[existingIdx].totalTests,
+        };
+        allStudentsRegistry.value = [...allStudentsRegistry.value];
+        localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+        updateProtectedContactsBackup();
       }
     });
 
@@ -470,6 +738,488 @@ function initMasterStudentsListener() {
   }
 }
 initMasterStudentsListener();
+
+export function updateProtectedContactsBackup() {
+  if (typeof window === "undefined") return;
+  try {
+    const contactsMap: Record<string, { phone?: string; parentPhone?: string; parentName?: string; parentTg?: string; notes?: string }> = {};
+    allStudentsRegistry.value.forEach((s) => {
+      if (s.phone || s.parentPhone || s.parentName || s.parentTg || s.notes) {
+        contactsMap[s.name.trim().toLowerCase()] = {
+          phone: s.phone || "",
+          parentPhone: s.parentPhone || "",
+          parentName: s.parentName || "",
+          parentTg: s.parentTg || "",
+          notes: s.notes || "",
+        };
+      }
+    });
+    if (Object.keys(contactsMap).length > 0) {
+      localStorage.setItem("ha_protected_contacts_backup", JSON.stringify(contactsMap));
+    }
+  } catch (e) {
+    console.warn("updateProtectedContactsBackup error:", e);
+  }
+}
+
+export function deepRecoverAllDataFromLocalStorage(): {
+  scannedKeysCount: number;
+  recoveredContactsCount: number;
+  totalStudentsWithPhone: number;
+  details: string[];
+} {
+  if (typeof window === "undefined") {
+    return { scannedKeysCount: 0, recoveredContactsCount: 0, totalStudentsWithPhone: 0, details: [] };
+  }
+
+  const contactsMap: Record<string, {
+    phone?: string;
+    parentPhone?: string;
+    parentName?: string;
+    parentTg?: string;
+    notes?: string;
+  }> = {};
+
+  const details: string[] = [];
+  let scannedKeysCount = 0;
+  const sampleNames = new Set(["ali valiyev", "madina karimova", "jasur rahimov", "zuhra yusupova", "bekzod rustamov"]);
+
+  const visited = new WeakSet();
+  function processStudentObject(obj: any, sourceKey: string, depth = 0) {
+    if (!obj || typeof obj !== "object" || depth > 6) return;
+    if (visited.has(obj)) return;
+    visited.add(obj);
+
+    if (obj.name && typeof obj.name === "string" && obj.name.trim().length >= 2) {
+      const cleanName = obj.name.trim().toLowerCase();
+      if (!sampleNames.has(cleanName)) {
+        if (!contactsMap[cleanName]) {
+          contactsMap[cleanName] = {};
+        }
+
+        const rec = contactsMap[cleanName];
+        if (obj.phone && typeof obj.phone === "string" && obj.phone.trim() && !rec.phone) {
+          rec.phone = obj.phone.trim();
+          details.push(`${obj.name}: tel (${obj.phone.trim()}) [${sourceKey}]`);
+        }
+        if (obj.parentPhone && typeof obj.parentPhone === "string" && obj.parentPhone.trim() && !rec.parentPhone) {
+          rec.parentPhone = obj.parentPhone.trim();
+        }
+        if (obj.parentName && typeof obj.parentName === "string" && obj.parentName.trim() && !rec.parentName) {
+          rec.parentName = obj.parentName.trim();
+        }
+        if (obj.parentTg && typeof obj.parentTg === "string" && obj.parentTg.trim() && !rec.parentTg) {
+          rec.parentTg = obj.parentTg.trim();
+        }
+        if (obj.notes && typeof obj.notes === "string" && obj.notes.trim() && !rec.notes) {
+          rec.notes = obj.notes.trim();
+        }
+      }
+    }
+
+    if (Array.isArray(obj)) {
+      obj.forEach((item) => processStudentObject(item, sourceKey, depth + 1));
+    } else {
+      for (const k of Object.keys(obj)) {
+        if (obj[k] && typeof obj[k] === "object") {
+          processStudentObject(obj[k], sourceKey, depth + 1);
+        }
+      }
+    }
+  }
+
+  // 1. Scan all localStorage keys
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      scannedKeysCount++;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      try {
+        const parsed = JSON.parse(raw);
+        processStudentObject(parsed, key);
+      } catch {
+        // Fallback: If raw text contains phone numbers and student names
+        const regex = /"name"\s*:\s*"([^"]+)"[\s\S]{1,300}?"(?:phone|parentPhone)"\s*:\s*"([^"]+)"/g;
+        let match;
+        while ((match = regex.exec(raw)) !== null) {
+          const n = match[1]?.trim().toLowerCase();
+          const p = match[2]?.trim();
+          if (n && p && p.length >= 7) {
+            if (!contactsMap[n]) contactsMap[n] = {};
+            if (!contactsMap[n].phone) contactsMap[n].phone = p;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("deepRecoverAllDataFromLocalStorage scan error:", e);
+  }
+
+  // 2. Merge recovered contacts into allStudentsRegistry
+  let recoveredContactsCount = 0;
+  allStudentsRegistry.value.forEach((st) => {
+    const cleanName = st.name.trim().toLowerCase();
+    const found = contactsMap[cleanName];
+    if (found) {
+      let changed = false;
+      if (found.phone && !st.phone) {
+        st.phone = found.phone;
+        changed = true;
+      }
+      if (found.parentPhone && !st.parentPhone) {
+        st.parentPhone = found.parentPhone;
+        changed = true;
+      }
+      if (found.parentName && !st.parentName) {
+        st.parentName = found.parentName;
+        changed = true;
+      }
+      if (found.parentTg && !st.parentTg) {
+        st.parentTg = found.parentTg;
+        changed = true;
+      }
+      if (found.notes && !st.notes) {
+        st.notes = found.notes;
+        changed = true;
+      }
+
+      if (changed) {
+        recoveredContactsCount++;
+        syncStudentToCloud(st);
+      }
+    }
+  });
+
+  // Also sync to active session students
+  students.value.forEach((st) => {
+    const cleanName = st.name.trim().toLowerCase();
+    const found = contactsMap[cleanName];
+    if (found) {
+      if (found.phone && !st.phone) st.phone = found.phone;
+      if (found.parentPhone && !st.parentPhone) st.parentPhone = found.parentPhone;
+    }
+  });
+
+  if (recoveredContactsCount > 0) {
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    localStorage.setItem("st", JSON.stringify(students.value));
+  }
+
+  updateProtectedContactsBackup();
+
+  const totalStudentsWithPhone = allStudentsRegistry.value.filter((s) => !!s.phone).length;
+
+  return {
+    scannedKeysCount,
+    recoveredContactsCount,
+    totalStudentsWithPhone,
+    details,
+  };
+}
+
+export function bulkImportContacts(entries: Array<{ name: string; phone?: string; parentPhone?: string; parentName?: string; parentTg?: string; notes?: string }>): number {
+  let updatedCount = 0;
+  entries.forEach((entry) => {
+    if (!entry.name || !entry.name.trim()) return;
+    const clean = entry.name.trim().toLowerCase();
+    const target = allStudentsRegistry.value.find((s) => s.name.trim().toLowerCase() === clean);
+    if (target) {
+      let changed = false;
+      if (entry.phone && entry.phone.trim()) { target.phone = entry.phone.trim(); changed = true; }
+      if (entry.parentPhone && entry.parentPhone.trim()) { target.parentPhone = entry.parentPhone.trim(); changed = true; }
+      if (entry.parentName && entry.parentName.trim()) { target.parentName = entry.parentName.trim(); changed = true; }
+      if (entry.parentTg && entry.parentTg.trim()) { target.parentTg = entry.parentTg.trim(); changed = true; }
+      if (entry.notes && entry.notes.trim()) { target.notes = entry.notes.trim(); changed = true; }
+      if (changed) {
+        updatedCount++;
+        syncStudentToCloud(target);
+      }
+    }
+  });
+
+  if (updatedCount > 0) {
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    updateProtectedContactsBackup();
+  }
+  return updatedCount;
+}
+
+// Auto-run deep recovery on store load to restore any orphaned localStorage contacts
+setTimeout(() => {
+  deepRecoverAllDataFromLocalStorage();
+}, 100);
+
+export async function restoreAndFindAllStudents(): Promise<{
+  total: number;
+  newlyRestored: number;
+  sources: { local: number; sessions: number; attendance: number; firebase: number; sheets: number };
+}> {
+  const sources = { local: 0, sessions: 0, attendance: 0, firebase: 0, sheets: 0 };
+  let newlyRestored = 0;
+  const sampleNames = new Set(["Ali Valiyev", "Madina Karimova", "Jasur Rahimov", "Zuhra Yusupova", "Bekzod Rustamov"]);
+  const sampleIds = new Set(["std-1", "std-2", "std-3", "std-4", "std-5"]);
+
+  const isValidName = (name?: string): boolean => {
+    if (!name) return false;
+    const clean = name.trim();
+    if (clean.length < 2) return false;
+    if (sampleNames.has(clean)) return false;
+    return true;
+  };
+
+  const getOrAddStudent = (name: string, defaultGroup: string = "Umumiy"): Student => {
+    const clean = name.trim();
+    const key = clean.toLowerCase();
+    let st = allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === key);
+    const cleanGrp = defaultGroup && defaultGroup.trim() ? defaultGroup.trim() : "Umumiy";
+
+    if (!st) {
+      const pin = getStudentDefaultPin(clean);
+      st = {
+        id: "restored-" + Math.random().toString(36).substring(2, 9),
+        name: clean,
+        group: cleanGrp,
+        groups: [cleanGrp],
+        status: "active",
+        phone: "",
+        parentName: "",
+        parentPhone: "",
+        parentTg: "",
+        login: clean.toLowerCase().replace(/\s+/g, "_"),
+        pin,
+        password: pin,
+        pattern: "",
+        notes: "",
+        joinedDate: new Date().toISOString().split("T")[0],
+        correct: 0,
+        total: 0,
+        sess: 0,
+        strikes: 0,
+        penalties: 0,
+        bonus: 0,
+        coins: 0,
+        totalTests: 0,
+        avgAccuracy: 0,
+        attendanceStats: { present: 0, excused: 0, unexcused: 0 },
+      };
+      allStudentsRegistry.value.push(st);
+      newlyRestored++;
+    } else {
+      if (cleanGrp && cleanGrp !== "Umumiy" && (!st.group || st.group === "Umumiy")) {
+        st.group = cleanGrp;
+      }
+      if (cleanGrp) {
+        if (!Array.isArray(st.groups)) st.groups = st.group ? [st.group] : [];
+        if (!st.groups.some((g) => g.toLowerCase() === cleanGrp.toLowerCase())) {
+          st.groups.push(cleanGrp);
+        }
+      }
+    }
+    return st;
+  };
+
+  // 1. Scan localStorage["st"]
+  try {
+    const rawSt = localStorage.getItem("st");
+    if (rawSt) {
+      const list = JSON.parse(rawSt);
+      if (Array.isArray(list)) {
+        list.forEach((s: any) => {
+          if (isValidName(s?.name) && !sampleIds.has(s?.id)) {
+            const st = getOrAddStudent(s.name, s.group || "Umumiy");
+            if (s.phone && !st.phone) st.phone = s.phone;
+            if (s.parentName && !st.parentName) st.parentName = s.parentName;
+            if (s.parentPhone && !st.parentPhone) st.parentPhone = s.parentPhone;
+            if (s.parentTg && !st.parentTg) st.parentTg = s.parentTg;
+            if (s.coins && !st.coins) st.coins = s.coins;
+            if (s.strikes && !st.strikes) st.strikes = s.strikes;
+            if (s.penalties && !st.penalties) st.penalties = s.penalties;
+            if (s.totalTests && !st.totalTests) st.totalTests = s.totalTests;
+            if (s.avgAccuracy && !st.avgAccuracy) st.avgAccuracy = s.avgAccuracy;
+            if (Array.isArray(s.groups)) {
+              st.groups = Array.from(new Set([...(st.groups || []), ...s.groups]));
+            }
+            sources.local++;
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("Restore scan st error:", e);
+  }
+
+  // 2. Scan localStorage["ha_lesson_sessions"]
+  try {
+    const rawSessions = localStorage.getItem("ha_lesson_sessions");
+    if (rawSessions) {
+      const sessions = JSON.parse(rawSessions);
+      if (Array.isArray(sessions)) {
+        sessions.forEach((sess: any) => {
+          const sessGroup = sess.group || "Umumiy";
+          const results = sess.studentResults || sess.results || [];
+          if (Array.isArray(results)) {
+            results.forEach((r: any) => {
+              if (isValidName(r?.name)) {
+                getOrAddStudent(r.name, sessGroup);
+                sources.sessions++;
+              }
+            });
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("Restore scan sessions error:", e);
+  }
+
+  // 3. Scan localStorage["ha_attendance_logs"] and "ha_local_attendance_logs"
+  try {
+    ["ha_attendance_logs", "ha_local_attendance_logs"].forEach((key) => {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const logs = JSON.parse(raw);
+        if (Array.isArray(logs)) {
+          logs.forEach((item: any) => {
+            if (isValidName(item?.name)) {
+              getOrAddStudent(item.name, item.group || "Umumiy");
+              sources.attendance++;
+            }
+          });
+        }
+      }
+    });
+  } catch (e) {
+    console.warn("Restore scan attendance error:", e);
+  }
+
+  // 4. Scan Firebase "master_students"
+  try {
+    const snap = await fbGet(fbRef(db, "master_students"));
+    if (snap && snap.exists()) {
+      const cloudData = snap.val();
+      Object.keys(cloudData).forEach((k) => {
+        const data = cloudData[k];
+        if (isValidName(data?.name)) {
+          const st = getOrAddStudent(data.name, data.group || "Umumiy");
+          if (data.phone && !st.phone) st.phone = data.phone;
+          if (data.parentName && !st.parentName) st.parentName = data.parentName;
+          if (data.parentPhone && !st.parentPhone) st.parentPhone = data.parentPhone;
+          if (data.parentTg && !st.parentTg) st.parentTg = data.parentTg;
+          if (data.pin) { st.pin = data.pin; st.password = data.pin; }
+          if (data.pattern) st.pattern = data.pattern;
+          if (data.notes && !st.notes) st.notes = data.notes;
+          if (data.status) st.status = data.status;
+          if (data.coins) st.coins = data.coins;
+          if (data.totalTests) st.totalTests = data.totalTests;
+          if (data.avgAccuracy) st.avgAccuracy = data.avgAccuracy;
+          if (Array.isArray(data.groups)) {
+            st.groups = Array.from(new Set([...(st.groups || []), ...data.groups]));
+          }
+          sources.firebase++;
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("Restore scan firebase master_students error:", e);
+  }
+
+  // 5. Scan Firebase "student_groups"
+  try {
+    const snapGroups = await fbGet(fbRef(db, "student_groups"));
+    if (snapGroups && snapGroups.exists()) {
+      const gData = snapGroups.val();
+      Object.keys(gData).forEach((k) => {
+        const item = gData[k];
+        if (isValidName(item?.studentName) && item?.groupName) {
+          const st = getOrAddStudent(item.studentName, item.groupName);
+          if (!st.groups) st.groups = [item.groupName];
+          else if (!st.groups.includes(item.groupName)) st.groups.push(item.groupName);
+          sources.firebase++;
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("Restore scan firebase student_groups error:", e);
+  }
+
+  // 6. Scan Firebase "lesson_sessions"
+  try {
+    const snapSessions = await fbGet(fbRef(db, "lesson_sessions"));
+    if (snapSessions && snapSessions.exists()) {
+      const sData = snapSessions.val();
+      Object.keys(sData).forEach((k) => {
+        const sess = sData[k];
+        const sessGroup = sess.group || "Umumiy";
+        const results = sess.studentResults || sess.results || [];
+        if (Array.isArray(results)) {
+          results.forEach((r: any) => {
+            if (isValidName(r?.name)) {
+              getOrAddStudent(r.name, sessGroup);
+              sources.firebase++;
+            }
+          });
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("Restore scan firebase lesson_sessions error:", e);
+  }
+
+  // 7. Scan Google Sheets API
+  try {
+    const res = await callApi("get_student_list", {}, { forceRefresh: true });
+    if (res && res.status === "success" && res.groups) {
+      for (const groupName in res.groups) {
+        if (groupName.toLowerCase() === "arxiv") continue;
+        const members: string[] = res.groups[groupName] || [];
+        members.forEach((name) => {
+          if (isValidName(name)) {
+            const st = getOrAddStudent(name, groupName);
+            if (!st.groups) st.groups = [groupName];
+            else if (!st.groups.includes(groupName)) st.groups.push(groupName);
+            sources.sheets++;
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("Restore scan sheets error:", e);
+  }
+
+  // Auto-heal fields for all students
+  allStudentsRegistry.value.forEach((s) => {
+    if (!s.pin || !/^\d{6}$/.test(s.pin)) {
+      s.pin = getStudentDefaultPin(s.name);
+      s.password = s.pin;
+    }
+    if (!s.groups || s.groups.length === 0) {
+      s.groups = [s.group || "Umumiy"];
+    }
+    if (!s.group) {
+      s.group = s.groups[0] || "Umumiy";
+    }
+  });
+
+  // Save to localStorage
+  allStudentsRegistry.value = [...allStudentsRegistry.value];
+  localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+  // Sync restored students to Firebase cloud
+  allStudentsRegistry.value.forEach((s) => {
+    syncStudentToCloud(s);
+  });
+
+  return {
+    total: allStudentsRegistry.value.length,
+    newlyRestored,
+    sources,
+  };
+}
 
 function loadInitialReminders(): TeacherReminder[] {
   const saved = localStorage.getItem("ha_reminders");
@@ -928,42 +1678,66 @@ export function useTeacherStore() {
         s.name.toLowerCase() === trimmedName.toLowerCase()
     );
 
+    const groups = Array.isArray(studentData.groups) && studentData.groups.length > 0
+      ? Array.from(new Set(studentData.groups.map((g) => g.trim()).filter(Boolean)))
+      : (studentData.group && studentData.group.trim() ? [studentData.group.trim()] : ["Umumiy"]);
+    const primaryGroup = studentData.group?.trim() || groups[0] || "Umumiy";
+
+    const existingStudent = existingIdx !== -1 ? allStudentsRegistry.value[existingIdx] : null;
+    const phone = (studentData.phone && studentData.phone.trim())
+      ? studentData.phone.trim()
+      : (studentData.phone === "" && (studentData as any)._explicitClear ? "" : (existingStudent?.phone || ""));
+    const parentName = (studentData.parentName && studentData.parentName.trim())
+      ? studentData.parentName.trim()
+      : (existingStudent?.parentName || "");
+    const parentPhone = (studentData.parentPhone && studentData.parentPhone.trim())
+      ? studentData.parentPhone.trim()
+      : (existingStudent?.parentPhone || "");
+    const parentTg = (studentData.parentTg && studentData.parentTg.trim())
+      ? studentData.parentTg.trim()
+      : (existingStudent?.parentTg || "");
+    const notes = (studentData.notes && studentData.notes.trim())
+      ? studentData.notes.trim()
+      : (existingStudent?.notes || "");
+
     const fullData: Student = {
-      id: studentData.id || "std-" + Date.now(),
+      id: studentData.id || existingStudent?.id || "std-" + Date.now(),
       name: trimmedName,
-      group: studentData.group || "Umumiy",
-      status: studentData.status || "active",
-      phone: studentData.phone || "",
-      parentName: studentData.parentName || "",
-      parentPhone: studentData.parentPhone || "",
-      parentTg: studentData.parentTg || "",
+      group: primaryGroup,
+      groups: groups,
+      status: studentData.status || existingStudent?.status || "active",
+      phone,
+      parentName,
+      parentPhone,
+      parentTg,
       login:
-        studentData.login || trimmedName.toLowerCase().replace(/\s+/g, "_"),
+        studentData.login || existingStudent?.login || trimmedName.toLowerCase().replace(/\s+/g, "_"),
       pin:
         studentData.pin && /^\d{6}$/.test(studentData.pin)
           ? studentData.pin
-          : (studentData.password && /^\d{6}$/.test(studentData.password)
-              ? studentData.password
+          : (existingStudent?.pin && /^\d{6}$/.test(existingStudent.pin)
+              ? existingStudent.pin
               : generateUnique6DigitPin(trimmedName)),
       password:
         studentData.password ||
         studentData.pin ||
+        existingStudent?.password ||
         generateUnique6DigitPin(trimmedName),
-      pattern: studentData.pattern || "",
-      notes: studentData.notes || "",
+      pattern: studentData.pattern || existingStudent?.pattern || "",
+      notes,
       joinedDate:
-        studentData.joinedDate || new Date().toISOString().split("T")[0],
-      correct: studentData.correct || 0,
-      total: studentData.total || 0,
-      sess: 0,
-      strikes: studentData.strikes || 0,
-      penalties: studentData.penalties || 0,
-      bonus: studentData.bonus || 0,
-      coins: studentData.coins || 0,
-      totalTests: studentData.totalTests || 0,
-      avgAccuracy: studentData.avgAccuracy || 0,
+        studentData.joinedDate || existingStudent?.joinedDate || new Date().toISOString().split("T")[0],
+      correct: studentData.correct ?? existingStudent?.correct ?? 0,
+      total: studentData.total ?? existingStudent?.total ?? 0,
+      sess: studentData.sess ?? existingStudent?.sess ?? 0,
+      strikes: studentData.strikes ?? existingStudent?.strikes ?? 0,
+      penalties: studentData.penalties ?? existingStudent?.penalties ?? 0,
+      bonus: studentData.bonus ?? existingStudent?.bonus ?? 0,
+      coins: studentData.coins ?? existingStudent?.coins ?? 0,
+      totalTests: studentData.totalTests ?? existingStudent?.totalTests ?? 0,
+      avgAccuracy: studentData.avgAccuracy ?? existingStudent?.avgAccuracy ?? 0,
       attendanceStats:
-        studentData.attendanceStats || { present: 0, excused: 0, unexcused: 0 },
+        studentData.attendanceStats || existingStudent?.attendanceStats || { present: 0, excused: 0, unexcused: 0 },
     };
 
     if (existingIdx !== -1) {
@@ -978,6 +1752,7 @@ export function useTeacherStore() {
     // Force Vue reactivity update & persist to localStorage
     allStudentsRegistry.value = [...allStudentsRegistry.value];
     localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    updateProtectedContactsBackup();
 
     // Realtime Cloud synchronization for student master record
     syncStudentToCloud(fullData);
@@ -1058,7 +1833,51 @@ export function useTeacherStore() {
     allStudentsRegistry.value = [...allStudentsRegistry.value];
   }
 
-  function transferStudentGroup(studentName: string, newGroup: string) {
+  function addStudentToGroup(studentName: string, newGroup: string) {
+    const cleanName = studentName.toLowerCase().trim();
+    const trimmedGroup = newGroup.trim();
+    if (!trimmedGroup || !cleanName) return;
+
+    const target = allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === cleanName
+    );
+    if (target) {
+      const currentGroups = getStudentGroups(target);
+      if (!currentGroups.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
+        currentGroups.push(trimmedGroup);
+        target.groups = currentGroups;
+        if (!target.group || target.group === "Umumiy") {
+          target.group = trimmedGroup;
+        }
+        allStudentsRegistry.value = [...allStudentsRegistry.value];
+        localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+        syncStudentToCloud(target);
+        syncGroupTransferToCloud(target.name, trimmedGroup);
+      }
+    }
+  }
+
+  function removeStudentFromGroup(studentName: string, groupToRemove: string) {
+    const cleanName = studentName.toLowerCase().trim();
+    const trimmedGroup = groupToRemove.trim();
+    if (!trimmedGroup || !cleanName) return;
+
+    const target = allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === cleanName
+    );
+    if (target) {
+      const currentGroups = getStudentGroups(target).filter(
+        (g) => g.toLowerCase() !== trimmedGroup.toLowerCase()
+      );
+      target.groups = currentGroups.length > 0 ? currentGroups : ["Umumiy"];
+      target.group = target.groups[0] || "Umumiy";
+      allStudentsRegistry.value = [...allStudentsRegistry.value];
+      localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+      syncStudentToCloud(target);
+    }
+  }
+
+  function transferStudentGroup(studentName: string, newGroup: string, addToExisting = false) {
     const cleanName = studentName.toLowerCase().trim();
     const trimmedGroup = newGroup.trim();
     if (!trimmedGroup || !cleanName) return;
@@ -1068,7 +1887,17 @@ export function useTeacherStore() {
       (s) => s.name.toLowerCase().trim() === cleanName
     );
     if (target) {
-      target.group = trimmedGroup;
+      if (addToExisting) {
+        const cur = getStudentGroups(target);
+        if (!cur.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
+          cur.push(trimmedGroup);
+          target.groups = cur;
+        }
+      } else {
+        target.group = trimmedGroup;
+        target.groups = [trimmedGroup];
+      }
+
       if (isNewGroupFrozen) {
         target.status = "frozen";
         syncFreezeToCloud(target.name, true, trimmedGroup);
@@ -1098,7 +1927,7 @@ export function useTeacherStore() {
     syncGroupTransferToCloud(target?.name || studentName, trimmedGroup);
   }
 
-  function transferMultipleStudentsGroup(studentNames: string[], newGroup: string) {
+  function transferMultipleStudentsGroup(studentNames: string[], newGroup: string, addToExisting = false) {
     const trimmedGroup = newGroup.trim();
     if (!trimmedGroup || studentNames.length === 0) return;
     const isNewGroupFrozen = isGroupFrozen(trimmedGroup);
@@ -1109,7 +1938,17 @@ export function useTeacherStore() {
         (s) => s.name.toLowerCase().trim() === cleanName
       );
       if (target) {
-        target.group = trimmedGroup;
+        if (addToExisting) {
+          const cur = getStudentGroups(target);
+          if (!cur.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
+            cur.push(trimmedGroup);
+            target.groups = cur;
+          }
+        } else {
+          target.group = trimmedGroup;
+          target.groups = [trimmedGroup];
+        }
+
         if (isNewGroupFrozen) {
           target.status = "frozen";
           syncFreezeToCloud(target.name, true, trimmedGroup);
@@ -1720,6 +2559,10 @@ export function useTeacherStore() {
     toggleFreezeGroup,
     transferStudentGroup,
     transferMultipleStudentsGroup,
+    addStudentToGroup,
+    removeStudentFromGroup,
+    getStudentGroups,
+    isStudentInGroup,
     deleteStudentPermanently,
     addReminder,
     toggleCompleteReminder,
@@ -1751,5 +2594,12 @@ export function useTeacherStore() {
     syncAllExistingLessonSessionsToCloud,
     syncStudentToCloud,
     deleteStudentFromCloud,
+    restoreAndFindAllStudents,
+    selectedDoskaStudent,
+    requestedTeacherSubview,
+    openStudentDoskaGlobal,
+    updateProtectedContactsBackup,
+    deepRecoverAllDataFromLocalStorage,
+    bulkImportContacts,
   };
 }

@@ -80,7 +80,11 @@
         <!-- Student Big Name with Smooth Transition -->
         <Transition name="slide-name" mode="out-in">
           <div :key="currentStudent.name" class="py-2">
-            <h2 class="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-sm line-clamp-2">
+            <h2
+              @click="teacherStore.openStudentDoskaGlobal(currentStudent.name)"
+              class="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-sm line-clamp-2 cursor-pointer hover:text-indigo-400 hover:underline transition"
+              title="O'quvchining shaxsiy doskasini ochish"
+            >
               {{ currentStudent.name }}
             </h2>
 

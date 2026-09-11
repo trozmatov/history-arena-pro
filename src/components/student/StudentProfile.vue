@@ -69,6 +69,17 @@
         <div class="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 px-3.5 py-1 text-xs font-black text-indigo-300 mt-1.5 shadow-sm">
           <span>Daraja:</span> <span>{{ studentStore.studentLevel.value }}</span>
         </div>
+
+        <!-- Enrolled Groups Badges -->
+        <div class="flex flex-wrap items-center justify-center gap-1.5 mt-2">
+          <span
+            v-for="grp in myEnrolledGroups"
+            :key="grp"
+            class="inline-flex items-center gap-1 rounded-full bg-white/10 border border-white/15 px-3 py-0.5 text-xs font-bold text-slate-200 shadow-sm"
+          >
+            <span>📚</span> <span>{{ grp }}</span>
+          </span>
+        </div>
       </div>
 
       <!-- Level Progression Bar -->
@@ -607,6 +618,7 @@ const monthKeys = computed(() => {
 });
 
 const monthData = computed(() => studentStore.activeMonthData.value);
+const myEnrolledGroups = computed(() => studentStore.getStudentEnrolledGroups(studentStore.studentName.value));
 
 const levelProgress = computed(() => {
   const tests = studentStore.historyData.value.length;

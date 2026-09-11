@@ -87,7 +87,13 @@
             >
               {{ idx + 1 }}
             </span>
-            <span class="font-bold text-white text-sm">{{ item.name }}</span>
+            <span
+              @click="teacherStore.openStudentDoskaGlobal(item.name)"
+              class="font-bold text-white text-sm cursor-pointer hover:text-indigo-400 hover:underline transition"
+              title="O'quvchining shaxsiy doskasini ochish"
+            >
+              {{ item.name }}
+            </span>
           </div>
 
           <div>

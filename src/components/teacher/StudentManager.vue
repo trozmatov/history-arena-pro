@@ -48,11 +48,45 @@
           <span>{{ syncingDb ? "Yuklanmoqda..." : "Bazadan Sinxronlash" }}</span>
         </button>
 
+        <!-- Excel Export Button -->
+        <button
+          type="button"
+          @click="exportStudentsToExcel()"
+          class="flex items-center gap-1.5 rounded-2xl border border-emerald-500/40 bg-emerald-600/20 px-3.5 py-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-600/30 active:scale-95 transition shadow-md"
+          title="Barcha yoki saralangan o'quvchilar ro'yxatini Excel (.xlsx) fayl qilib yuklab olish"
+        >
+          <span>📥</span>
+          <span>Excelga Yuklash</span>
+        </button>
+
+        <!-- Phone & Contact Recovery Button -->
+        <button
+          type="button"
+          @click="openPhoneRecoveryModal"
+          class="flex items-center gap-1.5 rounded-2xl border border-rose-500/40 bg-rose-600/20 px-3.5 py-2.5 text-xs font-bold text-rose-300 hover:bg-rose-600/30 active:scale-95 transition shadow-md"
+          title="Yo'qolgan telefon raqamlarini lokal xotiradan tiklash va yangilash"
+        >
+          <span>📱</span>
+          <span>Telefonlarni Tiklash</span>
+        </button>
+
+        <!-- Restore Previous Students Button -->
+        <button
+          type="button"
+          @click="triggerRestoreStudents"
+          :disabled="restoringStudents"
+          class="flex items-center gap-1.5 rounded-2xl border border-indigo-500/40 bg-indigo-600/20 px-3.5 py-2.5 text-xs font-bold text-indigo-300 hover:bg-indigo-600/30 active:scale-95 disabled:opacity-50 transition shadow-md"
+          title="Avval kiritilgan barcha o'quvchilarni lokal xotira, sessiyalar, Firebase va Google Sheets'dan qidirib tiklash"
+        >
+          <span :class="{ 'animate-spin': restoringStudents }">🔍</span>
+          <span>{{ restoringStudents ? "Qidirilmoqda..." : "Avvalgilarni Tiklash" }}</span>
+        </button>
+
         <!-- Store/Market Button -->
         <button
           type="button"
           @click="$emit('nav', 'market')"
-          class="flex items-center gap-1.5 rounded-2xl border border-emerald-500/30 bg-emerald-600/20 px-3.5 py-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-600/30 active:scale-95 transition shadow-md"
+          class="flex items-center gap-1.5 rounded-2xl border border-teal-500/30 bg-teal-600/20 px-3.5 py-2.5 text-xs font-bold text-teal-300 hover:bg-teal-600/30 active:scale-95 transition shadow-md"
           title="O'quvchilar do'koni va tangalar boshqaruvi"
         >
           <span>🛒</span>
@@ -328,6 +362,17 @@
           <span>🔄</span> <span>Guruhga ko'chirish ({{ selectedStudentNames.length }})</span>
         </button>
 
+        <!-- Batch Export Button if selected -->
+        <button
+          v-if="selectedStudentNames.length > 0"
+          type="button"
+          @click="exportSelectedStudentsToExcel"
+          class="rounded-2xl bg-emerald-500 px-3.5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-500/30 hover:bg-emerald-400 active:scale-95 transition flex items-center gap-1.5 animate-pulse"
+          title="Tanlangan o'quvchilarni Excel formatida yuklab olish"
+        >
+          <span>📥</span> <span>Tanlanganlarni yuklash ({{ selectedStudentNames.length }})</span>
+        </button>
+
         <!-- Group Filter -->
         <select
           v-model="selectedGroupFilter"
@@ -371,11 +416,11 @@
 
     <!-- 4. Students CRM Table / Grid -->
     <div class="rounded-3xl border border-white/10 bg-slate-900/80 p-5 shadow-2xl backdrop-blur-2xl space-y-4">
-      <div class="flex items-center justify-between">
-        <div class="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+        <div class="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 flex-wrap">
           <span>O'quvchilar Ro'yxati ({{ filteredStudents.length }})</span>
           <span v-if="filteredStudents.length > 0" class="text-slate-500">•</span>
-          <label v-if="filteredStudents.length > 0" class="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-400 hover:text-white">
+          <label v-if="filteredStudents.length > 0" class="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-300 hover:text-white bg-white/5 px-2.5 py-1 rounded-xl border border-white/10 transition">
             <input
               type="checkbox"
               :checked="isAllSelected"
@@ -386,15 +431,41 @@
           </label>
         </div>
 
-        <button
-          v-if="hasSampleStudents"
-          type="button"
-          @click="clearSampleStudents"
-          class="text-[11px] font-bold text-slate-400 hover:text-red-400 underline transition"
-          title="Boshlang'ich namuna tariqasida kiritilgan test o'quvchilarni tozalash"
-        >
-          🧹 Namunaviy o'quvchilarni tozalash
-        </button>
+        <!-- Export Buttons in List Header -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Download Selected -->
+          <button
+            v-if="selectedStudentNames.length > 0"
+            type="button"
+            @click="exportSelectedStudentsToExcel"
+            class="flex items-center gap-1.5 rounded-xl border border-emerald-500/50 bg-emerald-600/30 px-3 py-1.5 text-xs font-black text-emerald-300 hover:bg-emerald-600/40 active:scale-95 transition shadow-md animate-pulse"
+            title="Katakchalari belgilangan o'quvchilar ma'lumotlarini Excel (.xlsx) fayl qilib yuklab olish"
+          >
+            <span>📥</span>
+            <span>Belgilanganlarni yuklash ({{ selectedStudentNames.length }})</span>
+          </button>
+
+          <!-- Download All -->
+          <button
+            type="button"
+            @click="exportAllStudentsToExcel"
+            class="flex items-center gap-1.5 rounded-xl border border-blue-500/40 bg-blue-600/20 px-3 py-1.5 text-xs font-bold text-blue-300 hover:bg-blue-600/30 active:scale-95 transition shadow-sm"
+            title="Barcha o'quvchilar ma'lumotlarini Excel (.xlsx) fayl qilib yuklab olish"
+          >
+            <span>📥</span>
+            <span>Barchasini yuklash ({{ filteredStudents.length }})</span>
+          </button>
+
+          <button
+            v-if="hasSampleStudents"
+            type="button"
+            @click="clearSampleStudents"
+            class="text-[11px] font-bold text-slate-400 hover:text-red-400 underline transition ml-1"
+            title="Boshlang'ich namuna tariqasida kiritilgan test o'quvchilarni tozalash"
+          >
+            🧹 Namunaviy o'quvchilarni tozalash
+          </button>
+        </div>
       </div>
 
       <!-- Empty State -->
@@ -447,12 +518,14 @@
 
             <!-- Avatar -->
             <div
-              class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-black text-sm shadow-md"
+              @click="openStudentDetail(st)"
+              class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-black text-sm shadow-md cursor-pointer hover:scale-105 transition"
               :class="
                 st.status === 'frozen'
                   ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                   : 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-blue-500/25'
               "
+              title="Shaxsiy doskani ochish"
             >
               {{ st.status === 'frozen' ? '❄️' : st.name.charAt(0).toUpperCase() }}
             </div>
@@ -460,7 +533,13 @@
             <!-- Info text -->
             <div class="min-w-0 flex-1 space-y-0.5">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="font-black text-sm sm:text-base text-white truncate">{{ st.name }}</span>
+                <span
+                  @click="openStudentDetail(st)"
+                  class="font-black text-sm sm:text-base text-white truncate cursor-pointer hover:text-indigo-400 hover:underline transition"
+                  title="Shaxsiy doskasini ochish"
+                >
+                  {{ st.name }}
+                </span>
                 <span
                   class="rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-wider"
                   :class="
@@ -471,12 +550,18 @@
                 >
                   {{ st.status === 'frozen' ? '❄️ Muzlagan' : '🟢 Faol' }}
                 </span>
-                <span class="rounded-lg bg-white/10 border border-white/10 px-2 py-0.5 text-[10px] font-bold text-slate-300">
-                  {{ st.group || 'Guruhsiz' }}
-                </span>
+                <div class="inline-flex flex-wrap items-center gap-1">
+                  <span
+                    v-for="grp in getStudentGroupList(st)"
+                    :key="grp"
+                    class="rounded-lg bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-bold text-indigo-300"
+                  >
+                    📚 {{ grp }}
+                  </span>
+                </div>
               </div>
 
-              <!-- 6-digit PIN & Pattern bar -->
+              <!-- 6-digit PIN, Pattern & Contact bar -->
               <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono pt-0.5">
                 <span class="flex items-center gap-1.5 bg-black/50 px-2.5 py-0.5 rounded-lg border border-amber-500/30 text-amber-300">
                   <span class="text-slate-400 font-sans text-[11px]">🔢 PIN:</span>
@@ -499,9 +584,44 @@
                   <span>{{ st.pattern ? '🟢 Pattern faol' : '⏳ Pattern kutilmoqda' }}</span>
                 </span>
 
-                <span v-if="st.phone" class="text-slate-400 text-[11px] font-sans">
-                  📞 {{ st.phone }}
-                </span>
+                <!-- Quick Student Phone -->
+                <a
+                  v-if="st.phone"
+                  :href="'tel:' + st.phone"
+                  class="inline-flex items-center gap-1 text-slate-300 hover:text-indigo-300 text-[11px] font-sans bg-white/5 px-2 py-0.5 rounded-md border border-white/10 transition"
+                  title="O'quvchiga qo'ng'iroq"
+                >
+                  📱 {{ st.phone }}
+                </a>
+                <button
+                  v-else
+                  type="button"
+                  @click.stop="quickAddPhone(st)"
+                  class="inline-flex items-center gap-1 text-rose-300 hover:text-white text-[10px] font-sans bg-rose-500/15 px-2 py-0.5 rounded-md border border-rose-500/30 hover:bg-rose-500/30 transition shadow-sm"
+                  title="Telefon raqamini kiritish"
+                >
+                  <span>+ 📱 Tel kiritish</span>
+                </button>
+
+                <!-- Quick Parent Contact -->
+                <a
+                  v-if="st.parentPhone"
+                  :href="'tel:' + st.parentPhone"
+                  class="inline-flex items-center gap-1 text-emerald-300 hover:text-emerald-200 text-[11px] font-sans bg-emerald-500/15 px-2 py-0.5 rounded-md border border-emerald-500/30 transition"
+                  :title="(st.parentName ? st.parentName + ' ga' : 'Ota-onaga') + ' qo\'ng\'iroq qilish'"
+                >
+                  👨‍👩‍👧 {{ st.parentName ? st.parentName + ': ' : 'Ota-ona: ' }}{{ st.parentPhone }}
+                </a>
+
+                <a
+                  v-if="st.parentTg"
+                  :href="'https://t.me/' + st.parentTg.replace('@', '')"
+                  target="_blank"
+                  class="inline-flex items-center gap-1 text-sky-300 hover:text-sky-200 text-[11px] font-sans bg-sky-500/15 px-1.5 py-0.5 rounded-md border border-sky-500/30 transition"
+                  title="Ota-onasi Telegramiga yozish"
+                >
+                  💬 TG
+                </a>
               </div>
             </div>
           </div>
@@ -717,26 +837,79 @@
         </div>
 
         <!-- Group & Status -->
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-bold text-slate-300 mb-1">Guruhi *</label>
-            <input
-              v-model="formStudent.group"
-              type="text"
-              required
-              placeholder="Masalan: 7-A Guruh"
-              list="existing-groups-list"
-              class="w-full rounded-2xl border border-white/15 bg-black/40 px-4 py-3 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-500"
-            />
-            <datalist id="existing-groups-list">
-              <option v-for="g in groupsList" :key="g.name" :value="g.name" />
-            </datalist>
+        <!-- Groups & Status (Multi-group selector) -->
+        <div class="space-y-3 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-3.5">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-black uppercase tracking-wider text-indigo-300">
+              📚 O'quvchi Guruhlari (Multi-Group) *
+            </label>
+            <span class="text-[11px] text-indigo-300 font-bold bg-indigo-500/20 px-2 py-0.5 rounded-full">
+              {{ formStudentGroups.length }} ta guruhga a'zo
+            </span>
           </div>
-          <div>
+
+          <!-- Selected Groups Chips -->
+          <div v-if="formStudentGroups.length > 0" class="flex flex-wrap gap-1.5 p-2 rounded-xl bg-black/40 border border-white/10">
+            <span
+              v-for="(grp, gIdx) in formStudentGroups"
+              :key="grp"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition"
+              :class="gIdx === 0 ? 'bg-indigo-600 text-white shadow' : 'bg-white/10 text-slate-200 border border-white/10'"
+            >
+              <span>{{ grp }}</span>
+              <span v-if="gIdx === 0" class="text-[9px] bg-black/40 px-1.5 py-0.5 rounded uppercase font-black text-indigo-200">Asosiy</span>
+              <button
+                type="button"
+                @click="removeFormGroup(grp)"
+                class="hover:text-rose-400 ml-0.5 text-slate-400 p-0.5 transition"
+                title="Ushbu guruhni olib tashlash"
+              >
+                ✕
+              </button>
+            </span>
+          </div>
+
+          <!-- Quick pick chips from available groups -->
+          <div class="space-y-1">
+            <div class="text-[11px] text-slate-400">Mavjud guruhlardan tanlang (ustiga bosing):</div>
+            <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1 custom-scrollbar">
+              <button
+                v-for="g in groupsList"
+                :key="g.name"
+                type="button"
+                @click="toggleFormGroup(g.name)"
+                class="px-2.5 py-1 rounded-xl text-xs font-bold border transition active:scale-95"
+                :class="formStudentGroups.includes(g.name) ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200 shadow-sm' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'"
+              >
+                {{ formStudentGroups.includes(g.name) ? '✓ ' : '+ ' }}{{ g.name }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Add Custom Group input -->
+          <div class="flex gap-2 pt-1">
+            <input
+              v-model="formCustomGroupInput"
+              type="text"
+              placeholder="+ Yangi guruh nomini yozing..."
+              @keypress.enter.prevent="addCustomGroupToForm"
+              class="flex-1 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
+            />
+            <button
+              type="button"
+              @click="addCustomGroupToForm"
+              class="rounded-xl bg-indigo-600/30 border border-indigo-500/40 px-3 py-2 text-xs font-bold text-indigo-200 hover:bg-indigo-600/50 active:scale-95 transition"
+            >
+              + Qo'shish
+            </button>
+          </div>
+
+          <!-- Status Select -->
+          <div class="pt-1 border-t border-white/10">
             <label class="block text-xs font-bold text-slate-300 mb-1">Holati</label>
             <select
               v-model="formStudent.status"
-              class="w-full rounded-2xl border border-white/15 bg-black/40 px-4 py-3 text-xs text-white outline-none focus:border-blue-500"
+              class="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
             >
               <option value="active">🟢 Faol</option>
               <option value="frozen">❄️ Muzlatilgan</option>
@@ -876,9 +1049,38 @@
           </div>
         </div>
 
+        <!-- Action Type: Add to Group vs Move Group -->
+        <div class="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-black/40 border border-white/10 text-xs">
+          <button
+            type="button"
+            @click="transferActionType = 'add'"
+            class="py-2.5 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5"
+            :class="transferActionType === 'add' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'"
+          >
+            <span>➕</span> <span>Qo'shimcha guruhga</span>
+          </button>
+          <button
+            type="button"
+            @click="transferActionType = 'move'"
+            class="py-2.5 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5"
+            :class="transferActionType === 'move' ? 'bg-amber-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'"
+          >
+            <span>🔄</span> <span>Faqat ko'chirish</span>
+          </button>
+        </div>
+
+        <p class="text-[11px] text-slate-400 px-1">
+          <span v-if="transferActionType === 'add'">
+            💡 <b>Qo'shimcha guruh (Multi-group):</b> O'quvchi avvalgi guruhlarida ham saqlanadi va yangi tanlangan guruhga ham bir vaqtda a'zo bo'ladi.
+          </span>
+          <span v-else>
+            ⚠️ <b>Ko'chirish:</b> O'quvchi avvalgi guruhidan chiqariladi va faqat yangi tanlangan guruhga o'tkaziladi.
+          </span>
+        </p>
+
         <!-- Target Group Selection -->
         <div class="space-y-2">
-          <label class="block text-xs font-bold text-slate-300">Yangi guruhni tanlang yoki kiriting *</label>
+          <label class="block text-xs font-bold text-slate-300">Guruhni tanlang yoki kiriting *</label>
           <input
             v-model="transferNewGroupName"
             type="text"
@@ -919,9 +1121,10 @@
             type="button"
             @click="doConfirmTransfer"
             :disabled="!transferNewGroupName.trim()"
-            class="rounded-xl bg-amber-500 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-amber-500/30 hover:bg-amber-400 active:scale-95 disabled:opacity-40 transition"
+            class="rounded-xl px-5 py-2.5 text-xs font-black shadow-lg active:scale-95 disabled:opacity-40 transition"
+            :class="transferActionType === 'add' ? 'bg-indigo-600 text-white shadow-indigo-600/30 hover:bg-indigo-500' : 'bg-amber-500 text-slate-950 shadow-amber-500/30 hover:bg-amber-400'"
           >
-            Guruhni o'zgartirish 🚀
+            {{ transferActionType === 'add' ? "➕ Guruhga biriktirish" : "🔄 Guruhni o'zgartirish" }}
           </button>
         </div>
       </div>
@@ -1053,10 +1256,16 @@
                   {{ selectedStudent.status === 'frozen' ? '❄️ Muzlatilgan' : '🟢 Faol' }}
                 </span>
               </div>
-              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-1">
-                <span>📚 <b class="text-slate-200">{{ selectedStudent.group || 'Umumiy' }}</b></span>
-                <span>•</span>
-                <span>📅 {{ selectedStudent.joinedDate ? selectedStudent.joinedDate + ' da qo\'shilgan' : 'Faol a\'zo' }}</span>
+              <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+                <span
+                  v-for="grp in getStudentGroupList(selectedStudent)"
+                  :key="grp"
+                  class="rounded-lg bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 text-[11px] font-bold text-indigo-300"
+                >
+                  📚 {{ grp }}
+                </span>
+                <span class="text-xs text-slate-500">•</span>
+                <span class="text-xs text-slate-400">📅 {{ selectedStudent.joinedDate ? selectedStudent.joinedDate + ' da qo\'shilgan' : 'Faol a\'zo' }}</span>
               </div>
             </div>
           </div>
@@ -1150,6 +1359,62 @@
             </div>
           </div>
 
+          <!-- Enrolled Groups Management Card inside Doska -->
+          <div class="rounded-2xl border border-indigo-500/30 bg-indigo-950/25 p-4 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-black uppercase tracking-wider text-indigo-300">📚 A'zo Bo'lgan Guruhlari</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                  {{ getStudentGroupList(selectedStudent).length }} ta guruh
+                </span>
+              </div>
+
+              <!-- Quick Add Group Select -->
+              <div class="flex items-center gap-2">
+                <select
+                  v-if="availableGroupsToAdd(selectedStudent).length > 0"
+                  @change="handleQuickAddGroupToSelectedStudent($event)"
+                  class="text-xs bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 rounded-xl px-3 py-1.5 outline-none cursor-pointer hover:bg-indigo-600/50 transition font-bold"
+                >
+                  <option value="" disabled selected>+ Boshqa guruhga qo'shish...</option>
+                  <option
+                    v-for="g in availableGroupsToAdd(selectedStudent)"
+                    :key="g.name"
+                    :value="g.name"
+                  >
+                    ➕ {{ g.name }}
+                  </option>
+                </select>
+                <span v-else class="text-[11px] text-slate-500 italic">
+                  Barcha mavjud guruhlarga a'zo
+                </span>
+              </div>
+            </div>
+
+            <!-- Group Badges with Remove Option -->
+            <div class="flex flex-wrap items-center gap-2">
+              <div
+                v-for="(grp, gIdx) in getStudentGroupList(selectedStudent)"
+                :key="grp"
+                class="inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold transition shadow-sm"
+                :class="gIdx === 0 ? 'border-indigo-500/40 bg-indigo-600/20 text-indigo-200' : 'border-white/10 bg-black/40 text-slate-200'"
+              >
+                <span>👥 {{ grp }}</span>
+                <span v-if="gIdx === 0" class="text-[9px] bg-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded uppercase font-black">
+                  Asosiy
+                </span>
+                <button
+                  type="button"
+                  @click="handleRemoveGroupFromSelectedStudent(grp)"
+                  class="ml-1 text-slate-400 hover:text-rose-400 p-0.5 transition"
+                  title="Guruhdan chiqarish"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Personal Contacts & Family Card -->
           <div class="rounded-2xl border border-white/10 bg-black/30 p-4 space-y-3">
             <div class="flex items-center justify-between">
@@ -1167,13 +1432,18 @@
               <!-- Student Phone -->
               <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">📱 O'quvchi Telefoni</span>
-                <div v-if="selectedStudent.phone" class="flex items-center justify-between">
+                <div v-if="selectedStudent.phone" class="flex items-center justify-between gap-1 flex-wrap">
                   <a :href="'tel:' + selectedStudent.phone" class="font-mono text-white font-bold hover:text-indigo-400">
                     {{ selectedStudent.phone }}
                   </a>
-                  <a :href="'tel:' + selectedStudent.phone" class="text-[10px] px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold hover:bg-emerald-500/30">
-                    📞 Qo'ng'iroq
-                  </a>
+                  <div class="flex items-center gap-1">
+                    <a :href="'tel:' + selectedStudent.phone" class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold hover:bg-emerald-500/30">
+                      📞 Qo'ng'iroq
+                    </a>
+                    <a :href="'sms:' + selectedStudent.phone" class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold hover:bg-blue-500/30">
+                      💬 SMS
+                    </a>
+                  </div>
                 </div>
                 <div v-else class="text-slate-500 italic text-[11px] flex items-center justify-between">
                   <span>Kiritilmagan</span>
@@ -1194,13 +1464,18 @@
               <!-- Parent Phone -->
               <div class="p-3 rounded-xl bg-white/5 border border-white/5 space-y-1.5">
                 <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">📞 Ota-ona Telefoni</span>
-                <div v-if="selectedStudent.parentPhone" class="flex items-center justify-between">
+                <div v-if="selectedStudent.parentPhone" class="flex items-center justify-between gap-1 flex-wrap">
                   <a :href="'tel:' + selectedStudent.parentPhone" class="font-mono text-white font-bold hover:text-indigo-400">
                     {{ selectedStudent.parentPhone }}
                   </a>
-                  <a :href="'tel:' + selectedStudent.parentPhone" class="text-[10px] px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold hover:bg-emerald-500/30">
-                    📞 Qo'ng'iroq
-                  </a>
+                  <div class="flex items-center gap-1">
+                    <a :href="'tel:' + selectedStudent.parentPhone" class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold hover:bg-emerald-500/30">
+                      📞 Qo'ng'iroq
+                    </a>
+                    <a :href="'sms:' + selectedStudent.parentPhone" class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold hover:bg-blue-500/30">
+                      💬 SMS
+                    </a>
+                  </div>
                 </div>
                 <div v-else class="text-slate-500 italic text-[11px] flex items-center justify-between">
                   <span>Kiritilmagan</span>
@@ -1719,7 +1994,210 @@
       </div>
     </BaseModal>
 
-    <!-- ======================================================== -->
+    <!-- Phone & Contact Recovery Modal -->
+    <BaseModal
+      v-model="showPhoneRecoveryModal"
+      title="📱 Telefon Raqamlar va Ma'lumotlarni Tiklash Markazi"
+      custom-class="max-w-3xl w-full"
+    >
+      <div class="space-y-4 py-1">
+        <!-- Status summary counter cards -->
+        <div class="grid grid-cols-3 gap-2 sm:gap-3">
+          <div class="rounded-2xl border border-white/10 bg-black/40 p-3 text-center">
+            <div class="text-[10px] uppercase font-bold text-slate-400">Jami O'quvchilar</div>
+            <div class="text-lg sm:text-2xl font-black text-white mt-0.5">
+              {{ teacherStore.allStudentsRegistry.value.length }}
+            </div>
+          </div>
+          <div class="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3 text-center">
+            <div class="text-[10px] uppercase font-bold text-emerald-400">Telefonli O'quvchilar</div>
+            <div class="text-lg sm:text-2xl font-black text-emerald-400 mt-0.5">
+              {{ studentsWithPhoneCount }} ta
+            </div>
+          </div>
+          <div class="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-3 text-center">
+            <div class="text-[10px] uppercase font-bold text-rose-400">Telefoni Kiritilmagan</div>
+            <div class="text-lg sm:text-2xl font-black text-rose-400 mt-0.5">
+              {{ studentsWithoutPhoneCount }} ta
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode selector tabs -->
+        <div class="flex rounded-2xl bg-black/50 p-1 border border-white/10 text-xs">
+          <button
+            type="button"
+            @click="recoveryActiveTab = 'scan'"
+            class="flex-1 rounded-xl py-2 font-bold transition text-center flex items-center justify-center gap-1.5"
+            :class="recoveryActiveTab === 'scan' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+          >
+            <span>🔍</span>
+            <span>1. Lokal Xotirani Skanerlash</span>
+          </button>
+          <button
+            type="button"
+            @click="recoveryActiveTab = 'import'"
+            class="flex-1 rounded-xl py-2 font-bold transition text-center flex items-center justify-center gap-1.5"
+            :class="recoveryActiveTab === 'import' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+          >
+            <span>📋</span>
+            <span>2. Matn / Exceldan Import</span>
+          </button>
+          <button
+            type="button"
+            @click="recoveryActiveTab = 'quick'"
+            class="flex-1 rounded-xl py-2 font-bold transition text-center flex items-center justify-center gap-1.5"
+            :class="recoveryActiveTab === 'quick' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+          >
+            <span>✏️</span>
+            <span>3. Yetishmayotganlar ({{ studentsWithoutPhoneCount }})</span>
+          </button>
+        </div>
+
+        <!-- TAB 1: DEEP LOCALSTORAGE SCANNER -->
+        <div v-if="recoveryActiveTab === 'scan'" class="rounded-2xl border border-blue-500/20 bg-blue-950/15 p-4 sm:p-5 space-y-3">
+          <div class="flex items-start gap-3">
+            <span class="text-2xl">🧠</span>
+            <div class="space-y-1">
+              <h4 class="text-sm font-bold text-white">Brauzer Lokal Xotirasini (LocalStorage) Chuqur Qidiruv</h4>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Ushbu vosita brauzeringizdagi dars sessiyalari tarixi, davomat jurnali yozuvlari, eski o'quvchilar ro'yxati va zaxira kalitlarining barchasini chuqur skanerlab chiqadi va yo'qolgan telefon raqamlarini qayta tiklaydi.
+              </p>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button
+              type="button"
+              @click="triggerDeepScanFromModal"
+              class="w-full rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-xs font-black uppercase tracking-wider text-white shadow-lg hover:from-blue-500 hover:to-indigo-500 active:scale-95 transition flex items-center justify-center gap-2"
+            >
+              <span>🚀</span>
+              <span>Lokal Xotirani Chuqur Skanerlash va Tiklash</span>
+            </button>
+          </div>
+
+          <!-- Scan result report -->
+          <div v-if="recoveryDeepScanResult" class="p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-950/20 text-xs space-y-1.5">
+            <div class="font-bold text-emerald-300 flex items-center gap-1.5">
+              <span>✅</span>
+              <span>Skanerlash muvaffaqiyatli yakunlandi!</span>
+            </div>
+            <div class="text-slate-300">
+              Tekshirilgan xotira kalitlari soni: <b>{{ recoveryDeepScanResult.scannedKeysCount }}</b> ta.
+            </div>
+            <div class="text-slate-300">
+              Yangi topilgan va tiklangan kontaktlar: <b class="text-emerald-400">{{ recoveryDeepScanResult.recoveredContactsCount }}</b> ta.
+            </div>
+            <div class="text-slate-300">
+              Hozirgi vaqtda bazada telefon raqami mavjud o'quvchilar: <b class="text-emerald-400">{{ recoveryDeepScanResult.totalStudentsWithPhone }}</b> ta.
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: BULK IMPORT TEXT / EXCEL -->
+        <div v-if="recoveryActiveTab === 'import'" class="rounded-2xl border border-purple-500/20 bg-purple-950/15 p-4 sm:p-5 space-y-3">
+          <div class="flex items-start gap-3">
+            <span class="text-2xl">📋</span>
+            <div class="space-y-1">
+              <h4 class="text-sm font-bold text-white">Matn, Telegram yoki Excel jadvalidan telefonlarni import qilish</h4>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Agar sizda telefon raqamlari yozilgan boshqa ro'yxat yoki fayl bo'lsa, quyidagi maydonga har bir qatorga bittadan o'quvchi va uning telefonini nusxalab tashlang. Tizim ismni o'zi moslab, telefonni biriktiradi.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-400 mb-1">
+              Namuna: <code>Zumrad Abdukaimova, +998901234567, +998907654321</code> (Vergul, nuqta-vergul yoki Tab bilan ajratilgan)
+            </label>
+            <textarea
+              v-model="bulkPhoneInputText"
+              rows="6"
+              placeholder="Zumrad Abdukaimova, +998901234567&#10;Zulayho, +998931112233&#10;Zuhra Komilova, +998945556677, +998978889900"
+              class="w-full rounded-2xl border border-white/15 bg-black/60 p-3 font-mono text-xs text-white outline-none focus:border-purple-500 custom-scrollbar"
+            ></textarea>
+          </div>
+
+          <div class="flex items-center justify-between gap-3 pt-1">
+            <span v-if="bulkImportResultMsg" class="text-xs font-bold text-emerald-400">
+              {{ bulkImportResultMsg }}
+            </span>
+            <span v-else class="text-[11px] text-slate-400">
+              Ismlar katta-kichikligidan qat'i nazar bazadagi o'quvchilar bilan solishtiriladi.
+            </span>
+            <button
+              type="button"
+              @click="handleBulkPhoneImport"
+              class="rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-purple-500 active:scale-95 transition shadow-md shrink-0"
+            >
+              📥 Telefonlarni Bazaga Biriktirish
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 3: QUICK EDIT MISSING PHONES -->
+        <div v-if="recoveryActiveTab === 'quick'" class="rounded-2xl border border-amber-500/20 bg-amber-950/15 p-4 sm:p-5 space-y-3">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="text-xs font-bold text-white">
+              Telefoni kiritilmagan o'quvchilar ro'yxati ({{ studentsWithoutPhoneList.length }} ta)
+            </div>
+            <input
+              v-model="phoneMissingSearch"
+              type="text"
+              placeholder="🔍 Ism bo'yicha qidirish..."
+              class="rounded-xl border border-white/15 bg-black/50 px-3 py-1.5 text-xs text-white outline-none focus:border-amber-500 w-48"
+            />
+          </div>
+
+          <div class="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            <div v-if="studentsWithoutPhoneList.length === 0" class="py-8 text-center text-xs text-emerald-400 font-bold">
+              🎉 Barcha o'quvchilarning telefon raqamlari to'liq kiritilgan!
+            </div>
+            <div
+              v-for="st in studentsWithoutPhoneList"
+              :key="st.name"
+              class="rounded-xl border border-white/10 bg-black/40 p-2.5 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+            >
+              <div class="min-w-0 flex-1">
+                <span
+                  @click="openStudentDetail(st)"
+                  class="font-bold text-white hover:text-indigo-400 hover:underline cursor-pointer truncate block"
+                  title="Shaxsiy doskasini ochish"
+                >
+                  {{ st.name }}
+                </span>
+                <span class="text-[10px] text-slate-400">{{ st.group || 'Umumiy' }}</span>
+              </div>
+
+              <!-- Quick input fields -->
+              <div class="flex items-center gap-1.5 shrink-0">
+                <input
+                  type="text"
+                  :placeholder="'O\'quvchi tel'"
+                  v-model="st.phone"
+                  class="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white font-mono w-28 sm:w-32 outline-none focus:border-blue-500"
+                />
+                <input
+                  type="text"
+                  :placeholder="'Ota-ona tel'"
+                  v-model="st.parentPhone"
+                  class="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-emerald-300 font-mono w-28 sm:w-32 outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="button"
+                  @click="saveSingleMissingPhone(st, st.phone || '', st.parentPhone)"
+                  class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-500 transition shadow"
+                  title="Saqlash"
+                >
+                  💾
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </BaseModal>
     <!-- VIEW 2: DEDICATED GROUP CRM HUB FULL-PAGE VIEW -->
     <!-- ======================================================== -->
     <div v-if="managerView === 'group-hub' && selectedGroupHubName" class="space-y-6 animate-fade-in">
@@ -2055,7 +2533,13 @@
                 <div class="text-xl">
                   {{ idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉' }}
                 </div>
-                <div class="font-extrabold text-sm text-white truncate">{{ st.name }}</div>
+                <div
+                  @click="openStudentDetail(st)"
+                  class="font-extrabold text-sm text-white truncate cursor-pointer hover:text-indigo-400 hover:underline transition"
+                  title="Shaxsiy doskasini ochish"
+                >
+                  {{ st.name }}
+                </div>
                 <div class="text-xs font-black text-amber-400">🪙 {{ st.coins || 0 }} tanga</div>
                 <div class="text-[10px] text-emerald-400 font-bold">{{ st.avgAccuracy || 0 }}% aniqlik</div>
               </div>
@@ -2084,7 +2568,15 @@
                     :key="st.name"
                     class="border-b border-white/5 hover:bg-white/5 transition"
                   >
-                    <td class="px-3 py-2.5 text-left font-bold text-white">{{ st.name }}</td>
+                    <td class="px-3 py-2.5 text-left font-bold text-white">
+                      <span
+                        @click="openStudentDetail(st)"
+                        class="cursor-pointer hover:text-indigo-400 hover:underline transition"
+                        title="Shaxsiy doskasini ochish"
+                      >
+                        {{ st.name }}
+                      </span>
+                    </td>
                     <td class="px-3 py-2.5 font-black text-emerald-400">{{ st.avgAccuracy || 0 }}%</td>
                     <td class="px-3 py-2.5 font-black text-amber-400">🪙 {{ st.coins || 0 }}</td>
                     <td class="px-3 py-2.5 font-black text-yellow-400">⭐ {{ st.strikes || 0 }}</td>
@@ -2131,13 +2623,21 @@
             >
               <div class="flex items-center gap-3">
                 <div
-                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-black text-xs shadow"
+                  @click="openStudentDetail(st)"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-black text-xs shadow cursor-pointer hover:scale-105 transition"
                   :class="st.status === 'frozen' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-indigo-600 text-white'"
+                  title="Shaxsiy doskasini ochish"
                 >
                   {{ st.status === 'frozen' ? '❄️' : st.name.charAt(0).toUpperCase() }}
                 </div>
                 <div class="space-y-0.5">
-                  <div class="font-bold text-white text-sm">{{ st.name }}</div>
+                  <div
+                    @click="openStudentDetail(st)"
+                    class="font-bold text-white text-sm cursor-pointer hover:text-indigo-400 hover:underline transition"
+                    title="Shaxsiy doskasini ochish"
+                  >
+                    {{ st.name }}
+                  </div>
                   <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400">
                     <span class="text-amber-300 font-bold">🔢 PIN: {{ st.pin || st.password || '123456' }}</span>
                     <span>•</span>
@@ -2995,6 +3495,770 @@
     <!-- /VIEW 2: DEDICATED GROUP CRM HUB FULL-PAGE VIEW -->
 
     <!-- ======================================================== -->
+    <!-- VIEW 3: DEDICATED STUDENT DOSKA FULL-PAGE VIEW -->
+    <!-- ======================================================== -->
+    <div v-if="managerView === 'student-doska' && selectedStudent" class="space-y-6 animate-fade-in">
+      <!-- Top Navigation & Action Bar -->
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/80 p-5 sm:p-6 shadow-2xl backdrop-blur-2xl">
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            @click="closeStudentDoska"
+            class="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-black text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition shadow shrink-0"
+            title="O'quvchilar ro'yxatiga qaytish"
+          >
+            <span>⬅️</span>
+            <span>Ro'yxatga Qaytish</span>
+          </button>
+          <div class="min-w-0">
+            <h2 class="text-lg sm:text-2xl font-black text-white tracking-tight flex items-center gap-2 truncate">
+              <span>🪪</span> {{ selectedStudent.name }} — Shaxsiy Doskasi
+            </h2>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5 flex-wrap">
+              <span>O'quvchilar CRM</span>
+              <span>/</span>
+              <span class="text-indigo-400 font-bold">Shaxsiy Doska</span>
+              <span>/</span>
+              <span class="text-emerald-400 font-bold">{{ selectedStudent.name }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Excel Export for this student -->
+          <button
+            type="button"
+            @click="exportSingleStudentDoskaToExcel(selectedStudent)"
+            class="flex items-center gap-1.5 rounded-2xl border border-emerald-500/30 bg-emerald-600/20 px-3.5 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-600/30 active:scale-95 transition shadow-md"
+            title="Ushbu o'quvchining dars va test natijalari hamda davomatini Excel (.xlsx) fayl qilib yuklab olish"
+          >
+            <span>📥</span>
+            <span>Natijalarni Excelga Yuklash</span>
+          </button>
+
+          <!-- Edit Student -->
+          <button
+            type="button"
+            @click="openEditModal(selectedStudent)"
+            class="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition shadow-md"
+            title="O'quvchi ma'lumotlarini tahrirlash"
+          >
+            <span>✏️</span>
+            <span>Tahrirlash</span>
+          </button>
+
+          <!-- Telegram Message to Parent -->
+          <button
+            type="button"
+            @click="openParentAlert(selectedStudent)"
+            class="flex items-center gap-1.5 rounded-2xl border border-sky-500/30 bg-sky-600/20 px-3 py-2 text-xs font-bold text-sky-300 hover:bg-sky-600/30 active:scale-95 transition shadow-md"
+            title="Ota-onasiga Telegram orqali xabar yoki natija yuborish"
+          >
+            <span>✉️</span>
+            <span>Ota-onaga Xabar</span>
+          </button>
+
+          <!-- Add Reminder -->
+          <button
+            type="button"
+            @click="openReminderModal(selectedStudent)"
+            class="flex items-center gap-1.5 rounded-2xl border border-purple-500/30 bg-purple-600/20 px-3 py-2 text-xs font-bold text-purple-300 hover:bg-purple-600/30 active:scale-95 transition shadow-md"
+            title="O'quvchi bo'yicha eslatma qo'shish"
+          >
+            <span>🔔</span>
+            <span>Eslatma</span>
+          </button>
+
+          <!-- Freeze / Unfreeze -->
+          <button
+            type="button"
+            @click="toggleFreeze(selectedStudent)"
+            class="flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-bold active:scale-95 transition shadow-md"
+            :class="selectedStudent.status === 'frozen' ? 'border border-emerald-500/30 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30' : 'border border-cyan-500/30 bg-cyan-600/20 text-cyan-300 hover:bg-cyan-600/30'"
+            :title="selectedStudent.status === 'frozen' ? 'O\'quvchini qayta faollashtirish' : 'O\'quvchini muzlatish'"
+          >
+            <span>{{ selectedStudent.status === 'frozen' ? '☀️' : '❄️' }}</span>
+            <span>{{ selectedStudent.status === 'frozen' ? 'Eritish' : 'Muzlatish' }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Hero Student Profile Banner -->
+      <div class="rounded-3xl border border-white/10 bg-slate-950/90 p-5 sm:p-6 shadow-xl space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-5 border-b border-white/10 pb-5">
+          <!-- Left: Big Avatar + Info -->
+          <div class="flex items-center gap-4">
+            <div class="relative flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-3xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-600 text-3xl text-white font-black shadow-xl shadow-indigo-600/30 shrink-0">
+              <span>{{ selectedStudent.name.charAt(0).toUpperCase() }}</span>
+              <span
+                class="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold border-2 border-slate-950 shadow"
+                :class="selectedStudent.status === 'frozen' ? 'bg-cyan-500 text-slate-950' : 'bg-emerald-500 text-slate-950'"
+                :title="selectedStudent.status === 'frozen' ? 'Muzlatilgan' : 'Faol'"
+              >
+                {{ selectedStudent.status === 'frozen' ? '❄️' : '✓' }}
+              </span>
+            </div>
+
+            <div class="space-y-1 min-w-0">
+              <div class="flex flex-wrap items-center gap-2.5">
+                <h3 class="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
+                  {{ selectedStudent.name }}
+                </h3>
+                <span
+                  class="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider"
+                  :class="selectedStudent.status === 'frozen' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'"
+                >
+                  {{ selectedStudent.status === 'frozen' ? '❄️ Muzlatilgan' : '🟢 Faol' }}
+                </span>
+              </div>
+
+              <!-- Enrolled Groups with quick add/remove -->
+              <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                <span class="text-xs text-slate-400 font-bold">Guruhlari:</span>
+                <span
+                  v-for="(grp, gIdx) in getStudentGroupList(selectedStudent)"
+                  :key="grp"
+                  class="inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-bold transition shadow-sm"
+                  :class="gIdx === 0 ? 'border-indigo-500/40 bg-indigo-600/25 text-indigo-200' : 'border-white/10 bg-black/40 text-slate-200'"
+                >
+                  <span>📚 {{ grp }}</span>
+                  <span v-if="gIdx === 0" class="text-[9px] bg-indigo-500/30 text-indigo-300 px-1 py-0.2 rounded uppercase font-black">
+                    Asosiy
+                  </span>
+                  <button
+                    type="button"
+                    @click="handleRemoveGroupFromSelectedStudent(grp)"
+                    class="ml-0.5 text-slate-400 hover:text-rose-400 transition"
+                    title="Guruhdan chiqarish"
+                  >
+                    ✕
+                  </button>
+                </span>
+
+                <!-- Quick add group dropdown -->
+                <select
+                  v-if="availableGroupsToAdd(selectedStudent).length > 0"
+                  @change="handleQuickAddGroupToSelectedStudent($event)"
+                  class="text-[11px] bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 rounded-xl px-2.5 py-1 outline-none cursor-pointer hover:bg-indigo-600/50 transition font-bold"
+                >
+                  <option value="" disabled selected>+ Guruh qo'shish...</option>
+                  <option
+                    v-for="g in availableGroupsToAdd(selectedStudent)"
+                    :key="g.name"
+                    :value="g.name"
+                  >
+                    ➕ {{ g.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="text-[11px] text-slate-500 font-medium pt-0.5">
+                <span>📅 A'zo bo'lgan sana: </span>
+                <b class="text-slate-400">{{ selectedStudent.joinedDate || "Faol a'zo" }}</b>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Credentials Card with copy & regenerate -->
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 bg-black/40 border border-white/10 p-3 rounded-2xl">
+            <div class="space-y-1">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-[10px] uppercase font-bold text-slate-400">Kirish PIN Kodi</span>
+                <button
+                  type="button"
+                  @click="handleRegeneratePin(selectedStudent)"
+                  class="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold hover:underline"
+                  title="Yangi 6 xonali PIN generatsiya qilish"
+                >
+                  ⚡️ Yangilash
+                </button>
+              </div>
+              <div class="text-base sm:text-lg font-black text-amber-300 font-mono tracking-widest flex items-center gap-2">
+                <span>🔢 {{ selectedStudent.pin || selectedStudent.password || '123456' }}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:border-l sm:border-white/10 sm:pl-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+              <button
+                type="button"
+                @click="copyCredentials(selectedStudent)"
+                class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-500 active:scale-95 transition shadow"
+                title="Kirish ma'lumotlarini nusxalash"
+              >
+                <span>📋</span>
+                <span>PIN Nusxalash</span>
+              </button>
+
+              <button
+                v-if="selectedStudent.pattern"
+                type="button"
+                @click="handleResetPattern(selectedStudent)"
+                class="rounded-xl bg-rose-500/20 border border-rose-500/30 px-3 py-2 text-xs font-bold text-rose-300 hover:bg-rose-500/30 active:scale-95 transition"
+                title="O'quvchi grafik kalitini (pattern) tozalash"
+              >
+                🔄 Patternni Tozalash
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contacts Grid (Student Phone, Parent Info, Telegram, Notes) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <!-- Student Phone -->
+          <div class="rounded-2xl border border-white/5 bg-white/5 p-3.5 space-y-2">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">📱 O'quvchi Telefoni</span>
+            <div v-if="selectedStudent.phone" class="space-y-2">
+              <a :href="'tel:' + selectedStudent.phone" class="font-mono text-sm font-bold text-white hover:text-indigo-300 block">
+                {{ selectedStudent.phone }}
+              </a>
+              <div class="flex items-center gap-1.5">
+                <a :href="'tel:' + selectedStudent.phone" class="flex-1 text-center text-[11px] py-1 px-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold hover:bg-emerald-500/30 transition">
+                  📞 Qo'ng'iroq
+                </a>
+                <a :href="'sms:' + selectedStudent.phone" class="flex-1 text-center text-[11px] py-1 px-2 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 font-bold hover:bg-blue-500/30 transition">
+                  💬 SMS
+                </a>
+              </div>
+            </div>
+            <div v-else class="flex items-center justify-between text-xs text-slate-500 italic py-1">
+              <span>Kiritilmagan</span>
+              <button type="button" @click="openEditModal(selectedStudent)" class="text-indigo-400 text-[11px] font-bold hover:underline">
+                + Qo'shish
+              </button>
+            </div>
+          </div>
+
+          <!-- Parent Name -->
+          <div class="rounded-2xl border border-white/5 bg-white/5 p-3.5 space-y-2">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">👨‍👩‍👧 Ota-onasi (F.I.SH)</span>
+            <div class="text-sm font-bold text-white truncate py-0.5">
+              {{ selectedStudent.parentName || "Kiritilmagan" }}
+            </div>
+            <div class="text-[10px] text-slate-500">
+              O'quvchining vasiysi yoki ota-onasi
+            </div>
+          </div>
+
+          <!-- Parent Phone -->
+          <div class="rounded-2xl border border-white/5 bg-white/5 p-3.5 space-y-2">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">📞 Ota-ona Telefoni</span>
+            <div v-if="selectedStudent.parentPhone" class="space-y-2">
+              <a :href="'tel:' + selectedStudent.parentPhone" class="font-mono text-sm font-bold text-white hover:text-indigo-300 block">
+                {{ selectedStudent.parentPhone }}
+              </a>
+              <div class="flex items-center gap-1.5">
+                <a :href="'tel:' + selectedStudent.parentPhone" class="flex-1 text-center text-[11px] py-1 px-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold hover:bg-emerald-500/30 transition">
+                  📞 Qo'ng'iroq
+                </a>
+                <a :href="'sms:' + selectedStudent.parentPhone" class="flex-1 text-center text-[11px] py-1 px-2 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300 font-bold hover:bg-blue-500/30 transition">
+                  💬 SMS
+                </a>
+              </div>
+            </div>
+            <div v-else class="flex items-center justify-between text-xs text-slate-500 italic py-1">
+              <span>Kiritilmagan</span>
+              <button type="button" @click="openEditModal(selectedStudent)" class="text-indigo-400 text-[11px] font-bold hover:underline">
+                + Qo'shish
+              </button>
+            </div>
+          </div>
+
+          <!-- Parent Telegram -->
+          <div class="rounded-2xl border border-white/5 bg-white/5 p-3.5 space-y-2">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">💬 Ota-ona Telegrami</span>
+            <div v-if="selectedStudent.parentTg" class="space-y-2">
+              <a
+                :href="'https://t.me/' + selectedStudent.parentTg.replace('@', '')"
+                target="_blank"
+                class="font-bold text-sky-400 hover:underline block text-sm truncate"
+              >
+                {{ selectedStudent.parentTg.startsWith('@') ? selectedStudent.parentTg : '@' + selectedStudent.parentTg }}
+              </a>
+              <a
+                :href="'https://t.me/' + selectedStudent.parentTg.replace('@', '')"
+                target="_blank"
+                class="block text-center text-[11px] py-1 px-2 rounded-lg bg-sky-500/20 border border-sky-500/30 text-sky-300 font-bold hover:bg-sky-500/30 transition"
+              >
+                ✈️ Telegramda Yozish
+              </a>
+            </div>
+            <div v-else class="flex items-center justify-between text-xs text-slate-500 italic py-1">
+              <span>Kiritilmagan</span>
+              <button type="button" @click="openEditModal(selectedStudent)" class="text-indigo-400 text-[11px] font-bold hover:underline">
+                + Qo'shish
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Teacher Notes / Dossier Characteristics Banner -->
+        <div v-if="selectedStudent.notes" class="rounded-2xl border border-white/10 bg-black/40 p-4 space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <span>📝</span> O'qituvchi Eslatmasi & Xarakteristika
+            </span>
+            <button
+              type="button"
+              @click="openEditModal(selectedStudent)"
+              class="text-[10px] text-indigo-400 hover:underline font-bold"
+            >
+              ✏️ Tahrirlash
+            </button>
+          </div>
+          <p class="text-xs text-slate-300 italic pt-0.5">
+            «{{ selectedStudent.notes }}»
+          </p>
+        </div>
+      </div>
+
+      <!-- 4 Key KPI Scoreboard Metric Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <!-- 1. Accuracy -->
+        <div class="glass-card rounded-3xl p-4 sm:p-5 border-emerald-500/20 bg-emerald-950/20 space-y-1 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">O'rtacha Aniqlik</span>
+            <span class="text-xl">🎯</span>
+          </div>
+          <div class="text-2xl sm:text-3xl font-black text-emerald-300 tabular-nums">
+            {{ selectedStudent.avgAccuracy || 0 }}%
+          </div>
+          <div class="text-[11px] font-bold" :class="(selectedStudent.avgAccuracy || 0) >= 80 ? 'text-emerald-400' : (selectedStudent.avgAccuracy || 0) >= 60 ? 'text-amber-400' : 'text-rose-400'">
+            {{ (selectedStudent.avgAccuracy || 0) >= 85 ? '🏆 A\'lochi o\'quvchi' : (selectedStudent.avgAccuracy || 0) >= 70 ? '👍 Yaxshi o\'zlashtirmoqda' : '⚠️ Ko\'proq amaliyot kerak' }}
+          </div>
+        </div>
+
+        <!-- 2. Total Tests & Lessons -->
+        <div class="glass-card rounded-3xl p-4 sm:p-5 border-white/10 space-y-1 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Darslar & Testlar</span>
+            <span class="text-xl">📈</span>
+          </div>
+          <div class="text-2xl sm:text-3xl font-black text-white tabular-nums">
+            {{ selectedStudentHistory.length || selectedStudent.totalTests || 0 }} <span class="text-sm font-normal text-slate-400">ta</span>
+          </div>
+          <div class="text-[11px] text-slate-400">
+            Jami topshirilgan sinovlar
+          </div>
+        </div>
+
+        <!-- 3. Attendance Rate -->
+        <div class="glass-card rounded-3xl p-4 sm:p-5 border-blue-500/20 bg-blue-950/20 space-y-1 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-blue-400 uppercase tracking-wider">Davomat Ko'rsatkichi</span>
+            <span class="text-xl">📅</span>
+          </div>
+          <div class="text-2xl sm:text-3xl font-black text-blue-300 tabular-nums">
+            {{ selectedStudentAttendanceData.percent }}%
+          </div>
+          <div class="text-[11px] text-slate-300 flex items-center gap-1.5 flex-wrap">
+            <span class="text-emerald-400 font-bold">✅ {{ selectedStudentAttendanceData.present }}</span>
+            <span>•</span>
+            <span class="text-amber-400 font-bold">🟡 {{ selectedStudentAttendanceData.excused }}</span>
+            <span>•</span>
+            <span class="text-rose-400 font-bold">❌ {{ selectedStudentAttendanceData.unexcused }}</span>
+          </div>
+        </div>
+
+        <!-- 4. Coins & Strikes -->
+        <div class="glass-card rounded-3xl p-4 sm:p-5 border-amber-500/20 bg-amber-950/20 space-y-1 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-400 uppercase tracking-wider">Yutuqlar & Mukofotlar</span>
+            <span class="text-xl">🪙</span>
+          </div>
+          <div class="text-2xl sm:text-3xl font-black text-amber-300 tabular-nums flex items-center gap-2">
+            <span>{{ selectedStudent.coins || 0 }}</span>
+            <span class="text-xs font-bold text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-lg">Tanga</span>
+          </div>
+          <div class="text-[11px] text-slate-300 flex items-center gap-2">
+            <span class="text-yellow-400 font-bold">⭐ {{ selectedStudent.strikes || 0 }} striky</span>
+            <span>•</span>
+            <span class="text-rose-400 font-bold">⚠️ {{ selectedStudent.penalties || 0 }} jarima</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content Tabs Navigation -->
+      <div class="flex items-center gap-2 p-1.5 rounded-2xl bg-black/60 border border-white/10 overflow-x-auto custom-scrollbar">
+        <button
+          type="button"
+          @click="activeDoskaTab = 'history'"
+          class="flex-1 min-w-[170px] py-3 px-4 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2"
+          :class="activeDoskaTab === 'history' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+        >
+          <span>📈</span>
+          <span>Dars va Test Natijalari</span>
+          <span class="text-[11px] px-2 py-0.5 rounded-full bg-black/40 font-mono font-bold">
+            {{ selectedStudentHistory.length }}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          @click="activeDoskaTab = 'attendance'"
+          class="flex-1 min-w-[150px] py-3 px-4 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2"
+          :class="activeDoskaTab === 'attendance' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+        >
+          <span>📅</span>
+          <span>Davomat Jurnali</span>
+          <span class="text-[11px] px-2 py-0.5 rounded-full bg-black/40 font-mono font-bold">
+            {{ selectedStudentAttendanceData.percent }}%
+          </span>
+        </button>
+
+        <button
+          type="button"
+          @click="activeDoskaTab = 'overview'"
+          class="flex-1 min-w-[150px] py-3 px-4 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2"
+          :class="activeDoskaTab === 'overview' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30' : 'text-slate-400 hover:text-white hover:bg-white/5'"
+        >
+          <span>👤</span>
+          <span>Shaxsiy & Guruhlar</span>
+        </button>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- TAB 1: BATAFSIL DARS VA TEST NATIJALARI (HISTORY) -->
+      <!-- ======================================================== -->
+      <div v-if="activeDoskaTab === 'history'" class="space-y-4">
+        <div class="rounded-3xl border border-white/10 bg-slate-900/90 p-5 sm:p-6 space-y-5 shadow-xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div>
+              <h4 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                <span>📊</span> O'quvchining Barcha Dars va Test Natijalari Xronologiyasi
+              </h4>
+              <p class="text-xs text-slate-400">Har bir dars, test va savol-javob sessiyasidagi aniqlik va ballar</p>
+            </div>
+
+            <!-- Search & Actions -->
+            <div class="flex items-center gap-2">
+              <div class="relative">
+                <input
+                  v-model="doskaTestSearch"
+                  type="text"
+                  placeholder="Mavzu yoki kitob nomi..."
+                  class="rounded-xl border border-white/15 bg-black/50 pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 w-48 sm:w-60"
+                />
+                <span class="absolute left-2.5 top-2 text-xs text-slate-400">🔍</span>
+              </div>
+
+              <button
+                type="button"
+                @click="exportSingleStudentDoskaToExcel(selectedStudent)"
+                class="flex items-center gap-1 rounded-xl bg-emerald-600/20 border border-emerald-500/30 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-600/30 transition"
+                title="Faqat test natijalarini Excelga eksport qilish"
+              >
+                <span>📥</span> <span>Excel</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tests Table & Cards List -->
+          <div v-if="filteredDoskaTests.length > 0" class="space-y-3">
+            <div class="overflow-x-auto rounded-2xl border border-white/10 bg-black/40 p-1 custom-scrollbar">
+              <table class="w-full text-left text-xs text-slate-200 border-collapse">
+                <thead>
+                  <tr class="border-b border-white/10 text-[11px] font-black uppercase text-slate-400">
+                    <th class="px-4 py-3">№</th>
+                    <th class="px-4 py-3">Sana & Vaqt</th>
+                    <th class="px-4 py-3">Dars / Test Mavzusi</th>
+                    <th class="px-4 py-3 text-center">To'g'ri / Jami</th>
+                    <th class="px-4 py-3 text-center">O'zlashtirish (%)</th>
+                    <th class="px-4 py-3 text-center">Daraja</th>
+                    <th class="px-4 py-3 text-center">Tangalar</th>
+                    <th class="px-4 py-3 text-center">Rejim</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5">
+                  <tr
+                    v-for="(h, idx) in filteredDoskaTests"
+                    :key="idx"
+                    class="hover:bg-white/5 transition"
+                  >
+                    <td class="px-4 py-3 text-slate-500 font-mono">{{ idx + 1 }}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <div class="font-bold text-white font-mono">{{ h.date || "Avvalgi dars" }}</div>
+                      <div v-if="h.time" class="text-[10px] text-slate-400 font-mono">⏰ {{ h.time }}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                      <div class="font-bold text-white max-w-xs sm:max-w-md truncate">
+                        {{ formatCleanTopicName(h.topic || (h.book ? `${h.book} darsi` : "Savol-Javob")) }}
+                      </div>
+                      <div v-if="h.book" class="text-[10px] text-indigo-400 font-semibold">
+                        📖 {{ h.book }}
+                      </div>
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                      <span class="font-black text-white text-sm">
+                        {{ h.correct !== undefined ? h.correct : Math.round(((parseFloat(h.percent) || 0) / 100) * (parseInt(h.total) || 10)) }}
+                      </span>
+                      <span class="text-slate-500"> / {{ h.total || 10 }}</span>
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                      <span
+                        class="px-3 py-1 rounded-xl text-xs font-black inline-block min-w-[55px]"
+                        :class="(parseFloat(h.percent) || 0) >= 80 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : (parseFloat(h.percent) || 0) >= 50 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'"
+                      >
+                        {{ Math.round(parseFloat(h.percent) || 0) }}%
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                      <span
+                        class="px-2.5 py-0.5 rounded-lg text-[10px] font-black"
+                        :class="(parseFloat(h.percent) || 0) >= 85 ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : (parseFloat(h.percent) || 0) >= 70 ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : (parseFloat(h.percent) || 0) >= 50 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-slate-800 text-slate-400'"
+                      >
+                        {{ (parseFloat(h.percent) || 0) >= 85 ? '🏆 A\'lo' : (parseFloat(h.percent) || 0) >= 70 ? '👍 Yaxshi' : (parseFloat(h.percent) || 0) >= 50 ? 'Qoniqarli' : 'Past' }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                      <span v-if="h.coin" class="font-bold text-amber-400">🪙 +{{ h.coin }}</span>
+                      <span v-else class="text-slate-500">-</span>
+                      <span v-if="h.strike && parseInt(h.strike) > 0" class="ml-1.5 text-yellow-400 font-bold">⭐ +{{ h.strike }}</span>
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap text-slate-400 text-[11px]">
+                      {{ h.mode || "Savol-Javob" }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div v-else class="text-center py-12 px-4 rounded-2xl border border-dashed border-white/10 bg-white/5 space-y-3">
+            <div class="text-4xl">📝</div>
+            <h5 class="text-base font-bold text-white">Hozircha dars yoki test natijalari mavjud emas</h5>
+            <p class="text-xs text-slate-400 max-w-md mx-auto">
+              O'quvchi dars jarayonidagi savol-javoblar, AI imtihonlari yoki test sessiyalarida qatnashgandan so'ng uning barcha natijalari ushbu doskada avtomatik aks etadi.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- TAB 2: DAVOMAT JURNALI (ATTENDANCE) -->
+      <!-- ======================================================== -->
+      <div v-if="activeDoskaTab === 'attendance'" class="space-y-4">
+        <div class="rounded-3xl border border-white/10 bg-slate-900/90 p-5 sm:p-6 space-y-5 shadow-xl">
+          <div class="flex items-center justify-between border-b border-white/10 pb-4">
+            <div>
+              <h4 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                <span>📅</span> Darslar Davomati Jurnali
+              </h4>
+              <p class="text-xs text-slate-400">Har bir dars bo'yicha qatnashish va sabablar qaydnomasi</p>
+            </div>
+            <div class="text-sm font-black text-white font-mono bg-black/40 px-3 py-1.5 rounded-xl border border-white/10">
+              Jami darslar: <span class="text-indigo-400">{{ selectedStudentAttendanceData.total }}</span> ta
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs font-bold">
+              <span class="text-slate-300">Davomat ko'rsatkichi:</span>
+              <span
+                class="font-black"
+                :class="selectedStudentAttendanceData.percent >= 80 ? 'text-emerald-400' : selectedStudentAttendanceData.percent >= 60 ? 'text-amber-400' : 'text-rose-400'"
+              >
+                {{ selectedStudentAttendanceData.percent }}%
+              </span>
+            </div>
+            <div class="w-full h-3 rounded-full bg-black/50 overflow-hidden border border-white/10">
+              <div
+                class="h-full rounded-full transition-all duration-500"
+                :class="selectedStudentAttendanceData.percent >= 80 ? 'bg-emerald-500' : selectedStudentAttendanceData.percent >= 60 ? 'bg-amber-500' : 'bg-rose-500'"
+                :style="{ width: `${selectedStudentAttendanceData.percent}%` }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- 3 Stats Cards -->
+          <div class="grid grid-cols-3 gap-3">
+            <div class="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-4 text-center space-y-1">
+              <div class="text-2xl font-black text-emerald-400">{{ selectedStudentAttendanceData.present }}</div>
+              <div class="text-xs font-bold text-slate-300">✅ Qatnashdi</div>
+            </div>
+            <div class="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-4 text-center space-y-1">
+              <div class="text-2xl font-black text-amber-400">{{ selectedStudentAttendanceData.excused }}</div>
+              <div class="text-xs font-bold text-slate-300">🟡 Sababli</div>
+            </div>
+            <div class="rounded-2xl bg-rose-500/10 border border-rose-500/30 p-4 text-center space-y-1">
+              <div class="text-2xl font-black text-rose-400">{{ selectedStudentAttendanceData.unexcused }}</div>
+              <div class="text-xs font-bold text-slate-300">❌ Sababsiz</div>
+            </div>
+          </div>
+
+          <!-- Logs List -->
+          <div v-if="selectedStudentAttendanceData.logs && selectedStudentAttendanceData.logs.length > 0" class="space-y-2 pt-2">
+            <h5 class="text-xs font-black uppercase tracking-wider text-slate-400">
+              Darsma-dars davomat ro'yxati ({{ selectedStudentAttendanceData.logs.length }} ta)
+            </h5>
+            <div class="space-y-2 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
+              <div
+                v-for="(log, idx) in selectedStudentAttendanceData.logs"
+                :key="idx"
+                class="flex items-center justify-between p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-indigo-500/30 transition text-xs"
+              >
+                <div class="flex items-center gap-3 min-w-0">
+                  <span class="font-mono text-xs font-black text-indigo-300 shrink-0 bg-indigo-500/15 px-2.5 py-1 rounded-lg border border-indigo-500/30">
+                    🗓️ {{ log.date }}
+                  </span>
+                  <div class="min-w-0">
+                    <div class="font-bold text-white truncate">{{ log.topic || 'Dars' }}</div>
+                    <div v-if="log.reason" class="text-[10px] text-amber-400 italic">Sabab: {{ log.reason }}</div>
+                  </div>
+                </div>
+
+                <span
+                  class="px-3 py-1 rounded-xl text-xs font-black shrink-0 ml-2"
+                  :class="log.status === 'Keldi' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : log.status === 'Sababli' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'"
+                >
+                  {{ log.status === 'Keldi' ? '✅ Keldi' : log.status === 'Sababli' ? '🟡 Sababli' : '❌ Sababsiz' }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center py-10 text-xs text-slate-500 italic">
+            Bu o'quvchi bo'yicha hali dars davomati yozuvlari kiritilmagan.
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- TAB 3: SHAXSIY VA GURUHLAR (OVERVIEW) -->
+      <!-- ======================================================== -->
+      <div v-if="activeDoskaTab === 'overview'" class="space-y-4">
+        <!-- Multi-Group Management Card -->
+        <div class="rounded-3xl border border-indigo-500/30 bg-slate-900/90 p-5 sm:p-6 space-y-4 shadow-xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div>
+              <h4 class="text-base font-black text-white flex items-center gap-2">
+                <span>📚</span> Biriktirilgan Guruhlar Boshqaruvi
+              </h4>
+              <p class="text-xs text-slate-400">O'quvchi bir vaqtning o'zida bir nechta guruhlarda o'qishi mumkin</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <select
+                v-if="availableGroupsToAdd(selectedStudent).length > 0"
+                @change="handleQuickAddGroupToSelectedStudent($event)"
+                class="text-xs bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 rounded-xl px-3 py-2 outline-none cursor-pointer hover:bg-indigo-600/50 transition font-bold"
+              >
+                <option value="" disabled selected>+ Yangi guruhga qo'shish...</option>
+                <option
+                  v-for="g in availableGroupsToAdd(selectedStudent)"
+                  :key="g.name"
+                  :value="g.name"
+                >
+                  ➕ {{ g.name }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <div
+              v-for="(grp, gIdx) in getStudentGroupList(selectedStudent)"
+              :key="grp"
+              class="rounded-2xl border p-4 flex items-center justify-between gap-2 shadow transition"
+              :class="gIdx === 0 ? 'border-indigo-500/40 bg-indigo-950/30' : 'border-white/10 bg-black/40'"
+            >
+              <div class="space-y-1">
+                <div class="font-bold text-white text-sm flex items-center gap-1.5">
+                  <span>👥</span> {{ grp }}
+                </div>
+                <div class="text-[10px] uppercase font-black tracking-wider" :class="gIdx === 0 ? 'text-indigo-400' : 'text-slate-500'">
+                  {{ gIdx === 0 ? 'Asosiy Guruh' : 'Qo\'shimcha Guruh' }}
+                </div>
+              </div>
+              <button
+                type="button"
+                @click="handleRemoveGroupFromSelectedStudent(grp)"
+                class="p-2 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition text-xs"
+                title="Guruhdan chiqarish"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Student Login & Security Card -->
+        <div class="rounded-3xl border border-white/10 bg-slate-900/90 p-5 sm:p-6 space-y-4 shadow-xl">
+          <div class="flex items-center justify-between border-b border-white/10 pb-4">
+            <h4 class="text-base font-black text-white flex items-center gap-2">
+              <span>🔑</span> Tizimga Kirish Kartasi
+            </h4>
+            <button
+              type="button"
+              @click="copyCredentials(selectedStudent)"
+              class="rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 active:scale-95 transition shadow"
+            >
+              📋 Nusxalash
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div class="p-3.5 rounded-2xl bg-black/50 border border-white/10 space-y-1">
+              <span class="text-[10px] text-slate-400 font-bold uppercase">Login (Zaxira)</span>
+              <div class="text-sm font-bold text-white font-mono truncate">
+                {{ selectedStudent.login || selectedStudent.name.toLowerCase().replace(/\s+/g, '_') }}
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-2xl bg-black/50 border border-amber-500/30 space-y-1">
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] text-amber-300 font-bold uppercase">6 Xonali PIN</span>
+                <button
+                  type="button"
+                  @click="handleRegeneratePin(selectedStudent)"
+                  class="text-[9px] text-indigo-400 hover:text-indigo-300 font-bold"
+                >
+                  ⚡️ Yangilash
+                </button>
+              </div>
+              <div class="text-base font-black text-amber-300 font-mono tracking-widest">
+                {{ selectedStudent.pin || selectedStudent.password || '123456' }}
+              </div>
+            </div>
+
+            <div class="p-3.5 rounded-2xl bg-black/50 border border-white/10 space-y-1 flex items-center justify-between">
+              <div>
+                <span class="text-[10px] text-slate-400 font-bold uppercase block">Grafik Kalit (Pattern)</span>
+                <span
+                  class="px-2 py-0.5 rounded-md font-bold text-[10px] inline-block mt-1"
+                  :class="selectedStudent.pattern ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'"
+                >
+                  {{ selectedStudent.pattern ? '🟢 O\'rnatilgan' : '⏳ O\'rnatilmagan' }}
+                </span>
+              </div>
+              <button
+                v-if="selectedStudent.pattern"
+                type="button"
+                @click="handleResetPattern(selectedStudent)"
+                class="rounded-xl bg-rose-500/20 border border-rose-500/30 px-2.5 py-1.5 text-[11px] font-bold text-rose-300 hover:bg-rose-500/30 transition"
+              >
+                🔄 Tozalash
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Return Button -->
+      <div class="flex justify-end pt-2 pb-6">
+        <button
+          type="button"
+          @click="closeStudentDoska"
+          class="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition shadow"
+        >
+          <span>⬅️</span>
+          <span>O'quvchilar Ro'yxatiga Qaytish</span>
+        </button>
+      </div>
+    </div>
+    <!-- /VIEW 3: DEDICATED STUDENT DOSKA FULL-PAGE VIEW -->
+
+    <!-- ======================================================== -->
     <!-- MODAL 7: CREATE NEW GROUP MODAL -->
     <!-- ======================================================== -->
     <BaseModal
@@ -3289,7 +4553,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { Chart, registerables } from "chart.js";
-import { useTeacherStore, Student, TeacherReminder, GroupMeta, GroupReminder, BOOK_LIST, LessonSessionRecord, normalizeDateToDDMM } from "../../composables/useTeacherStore";
+import * as XLSX from "xlsx";
+import { useTeacherStore, Student, TeacherReminder, GroupMeta, GroupReminder, BOOK_LIST, LessonSessionRecord, normalizeDateToDDMM, getStudentGroups, isStudentInGroup } from "../../composables/useTeacherStore";
 import { callApi } from "../../services/api";
 import { getStudentDefaultPin } from "../../composables/useStudentStore";
 import { sendTelegramMessage } from "../../services/telegram";
@@ -3305,12 +4570,16 @@ const emit = defineEmits<{
 
 const teacherStore = useTeacherStore();
 
-// View Navigation State (Main CRM vs Group Hub)
-const managerView = ref<"main" | "group-hub">("main");
+// View Navigation State (Main CRM vs Group Hub vs Student Doska)
+const managerView = ref<"main" | "group-hub" | "student-doska">("main");
 
 function closeGroupHub() {
   managerView.value = "main";
   selectedGroupHubName.value = "";
+}
+
+function closeStudentDoska() {
+  managerView.value = "main";
 }
 
 // Search & Filter & Selection
@@ -3567,10 +4836,27 @@ const selectedStudentHistory = computed(() => {
     return tB - tA;
   });
 });
+
+const doskaTestSearch = ref("");
+const filteredDoskaTests = computed(() => {
+  let list = selectedStudentHistory.value;
+  const q = doskaTestSearch.value.trim().toLowerCase();
+  if (q) {
+    list = list.filter(
+      (h) =>
+        (h.topic && h.topic.toLowerCase().includes(q)) ||
+        (h.book && h.book.toLowerCase().includes(q)) ||
+        (h.date && h.date.toLowerCase().includes(q)) ||
+        (h.mode && h.mode.toLowerCase().includes(q))
+    );
+  }
+  return list;
+});
 const showTransferModal = ref(false);
 const transferTargetStudent = ref<Student | null>(null);
 const isBatchTransfer = ref(false);
 const transferNewGroupName = ref("");
+const transferActionType = ref<"add" | "move">("add");
 
 const showReminderModal = ref(false);
 const reminderTargetStudent = ref<Student | null>(null);
@@ -3598,6 +4884,8 @@ const formStudent = ref<Partial<Student>>({
   pattern: "",
   notes: "",
 });
+const formStudentGroups = ref<string[]>([]);
+const formCustomGroupInput = ref("");
 
 // Reminder Form State
 const formReminder = ref({
@@ -3618,10 +4906,11 @@ const frozenStudentsCount = computed(
 );
 
 const sampleStudentNames = new Set(["Ali Valiyev", "Madina Karimova", "Jasur Rahimov", "Zuhra Yusupova", "Bekzod Rustamov"]);
+const sampleStudentIds = new Set(["std-1", "std-2", "std-3", "std-4", "std-5"]);
 
 const hasSampleStudents = computed(() => {
   return teacherStore.allStudentsRegistry.value.some(
-    (s) => sampleStudentNames.has(s.name) || s.id?.startsWith("std-")
+    (s) => sampleStudentNames.has(s.name.trim()) || sampleStudentIds.has(s.id || "")
   );
 });
 
@@ -3666,33 +4955,37 @@ const groupsList = computed(() => {
     }
   }
 
-  // 2. Count students for each group
+  // 2. Count students for each group (multi-group support)
   teacherStore.allStudentsRegistry.value.forEach((s) => {
-    const g = s.group || "Umumiy";
-    if (!map[g]) {
-      const meta = teacherStore.getGroupMeta(g);
-      map[g] = {
-        name: g,
-        count: 0,
-        activeCount: 0,
-        frozenCount: 0,
-        isAllFrozen: teacherStore.isGroupFrozen(g),
-        totalAccuracy: 0,
-        avgAccuracy: 0,
-        days: meta.days || ["Du", "Chor", "Juma"],
-        time: meta.time || "14:00 - 15:30",
-        room: meta.room || "",
-        subject: meta.subject || "Tarix",
-        note: meta.note || "",
-      };
-    }
-    map[g].count++;
-    if (s.status === "frozen") {
-      map[g].frozenCount++;
-    } else {
-      map[g].activeCount++;
-      map[g].totalAccuracy += s.avgAccuracy || 0;
-    }
+    const sGroups = getStudentGroupList(s);
+    sGroups.forEach((g) => {
+      if (!g || !g.trim()) return;
+      const cleanG = g.trim();
+      if (!map[cleanG]) {
+        const meta = teacherStore.getGroupMeta(cleanG);
+        map[cleanG] = {
+          name: cleanG,
+          count: 0,
+          activeCount: 0,
+          frozenCount: 0,
+          isAllFrozen: teacherStore.isGroupFrozen(cleanG),
+          totalAccuracy: 0,
+          avgAccuracy: 0,
+          days: meta.days || ["Du", "Chor", "Juma"],
+          time: meta.time || "14:00 - 15:30",
+          room: meta.room || "",
+          subject: meta.subject || "Tarix",
+          note: meta.note || "",
+        };
+      }
+      map[cleanG].count++;
+      if (s.status === "frozen") {
+        map[cleanG].frozenCount++;
+      } else {
+        map[cleanG].activeCount++;
+        map[cleanG].totalAccuracy += s.avgAccuracy || 0;
+      }
+    });
   });
 
   const list = Object.values(map);
@@ -3736,7 +5029,7 @@ const currentGroupMeta = computed(() => {
 const currentGroupStudents = computed(() => {
   if (!selectedGroupHubName.value) return [];
   return teacherStore.allStudentsRegistry.value.filter(
-    (s) => (s.group || "Umumiy") === selectedGroupHubName.value
+    (s) => isStudentInGroup(s, selectedGroupHubName.value)
   );
 });
 
@@ -3818,7 +5111,7 @@ const filteredStudents = computed(() => {
   let list = teacherStore.allStudentsRegistry.value;
 
   if (selectedGroupFilter.value) {
-    list = list.filter((s) => s.group === selectedGroupFilter.value);
+    list = list.filter((s) => isStudentInGroup(s, selectedGroupFilter.value));
   }
 
   if (statusFilter.value === "active") {
@@ -3833,8 +5126,10 @@ const filteredStudents = computed(() => {
       (s) =>
         s.name.toLowerCase().includes(query) ||
         (s.group && s.group.toLowerCase().includes(query)) ||
+        (Array.isArray(s.groups) && s.groups.some((g) => g.toLowerCase().includes(query))) ||
         (s.phone && s.phone.toLowerCase().includes(query)) ||
         (s.login && s.login.toLowerCase().includes(query)) ||
+        (s.parentName && s.parentName.toLowerCase().includes(query)) ||
         (s.parentPhone && s.parentPhone.toLowerCase().includes(query))
     );
   }
@@ -4016,6 +5311,45 @@ async function refreshStudentStats(force = false) {
 
       dbHistorySessions.value = Object.values(sessionMap);
     }
+
+    // Merge local teacher lesson sessions into historyByName so offline/local tests are included!
+    if (Array.isArray(teacherStore.lessonSessions.value)) {
+      teacherStore.lessonSessions.value.forEach((sess: any) => {
+        const sessDate = sess.date || "Dars";
+        const sessTime = sess.time || "";
+        const sessTopic = formatCleanTopicName(sess.topic || (sess.book ? `${sess.book} darsi` : "Dars"));
+        const sessBook = sess.book || "";
+        const results = sess.studentResults || sess.results || [];
+        if (Array.isArray(results)) {
+          results.forEach((r: any) => {
+            if (!r || !r.name) return;
+            const sName = String(r.name).trim();
+            const key = sName.toLowerCase();
+            if (!historyByName[key]) historyByName[key] = [];
+            const alreadyExists = historyByName[key].some(
+              (item) => item.date === sessDate && (item.topic === sessTopic || item.topic === sess.topic)
+            );
+            if (!alreadyExists) {
+              const p = Math.round(parseFloat(r.percent) || 0);
+              historyByName[key].push({
+                name: sName,
+                date: sessDate,
+                time: sessTime,
+                book: sessBook,
+                topic: sessTopic,
+                correct: r.correct !== undefined ? r.correct : Math.round((p / 100) * (r.total || 10)),
+                total: r.total || 10,
+                percent: p,
+                coin: r.coins || (p >= 80 ? 20 : 5),
+                strike: r.strikes || 0,
+                mode: sess.mode || "Savol-Javob",
+              });
+            }
+          });
+        }
+      });
+    }
+
     studentHistoryMap.value = historyByName;
 
     const lbByName: Record<string, any> = {};
@@ -4169,8 +5503,337 @@ async function refreshStudentStats(force = false) {
   }
 }
 
+const restoringStudents = ref(false);
+
+async function triggerRestoreStudents() {
+  if (restoringStudents.value) return;
+  restoringStudents.value = true;
+  try {
+    const res = await teacherStore.restoreAndFindAllStudents();
+    await refreshStudentStats(true);
+    alert(
+      `✅ Qidiruv va tiklash muvaffaqiyatli yakunlandi!\n\n` +
+      `📊 Jami bazadagi o'quvchilar: ${res.total} ta\n` +
+      `✨ Yangi topilgan va tiklanganlar: ${res.newlyRestored} ta\n` +
+      `📱 Tekshirilgan manbalar: Lokal dars sessiyalari, davomat jurnali, Firebase buluti va Google Sheets.`
+    );
+  } catch (e: any) {
+    alert("O'quvchilarni qidirishda xatolik yuz berdi: " + (e.message || e));
+  } finally {
+    restoringStudents.value = false;
+  }
+}
+
+function getStudentAttendanceSummary(student: Student) {
+  const key = student.name.trim().toLowerCase();
+  const att = studentAttendanceLogsMap.value[key];
+  if (att) {
+    const total = att.present + att.excused + att.unexcused;
+    const percent = total > 0 ? Math.round((att.present / total) * 100) : 100;
+    return { present: att.present, excused: att.excused, unexcused: att.unexcused, total, percent };
+  }
+  const st = student.attendanceStats || { present: 0, excused: 0, unexcused: 0 };
+  const total = (st.present || 0) + (st.excused || 0) + (st.unexcused || 0);
+  const percent = total > 0 ? Math.round(((st.present || 0) / total) * 100) : 100;
+  return { present: st.present || 0, excused: st.excused || 0, unexcused: st.unexcused || 0, total, percent };
+}
+
+function exportStudentsToExcel(subset?: Student[], customTitle?: string) {
+  const listToExport = subset || filteredStudents.value;
+  if (!listToExport || listToExport.length === 0) {
+    alert("Eksport qilish uchun o'quvchilar ro'yxati bo'sh!");
+    return;
+  }
+
+  const rows = listToExport.map((s, idx) => {
+    const groupsStr = getStudentGroupList(s).join(", ");
+    const attData = getStudentAttendanceSummary(s);
+    return {
+      "№": idx + 1,
+      "O'quvchi F.I.SH": s.name,
+      "Guruh(lar)": groupsStr,
+      "Asosiy Guruhi": s.group || "Umumiy",
+      "Holati": s.status === "frozen" ? "Muzlatilgan" : "Faol",
+      "O'quvchi Telefoni": s.phone || "",
+      "Ota-onasi F.I.SH": s.parentName || "",
+      "Ota-onasi Telefoni": s.parentPhone || "",
+      "Ota-onasi Telegrami": s.parentTg || "",
+      "6-Xonali PIN": s.pin || s.password || "",
+      "Login": s.login || s.name.toLowerCase().replace(/\s+/g, "_"),
+      "O'rtacha Aniqlik (%)": (s.avgAccuracy || 0) + "%",
+      "Darslar va Testlar Soni": s.totalTests || 0,
+      "Yig'ilgan Tangalar": s.coins || 0,
+      "Strikylar": s.strikes || 0,
+      "Jarimalar": s.penalties || 0,
+      "Davomat (%)": (attData.percent || 0) + "%",
+      "Kelgan Darslar": attData.present || 0,
+      "Sababli Qoldirilgan": attData.excused || 0,
+      "Sababsiz Qoldirilgan": attData.unexcused || 0,
+      "Qo'shilgan Sana": s.joinedDate || "",
+      "Eslatma / Xarakteristika": s.notes || "",
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+
+  // Set column widths
+  ws["!cols"] = [
+    { wch: 5 },  // №
+    { wch: 25 }, // Ism
+    { wch: 28 }, // Guruhlar
+    { wch: 18 }, // Asosiy guruh
+    { wch: 14 }, // Holat
+    { wch: 16 }, // Tel
+    { wch: 24 }, // Ota-ona
+    { wch: 16 }, // Ota-ona tel
+    { wch: 18 }, // Telegram
+    { wch: 14 }, // PIN
+    { wch: 20 }, // Login
+    { wch: 18 }, // Aniqlik %
+    { wch: 20 }, // Testlar soni
+    { wch: 16 }, // Tangalar
+    { wch: 10 }, // Strikylar
+    { wch: 10 }, // Jarimalar
+    { wch: 14 }, // Davomat %
+    { wch: 12 }, // Keldi
+    { wch: 12 }, // Sababli
+    { wch: 12 }, // Sababsiz
+    { wch: 15 }, // Sana
+    { wch: 35 }, // Eslatma
+  ];
+
+  const wb = XLSX.utils.book_new();
+  const rawTitle = customTitle || selectedGroupFilter.value || "Barcha_Oquvchilar";
+  const sheetTitle = rawTitle.replace(/[/\\?*[\]]/g, "_").substring(0, 31);
+  XLSX.utils.book_append_sheet(wb, ws, sheetTitle);
+
+  const nowStr = new Date().toISOString().split("T")[0];
+  const filename = `Oquvchilar_Royxati_${sheetTitle}_${nowStr}.xlsx`.replace(/\s+/g, "_");
+  XLSX.writeFile(wb, filename);
+}
+
+function exportSingleStudentDoskaToExcel(student: Student) {
+  if (!student) return;
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: General Student Profile & Stats
+  const attData = selectedStudentAttendanceData.value;
+  const profileRow = [
+    {
+      "F.I.SH": student.name,
+      "Holati": student.status === "frozen" ? "Muzlatilgan" : "Faol",
+      "Guruhlari": getStudentGroupList(student).join(", "),
+      "O'quvchi Telefoni": student.phone || "Kiritilmagan",
+      "Ota-onasi": student.parentName || "Kiritilmagan",
+      "Ota-ona Telefoni": student.parentPhone || "Kiritilmagan",
+      "Ota-ona Telegram": student.parentTg || "Kiritilmagan",
+      "6-Xonali PIN": student.pin || student.password || "",
+      "O'rtacha Aniqlik (%)": (student.avgAccuracy || 0) + "%",
+      "Jami Darslar/Testlar": selectedStudentHistory.value.length || student.totalTests || 0,
+      "Tangalar": student.coins || 0,
+      "Strikylar": student.strikes || 0,
+      "Jarimalar": student.penalties || 0,
+      "Davomat (%)": attData.percent + "%",
+      "Qatnashdi": attData.present,
+      "Sababli": attData.excused,
+      "Sababsiz": attData.unexcused,
+      "Qo'shilgan Sana": student.joinedDate || "",
+      "Eslatma / Xarakteristika": student.notes || "",
+    }
+  ];
+  const wsProfile = XLSX.utils.json_to_sheet(profileRow);
+  XLSX.utils.book_append_sheet(wb, wsProfile, "Shaxsiy Ma'lumotlar");
+
+  // Sheet 2: Detailed Test & Lesson Results
+  const historyRows = selectedStudentHistory.value.map((h, i) => {
+    const p = Math.round(parseFloat(h.percent) || 0);
+    const correctVal = h.correct !== undefined ? h.correct : Math.round((p / 100) * (parseInt(h.total) || 10));
+    const totalVal = parseInt(h.total) || 10;
+    return {
+      "№": i + 1,
+      "Sana": h.date || "Avvalgi dars",
+      "Vaqt": h.time || "",
+      "Dars / Test Mavzusi": formatCleanTopicName(h.topic || (h.book ? `${h.book} darsi` : "Savol-Javob")),
+      "Kitob / Fan": h.book || "",
+      "To'g'ri Javoblar": correctVal,
+      "Jami Savollar": totalVal,
+      "O'zlashtirish (%)": `${p}%`,
+      "Daraja": p >= 85 ? "A'lo 🏆" : p >= 70 ? "Yaxshi 👍" : p >= 50 ? "Qoniqarli" : "Past",
+      "Tangalar": h.coin ? `+${h.coin}` : "",
+      "Strikylar": h.strike ? `+${h.strike}` : "",
+      "Rejim": h.mode || "Savol-Javob",
+    };
+  });
+  const wsHistory = XLSX.utils.json_to_sheet(historyRows.length > 0 ? historyRows : [{ "Xabar": "Natijalar mavjud emas" }]);
+  wsHistory["!cols"] = [
+    { wch: 5 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 32 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 16 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsHistory, "Test va Dars Natijalari");
+
+  // Sheet 3: Attendance Journal
+  const attRows = (attData.logs || []).map((log: any, i: number) => ({
+    "№": i + 1,
+    "Sana": log.date,
+    "Mavzu / Guruh": log.topic || "Dars",
+    "Davomat Holati": log.status,
+  }));
+  const wsAtt = XLSX.utils.json_to_sheet(attRows.length > 0 ? attRows : [{ "Xabar": "Davomat yozuvlari mavjud emas" }]);
+  wsAtt["!cols"] = [{ wch: 5 }, { wch: 14 }, { wch: 28 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, wsAtt, "Davomat Jurnali");
+
+  const cleanName = student.name.replace(/[^a-zA-Z0-9_\u0400-\u04FF]/g, "_");
+  const nowStr = new Date().toISOString().split("T")[0];
+  XLSX.writeFile(wb, `Oquvchi_Doskasi_${cleanName}_${nowStr}.xlsx`);
+}
+
+// --- Selective & Bulk Export to Excel ---
+function exportSelectedStudentsToExcel() {
+  if (selectedStudentNames.value.length === 0) {
+    alert("Iltimos, avval ro'yxatdan o'quvchilarni belgilang!");
+    return;
+  }
+  const selectedList = teacherStore.allStudentsRegistry.value.filter((s) =>
+    selectedStudentNames.value.includes(s.name)
+  );
+  if (selectedList.length === 0) {
+    alert("Belgilangan o'quvchilar topilmadi!");
+    return;
+  }
+  exportStudentsToExcel(selectedList, `Tanlangan_${selectedList.length}_Oquvchi`);
+}
+
+function exportAllStudentsToExcel() {
+  const allList = teacherStore.allStudentsRegistry.value;
+  if (!allList || allList.length === 0) {
+    alert("O'quvchilar ro'yxati bo'sh!");
+    return;
+  }
+  exportStudentsToExcel(allList, "Barcha_Oquvchilar");
+}
+
+// --- Phone & Contact Recovery Center State ---
+const showPhoneRecoveryModal = ref(false);
+const recoveryActiveTab = ref<"scan" | "import" | "quick">("scan");
+const recoveryDeepScanResult = ref<{
+  scannedKeysCount: number;
+  recoveredContactsCount: number;
+  totalStudentsWithPhone: number;
+} | null>(null);
+const bulkPhoneInputText = ref("");
+const bulkImportResultMsg = ref("");
+const phoneMissingSearch = ref("");
+
+const studentsWithPhoneCount = computed(() => {
+  return (teacherStore.allStudentsRegistry.value || []).filter(
+    (s) => !!(s.phone && s.phone.trim())
+  ).length;
+});
+
+const studentsWithoutPhoneCount = computed(() => {
+  return (teacherStore.allStudentsRegistry.value || []).filter(
+    (s) => !(s.phone && s.phone.trim())
+  ).length;
+});
+
+const studentsWithoutPhoneList = computed(() => {
+  const list = (teacherStore.allStudentsRegistry.value || []).filter(
+    (s) => !(s.phone && s.phone.trim())
+  );
+  if (!phoneMissingSearch.value.trim()) return list;
+  const q = phoneMissingSearch.value.toLowerCase().trim();
+  return list.filter(
+    (s) =>
+      s.name.toLowerCase().includes(q) ||
+      (s.group && s.group.toLowerCase().includes(q))
+  );
+});
+
+function openPhoneRecoveryModal() {
+  recoveryDeepScanResult.value = null;
+  bulkImportResultMsg.value = "";
+  recoveryActiveTab.value = "scan";
+  showPhoneRecoveryModal.value = true;
+}
+
+function triggerDeepScanFromModal() {
+  const res = teacherStore.deepRecoverAllDataFromLocalStorage();
+  recoveryDeepScanResult.value = res;
+  refreshStudentStats(true);
+}
+
+function handleBulkPhoneImport() {
+  if (!bulkPhoneInputText.value.trim()) {
+    alert("Iltimos, avval matn kiriting!");
+    return;
+  }
+  const res = teacherStore.bulkImportContacts(bulkPhoneInputText.value);
+  bulkImportResultMsg.value = `✅ Muvaffaqiyatli: ${res.matchedCount} ta o'quvchining kontakt ma'lumotlari yangilandi!`;
+  bulkPhoneInputText.value = "";
+  refreshStudentStats(true);
+}
+
+function saveSingleMissingPhone(student: any, phone: string, parentPhone?: string) {
+  if (!student) return;
+  teacherStore.saveStudent({
+    ...student,
+    phone: (phone || "").trim(),
+    parentPhone: parentPhone !== undefined ? parentPhone.trim() : student.parentPhone || "",
+  });
+  alert(`✅ "${student.name}" uchun telefon raqami muvaffaqiyatli saqlandi!`);
+}
+
+function quickAddPhone(student: any) {
+  if (!student) return;
+  const input = prompt(
+    `"${student.name}" uchun telefon raqamini kiriting (masalan, +998901234567):`,
+    student.phone || "+998"
+  );
+  if (input !== null && input.trim() && input.trim() !== "+998") {
+    saveSingleMissingPhone(student, input.trim(), student.parentPhone);
+  }
+}
+
+// Watch for globally triggered student doska request from any component
+watch(
+  () => teacherStore.selectedDoskaStudent?.value,
+  (st) => {
+    if (st) {
+      openStudentDetail(st);
+      teacherStore.selectedDoskaStudent.value = null;
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
+  // Proactively run recovery from local storage if contacts exist in backup
+  teacherStore.deepRecoverAllDataFromLocalStorage();
   refreshStudentStats();
+
+  if (teacherStore.selectedDoskaStudent?.value) {
+    openStudentDetail(teacherStore.selectedDoskaStudent.value);
+    teacherStore.selectedDoskaStudent.value = null;
+  }
+
+  if (teacherStore.allStudentsRegistry.value.length === 0) {
+    teacherStore
+      .restoreAndFindAllStudents()
+      .then(() => {
+        refreshStudentStats(true);
+      })
+      .catch(() => {});
+  }
 });
 
 const isAllSelected = computed(() => {
@@ -4207,15 +5870,21 @@ function openBatchTransferModal() {
 function doConfirmTransfer() {
   const newGroup = transferNewGroupName.value.trim();
   if (!newGroup) return;
+  const isAdd = transferActionType.value === "add";
 
   if (isBatchTransfer.value) {
-    teacherStore.transferMultipleStudentsGroup(selectedStudentNames.value, newGroup);
+    teacherStore.transferMultipleStudentsGroup(selectedStudentNames.value, newGroup, isAdd);
     selectedStudentNames.value = [];
   } else if (transferTargetStudent.value) {
-    teacherStore.transferStudentGroup(transferTargetStudent.value.name, newGroup);
+    teacherStore.transferStudentGroup(transferTargetStudent.value.name, newGroup, isAdd);
   }
 
   showTransferModal.value = false;
+  alert(
+    isAdd
+      ? `✅ Tanlangan o'quvchi(lar) "${newGroup}" guruhiga ham muvaffaqiyatli a'zo qilindi!`
+      : `✅ Tanlangan o'quvchi(lar) "${newGroup}" guruhiga ko'chirildi!`
+  );
 }
 
 // --- Sync Real Students from Google Sheets Database ---
@@ -4282,9 +5951,9 @@ async function syncFromDb(force = true) {
 }
 
 function clearSampleStudents() {
-  if (confirm("Namunaviy o'quvchilar ro'yxatdan o'chirilsinmi? (Haqiqiy bazadan yuklangan o'quvchilar saqlanib qoladi)")) {
+  if (confirm("Namunaviy o'quvchilar ro'yxatdan o'chirilsinmi? (Haqiqiy o'quvchilar saqlanib qoladi)")) {
     teacherStore.allStudentsRegistry.value = teacherStore.allStudentsRegistry.value.filter(
-      (s) => !sampleStudentNames.has(s.name) && !s.id?.startsWith("std-")
+      (s) => !sampleStudentNames.has(s.name.trim()) && !sampleStudentIds.has(s.id || "")
     );
     teacherStore.reminders.value = teacherStore.reminders.value.filter(
       (r) => r.id !== "rem-1" && r.id !== "rem-2"
@@ -4297,14 +5966,93 @@ function toggleGroupFreeze(groupName: string, freeze: boolean) {
   teacherStore.toggleFreezeGroup(groupName, freeze);
 }
 
+// --- Helper methods for Multi-group & Doska ---
+function getStudentGroupList(student: Partial<Student>): string[] {
+  return getStudentGroups(student as Student);
+}
+
+function toggleFormGroup(groupName: string) {
+  const clean = groupName.trim();
+  if (!clean) return;
+  const idx = formStudentGroups.value.indexOf(clean);
+  if (idx !== -1) {
+    if (formStudentGroups.value.length > 1) {
+      formStudentGroups.value.splice(idx, 1);
+    } else {
+      alert("O'quvchi kamida bitta guruhda bo'lishi kerak!");
+    }
+  } else {
+    formStudentGroups.value.push(clean);
+  }
+}
+
+function removeFormGroup(groupName: string) {
+  const clean = groupName.trim();
+  if (formStudentGroups.value.length <= 1) {
+    alert("O'quvchi kamida bitta guruhda bo'lishi kerak!");
+    return;
+  }
+  formStudentGroups.value = formStudentGroups.value.filter((g) => g !== clean);
+}
+
+function addCustomGroupToForm() {
+  const clean = formCustomGroupInput.value.trim();
+  if (!clean) return;
+  if (!formStudentGroups.value.includes(clean)) {
+    formStudentGroups.value.push(clean);
+  }
+  formCustomGroupInput.value = "";
+}
+
+function handleQuickAddGroupToSelectedStudent(event: Event) {
+  const select = event.target as HTMLSelectElement;
+  const newGroup = select.value;
+  if (!newGroup || !selectedStudent.value) return;
+  teacherStore.addStudentToGroup(selectedStudent.value.name, newGroup);
+  const updated = teacherStore.allStudentsRegistry.value.find(
+    (s) => s.name.toLowerCase().trim() === selectedStudent.value?.name.toLowerCase().trim()
+  );
+  if (updated) {
+    selectedStudent.value = updated;
+  }
+  select.value = "";
+}
+
+function handleRemoveGroupFromSelectedStudent(groupName: string) {
+  if (!selectedStudent.value) return;
+  const curGroups = getStudentGroupList(selectedStudent.value);
+  if (curGroups.length <= 1) {
+    alert("O'quvchi kamida bitta guruhda bo'lishi shart!");
+    return;
+  }
+  if (confirm(`"${selectedStudent.value.name}"ni "${groupName}" guruhidan chiqarishni tasdiqlaysizmi?`)) {
+    teacherStore.removeStudentFromGroup(selectedStudent.value.name, groupName);
+    const updated = teacherStore.allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === selectedStudent.value?.name.toLowerCase().trim()
+    );
+    if (updated) {
+      selectedStudent.value = updated;
+    }
+  }
+}
+
+function availableGroupsToAdd(student: Partial<Student>): Array<{ name: string }> {
+  const current = getStudentGroupList(student);
+  return groupsList.value.filter((g) => !current.includes(g.name));
+}
+
 // --- Student CRUD Actions ---
 function openAddModal() {
   editingStudent.value = false;
   const pin = teacherStore.generateUnique6DigitPin(teacherStore.allStudentsRegistry.value);
+  const initialGroup = selectedGroupFilter.value || (groupsList.value[0]?.name || "Umumiy");
+  formStudentGroups.value = [initialGroup];
+  formCustomGroupInput.value = "";
   formStudent.value = {
     id: "usr-" + Date.now(),
     name: "",
-    group: selectedGroupFilter.value || (groupsList.value[0]?.name || ""),
+    group: initialGroup,
+    groups: [initialGroup],
     status: "active",
     phone: "",
     parentName: "",
@@ -4321,8 +6069,13 @@ function openAddModal() {
 
 function openEditModal(student: Student) {
   editingStudent.value = true;
+  const sGroups = getStudentGroupList(student);
+  formStudentGroups.value = [...sGroups];
+  formCustomGroupInput.value = "";
   formStudent.value = {
     ...student,
+    group: student.group || sGroups[0] || "Umumiy",
+    groups: sGroups,
     pin: student.pin || student.password || teacherStore.generateUnique6DigitPin(teacherStore.allStudentsRegistry.value),
   };
   showAddEditModal.value = true;
@@ -4379,7 +6132,10 @@ function saveStudentData() {
     alert("Iltimos, o'quvchining to'liq F.I.Sh ni kiriting!");
     return;
   }
-  const group = formStudent.value.group?.trim() || "Umumiy";
+  const selectedGroups = formStudentGroups.value.length > 0
+    ? formStudentGroups.value
+    : [formStudent.value.group?.trim() || "Umumiy"];
+  const primaryGroup = selectedGroups[0] || "Umumiy";
 
   if (!formStudent.value.pin || !/^\d{6}$/.test(formStudent.value.pin)) {
     formStudent.value.pin = teacherStore.generateUnique6DigitPin(name);
@@ -4389,20 +6145,28 @@ function saveStudentData() {
   teacherStore.saveStudent({
     ...formStudent.value,
     name,
-    group,
+    group: primaryGroup,
+    groups: selectedGroups,
     pin: formStudent.value.pin,
     password: formStudent.value.password || formStudent.value.pin,
   } as any);
 
-  // Auto-switch group filter so the teacher immediately sees the newly added student!
-  if (selectedGroupFilter.value && selectedGroupFilter.value !== group) {
-    selectedGroupFilter.value = group;
+  if (selectedGroupFilter.value && !selectedGroups.includes(selectedGroupFilter.value)) {
+    selectedGroupFilter.value = primaryGroup;
   }
+
+  if (selectedStudent.value && selectedStudent.value.name.toLowerCase().trim() === name.toLowerCase()) {
+    const updated = teacherStore.allStudentsRegistry.value.find(
+      (s) => s.name.toLowerCase().trim() === name.toLowerCase()
+    );
+    if (updated) selectedStudent.value = updated;
+  }
+
   searchQuery.value = "";
   currentPage.value = 1;
   showAddEditModal.value = false;
 
-  alert(`✅ "${name}" muvaffaqiyatli saqlandi!\n👥 Guruhi: ${group}\n🔢 6 xonali PIN kod: ${formStudent.value.pin}`);
+  alert(`✅ "${name}" muvaffaqiyatli saqlandi!\n👥 Guruhlari: ${selectedGroups.join(", ")}\n🔢 6 xonali PIN kod: ${formStudent.value.pin}`);
 }
 
 function toggleFreeze(student: Student) {
@@ -4417,8 +6181,9 @@ function confirmDelete(student: Student) {
 
 function openStudentDetail(student: Student) {
   selectedStudent.value = student;
-  activeDoskaTab.value = "overview";
-  showDetailModal.value = true;
+  activeDoskaTab.value = "history";
+  managerView.value = "student-doska";
+  showDetailModal.value = false;
   if (Object.keys(studentAttendanceLogsMap.value).length === 0 || Object.keys(studentHistoryMap.value).length === 0) {
     refreshStudentStats();
   }

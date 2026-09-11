@@ -15,7 +15,8 @@
     "jspdf-autotable": "^5.0.8",
     "lucide-vue-next": "^1.0.0",
     "pdfjs-dist": "^6.3.289",
-    "vue": "^3.5.41"
+    "vue": "^3.5.41",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.8",

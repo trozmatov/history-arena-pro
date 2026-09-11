@@ -216,7 +216,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import Navbar from "./components/common/Navbar.vue";
 import BaseModal from "./components/common/BaseModal.vue";
 
@@ -256,6 +256,18 @@ const isWideView = computed(() => {
   if (activeRole.value === "student") return false;
   return ["attendance", "leaderboard", "stats", "market", "chat", "students", "challenge", "ai-exam"].includes(teacherSubview.value);
 });
+
+// React to global student doska navigation request
+watch(
+  () => teacherStore.requestedTeacherSubview.value,
+  (newSub) => {
+    if (newSub) {
+      activeRole.value = "teacher";
+      teacherSubview.value = newSub as any;
+      teacherStore.requestedTeacherSubview.value = null;
+    }
+  }
+);
 
 const showNotifModal = ref(false);
 const notifTab = ref<"all" | "reminders" | "system">("all");
