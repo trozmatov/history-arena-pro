@@ -401,8 +401,11 @@ const teacherUnreadCount = computed(() => {
 });
 
 onMounted(() => {
-  // Listen for browser URL history navigation (back/forward)
+  // Listen for browser URL history navigation (back/forward and hash)
   window.addEventListener("popstate", () => {
+    currentRoute.value = getNormalizedPath();
+  });
+  window.addEventListener("hashchange", () => {
     currentRoute.value = getNormalizedPath();
   });
 
