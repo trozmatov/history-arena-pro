@@ -2,7 +2,7 @@
   <header class="sticky top-0 z-40 w-full border-b border-white/10 bg-slate-950/60 backdrop-blur-xl">
     <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
       <!-- Logo & App Name -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 cursor-pointer select-none" @click="$emit('goHome')">
         <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-500 shadow-lg shadow-indigo-500/30 text-white font-extrabold text-lg">
           HA
         </div>
@@ -54,6 +54,22 @@
           <span v-else class="text-sm">🔇</span>
         </button>
 
+        <!-- Natijalar / Results Button -->
+        <button
+          type="button"
+          @click="$emit('viewResults')"
+          class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition-all border shadow-sm active:scale-95"
+          :class="
+            isResultsActive
+              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/30'
+              : 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+          "
+          title="O'quvchilar natijalari va sertifikatlari (history-pro.uz/results)"
+        >
+          <span>🏆</span>
+          <span class="hidden sm:inline">Natijalar</span>
+        </button>
+
         <!-- Notification Bell (Teacher) -->
         <div v-if="activeRole === 'teacher'" class="relative">
           <button
@@ -82,11 +98,14 @@ import { soundManager } from "../../composables/useAudio";
 defineProps<{
   activeRole: "teacher" | "student";
   unreadCount?: number;
+  isResultsActive?: boolean;
 }>();
 
 defineEmits<{
   (e: "changeRole", role: "teacher" | "student"): void;
   (e: "toggleNotifs"): void;
+  (e: "viewResults"): void;
+  (e: "goHome"): void;
 }>();
 
 const soundEnabled = ref(soundManager.enabled);

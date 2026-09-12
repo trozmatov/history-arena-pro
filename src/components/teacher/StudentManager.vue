@@ -5927,17 +5927,27 @@ async function syncFromDb(force = true) {
             });
             countAdded++;
           } else {
+            let updated = false;
             if (!exists.group || exists.group === "Umumiy") {
               exists.group = groupName;
+              exists.groups = [groupName];
+              updated = true;
             }
             if (!exists.pin || !/^\d{6}$/.test(exists.pin)) {
               const defPin = teacherStore.generateUnique6DigitPin(trimmed);
               exists.pin = defPin;
               exists.password = defPin;
+              updated = true;
+            }
+            if (updated) {
+              teacherStore.syncStudentToCloud(exists);
+              teacherStore.syncGroupTransferToCloud(exists.name, exists.group);
             }
           }
         });
       }
+      teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
+      localStorage.setItem("ha_all_students", JSON.stringify(teacherStore.allStudentsRegistry.value));
       await refreshStudentStats(true);
       alert(`Baza bilan muvaffaqiyatli sinxronlandi! ${countAdded > 0 ? countAdded + " ta yangi o'quvchi qo'shildi." : "Barcha o'quvchilar va natijalar yangilandi."}`);
     } else {
@@ -6404,7 +6414,7 @@ function copyAllGroupCredentials(groupName: string) {
 
 function startLessonWithGroup(groupName: string) {
   const students = teacherStore.allStudentsRegistry.value.filter(
-    (s) => (s.group || "Umumiy") === groupName && s.status !== "frozen"
+    (s) => isStudentInGroup(s, groupName) && s.status !== "frozen"
   );
   if (students.length === 0) {
     alert("Ushbu guruhda faol o'quvchilar yo'q!");

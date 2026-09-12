@@ -1,20 +1,33 @@
 <template>
   <div class="min-h-screen bg-slate-950 text-slate-100 selection:bg-blue-600 selection:text-white flex flex-col font-sans">
-    <!-- Top Global Navbar -->
+    <!-- Top Global Navbar (Hidden on public /results showcase page) -->
     <Navbar
+      v-if="!isResultsActive"
       :active-role="activeRole"
       :unread-count="teacherUnreadCount"
-      @change-role="activeRole = $event"
+      :is-results-active="isResultsActive"
+      @change-role="handleRoleChange"
       @toggle-notifs="showNotifModal = true"
+      @view-results="navigateTo('/results')"
+      @go-home="navigateTo('/')"
     />
 
     <!-- Main Container: Dynamically scales to max-w-7xl on desktop for CRM tables and analytics -->
     <main
-      class="flex-1 w-full mx-auto px-2.5 py-3 sm:p-6 flex flex-col transition-all duration-300 overflow-x-hidden"
-      :class="isWideView ? 'max-w-7xl' : 'max-w-xl justify-center'"
+      class="flex-1 w-full mx-auto flex flex-col transition-all duration-300 overflow-x-hidden"
+      :class="[
+        isResultsActive
+          ? 'w-full p-0 max-w-none'
+          : (isWideView ? 'max-w-7xl px-2.5 py-3 sm:p-6' : 'max-w-xl justify-center px-2.5 py-3 sm:p-6')
+      ]"
     >
+      <!-- 🏆 PUBLIC RESULTS SHOWCASE (/results) -->
+      <template v-if="isResultsActive">
+        <PublicResultsView @go-home="navigateTo('/')" />
+      </template>
+
       <!-- 👨‍🏫 TEACHER PORTAL -->
-      <template v-if="activeRole === 'teacher'">
+      <template v-else-if="activeRole === 'teacher'">
         <Transition name="fade" mode="out-in">
           <!-- 1. Teacher Login -->
           <TeacherLogin v-if="!teacherStore.isTeacherLoggedIn.value" key="teacher-login" />
@@ -65,6 +78,11 @@
               v-else-if="teacherSubview === 'challenge' || teacherSubview === 'ai-exam'"
               @back="teacherSubview = 'setup'"
             />
+            <CertificatesManager
+              v-else-if="teacherSubview === 'certificates'"
+              @back="teacherSubview = 'setup'"
+              @open-public-results="navigateTo('/results')"
+            />
           </div>
         </Transition>
       </template>
@@ -73,7 +91,7 @@
       <template v-else>
         <Transition name="fade" mode="out-in">
           <StudentLogin v-if="!studentStore.isStudentLoggedIn.value" key="student-login" />
-          <StudentProfile v-else key="student-profile" />
+          <StudentProfile v-else key="student-profile" @nav-to-results="navigateTo('/results')" />
         </Transition>
       </template>
     </main>
@@ -232,8 +250,10 @@ import MarketManager from "./components/teacher/MarketManager.vue";
 import LiveChat from "./components/teacher/LiveChat.vue";
 import StudentManager from "./components/teacher/StudentManager.vue";
 import AIChallengeManager from "./components/teacher/AIChallengeManager.vue";
+import CertificatesManager from "./components/teacher/CertificatesManager.vue";
 
-// Student components
+// Public & Student components
+import PublicResultsView from "./components/public/PublicResultsView.vue";
 import StudentLogin from "./components/student/StudentLogin.vue";
 import StudentProfile from "./components/student/StudentProfile.vue";
 
@@ -247,14 +267,60 @@ import { prefetchCommonData } from "./services/api";
 const teacherStore = useTeacherStore();
 const studentStore = useStudentStore();
 
+// URL Routing for /results
+function getNormalizedPath(): string {
+  if (typeof window === "undefined") return "/";
+  const path = window.location.pathname.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  if (
+    path === "/results" ||
+    path.startsWith("/results") ||
+    hash === "#/results" ||
+    hash === "#results"
+  ) {
+    return "/results";
+  }
+  return "/";
+}
+
+const currentRoute = ref<string>(getNormalizedPath());
+const isResultsActive = computed(() => currentRoute.value === "/results");
+
+function navigateTo(path: string) {
+  currentRoute.value = path;
+  if (typeof window !== "undefined") {
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, "", path);
+    }
+  }
+}
+
+function handleRoleChange(role: "teacher" | "student") {
+  activeRole.value = role;
+  if (isResultsActive.value) {
+    navigateTo("/");
+  }
+}
+
 const activeRole = ref<"teacher" | "student">("teacher");
 const teacherSubview = ref<
-  "setup" | "game" | "results" | "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students" | "challenge" | "ai-exam"
+  "setup" | "game" | "results" | "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students" | "challenge" | "ai-exam" | "certificates"
 >("setup");
 
 const isWideView = computed(() => {
+  if (isResultsActive.value) return true;
   if (activeRole.value === "student") return false;
-  return ["attendance", "leaderboard", "stats", "market", "chat", "students", "challenge", "ai-exam"].includes(teacherSubview.value);
+  return [
+    "attendance",
+    "leaderboard",
+    "stats",
+    "market",
+    "chat",
+    "students",
+    "challenge",
+    "ai-exam",
+    "certificates",
+  ].includes(teacherSubview.value);
 });
 
 // React to global student doska navigation request
@@ -335,6 +401,11 @@ const teacherUnreadCount = computed(() => {
 });
 
 onMounted(() => {
+  // Listen for browser URL history navigation (back/forward)
+  window.addEventListener("popstate", () => {
+    currentRoute.value = getNormalizedPath();
+  });
+
   // Pre-fetch common data in background
   prefetchCommonData();
 
@@ -452,14 +523,26 @@ onMounted(() => {
         (s) => s.name.toLowerCase().trim() === cleanName
       );
       if (target) {
+        let changed = false;
         if (target.group !== val.group) {
           target.group = val.group;
-          if (isNewGroupFrozen) {
-            target.status = "frozen";
-          } else if (target.group?.toLowerCase().trim() !== "arxiv") {
-            target.status = "active";
-          }
+          changed = true;
+        }
+        const curGroups = teacherStore.getStudentGroups(target);
+        if (!curGroups.some((g) => g.toLowerCase() === val.group.toLowerCase())) {
+          target.groups = [val.group, ...curGroups.filter((g) => g !== "Umumiy")];
+          changed = true;
+        }
+        if (isNewGroupFrozen && target.status !== "frozen") {
+          target.status = "frozen";
+          changed = true;
+        } else if (!isNewGroupFrozen && target.group?.toLowerCase().trim() !== "arxiv" && target.status === "frozen") {
+          target.status = "active";
+          changed = true;
+        }
+        if (changed) {
           teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
+          localStorage.setItem("ha_all_students", JSON.stringify(teacherStore.allStudentsRegistry.value));
         }
       } else {
         teacherStore.saveStudent({

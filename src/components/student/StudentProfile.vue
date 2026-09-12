@@ -116,6 +116,46 @@
       </div>
     </div>
 
+    <!-- 🌟 MOTIVATIONAL RESULTS SHOWCASE BANNER -->
+    <div
+      @click="goToResults"
+      class="w-full rounded-3xl border border-amber-500/40 bg-gradient-to-r from-amber-950/70 via-indigo-950/80 to-purple-950/70 p-4 sm:p-5 shadow-2xl backdrop-blur-2xl relative overflow-hidden group cursor-pointer hover:border-amber-400 hover:shadow-amber-500/20 transition-all duration-300 transform hover:-translate-y-0.5 box-border"
+    >
+      <div class="absolute -right-8 -bottom-8 w-32 h-32 bg-amber-500/15 rounded-full blur-2xl group-hover:bg-amber-500/25 transition"></div>
+      <div class="flex items-center justify-between gap-3 relative z-10">
+        <div class="flex items-center gap-3.5 min-w-0">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 text-2xl shadow-lg shadow-amber-500/30 text-slate-950 font-black animate-pulse">
+            🏆
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-[9px] font-black uppercase tracking-wider bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">
+                MOTIVATSIYA & FAXR
+              </span>
+              <span class="text-[11px] font-bold text-amber-300">
+                100% Davlat Grantlari ⭐
+              </span>
+            </div>
+            <h3 class="text-sm sm:text-base font-black text-white mt-0.5 truncate group-hover:text-amber-300 transition">
+              Bizning Faxrlarimiz & Sertifikatlar
+            </h3>
+            <p class="text-[11px] text-slate-300 truncate">
+              O'zingizga motivatsiya oling va ular kabi eng yuqori cho'qqilarni zabt eting!
+            </p>
+          </div>
+        </div>
+
+        <div class="shrink-0">
+          <button
+            type="button"
+            class="rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-amber-500/30 group-hover:from-amber-400 group-hover:to-orange-400 active:scale-95 transition flex items-center gap-1.5 whitespace-nowrap"
+          >
+            <span>Ko'rish</span> <span>🚀</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 1. Barcha Kitoblar O'zlashtirilishi (PieChart Cardbox) -->
     <div class="w-full glass-card rounded-3xl p-4 sm:p-5 border-white/10 space-y-4 box-border overflow-hidden">
       <div class="flex items-center justify-between flex-wrap gap-2">
@@ -527,13 +567,24 @@ import PatternLock from "./PatternLock.vue";
 import BaseModal from "../common/BaseModal.vue";
 import { soundManager, fireConfetti } from "../../composables/useAudio";
 
-Chart.register(...registerables);
+const emit = defineEmits<{
+  (e: "navToResults"): void;
+}>();
 
 const studentStore = useStudentStore();
 const showDuelModal = ref(false);
 const showChallengeModal = ref(false);
 const studentChartRef = ref<HTMLCanvasElement | null>(null);
 let chartInst: Chart | null = null;
+
+function goToResults() {
+  soundManager.playClick();
+  emit("navToResults");
+  if (typeof window !== "undefined") {
+    window.history.pushState({}, "", "/results");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+}
 
 // History View Tab
 const historyViewTab = ref<"tests" | "lessons">("tests");

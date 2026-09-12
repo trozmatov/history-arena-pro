@@ -764,9 +764,9 @@ const allStudentRows = computed<StudentRow[]>(() => {
     if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
     const g = (s.group || "Boshqa").trim();
     if (g === "Arxiv" || g.toLowerCase().includes("arxiv")) return;
-    if (selectedGroup.value !== "all" && g !== selectedGroup.value) return;
+    if (selectedGroup.value !== "all" && !teacherStore.isStudentInGroup(s, selectedGroup.value)) return;
 
-    studentsMap[s.name] = { group: g, records: {}, reasons: {} };
+    studentsMap[s.name] = { group: selectedGroup.value !== "all" ? selectedGroup.value : g, records: {}, reasons: {} };
   });
 
   // 2. Populate logs and discover any additional students in rawLogs
@@ -777,9 +777,10 @@ const allStudentRows = computed<StudentRow[]>(() => {
     const normDate = normalizeDateToDDMM(l.date);
     if (getMonthFromDate(normDate) !== targetM) return;
 
-    const g = master?.group || l.group || "Boshqa";
-    if (selectedGroup.value !== "all" && g !== selectedGroup.value) return;
+    const inSelectedGroup = selectedGroup.value === "all" || (master ? teacherStore.isStudentInGroup(master, selectedGroup.value) : l.group === selectedGroup.value);
+    if (!inSelectedGroup) return;
 
+    const g = selectedGroup.value !== "all" ? selectedGroup.value : (master?.group || l.group || "Boshqa");
     if (!studentsMap[l.name]) {
       studentsMap[l.name] = { group: g, records: {}, reasons: {} };
     }
@@ -800,9 +801,11 @@ const allStudentRows = computed<StudentRow[]>(() => {
         const norm = sr.name.toLowerCase().trim();
         const master = masterMap.get(norm);
         if (master?.isFrozen || teacherStore.isStudentFrozen(sr.name)) return;
-        const g = master?.group || sess.group || "Boshqa";
-        if (selectedGroup.value !== "all" && g !== selectedGroup.value) return;
 
+        const inSelectedGroup = selectedGroup.value === "all" || (master ? teacherStore.isStudentInGroup(master, selectedGroup.value) : sess.group === selectedGroup.value);
+        if (!inSelectedGroup) return;
+
+        const g = selectedGroup.value !== "all" ? selectedGroup.value : (master?.group || sess.group || "Boshqa");
         if (!studentsMap[sr.name]) {
           studentsMap[sr.name] = { group: g, records: {}, reasons: {} };
         }

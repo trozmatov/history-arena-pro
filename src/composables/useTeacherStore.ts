@@ -44,13 +44,18 @@ export function syncGroupFreezeToCloud(groupName: string, isFrozen: boolean) {
 
 export function getStudentGroups(student: Partial<Student>): string[] {
   if (!student) return ["Umumiy"];
+  const list: string[] = [];
   if (Array.isArray(student.groups) && student.groups.length > 0) {
-    return Array.from(new Set(student.groups.map((g) => g.trim()).filter(Boolean)));
+    list.push(...student.groups.map((g) => g.trim()).filter(Boolean));
   }
   if (student.group && student.group.trim()) {
-    return [student.group.trim()];
+    const cleanP = student.group.trim();
+    if (!list.some((g) => g.toLowerCase() === cleanP.toLowerCase())) {
+      list.unshift(cleanP);
+    }
   }
-  return ["Umumiy"];
+  const unique = Array.from(new Set(list));
+  return unique.length > 0 ? unique : ["Umumiy"];
 }
 
 export function isStudentInGroup(student: Partial<Student>, groupName: string): boolean {
@@ -188,14 +193,12 @@ initTeacherFreezeListener();
 export function syncGroupTransferToCloud(studentName: string, newGroup: string) {
   try {
     const key = sanitizeFbKey(studentName);
-    const trimmedGroup = newGroup.trim();
-    if (trimmedGroup) {
-      fbSet(fbRef(db, `student_groups/${key}`), {
-        name: studentName,
-        group: trimmedGroup,
-        updatedAt: Date.now(),
-      }).catch((e: any) => console.warn("Firebase group transfer sync error:", e));
-    }
+    const trimmedGroup = (newGroup || "Umumiy").trim() || "Umumiy";
+    fbSet(fbRef(db, `student_groups/${key}`), {
+      name: studentName,
+      group: trimmedGroup,
+      updatedAt: Date.now(),
+    }).catch((e: any) => console.warn("Firebase group transfer sync error:", e));
   } catch (e) {
     console.warn("syncGroupTransferToCloud error:", e);
   }
@@ -1012,11 +1015,8 @@ export async function restoreAndFindAllStudents(): Promise<{
     } else {
       if (cleanGrp && cleanGrp !== "Umumiy" && (!st.group || st.group === "Umumiy")) {
         st.group = cleanGrp;
-      }
-      if (cleanGrp) {
-        if (!Array.isArray(st.groups)) st.groups = st.group ? [st.group] : [];
-        if (!st.groups.some((g) => g.toLowerCase() === cleanGrp.toLowerCase())) {
-          st.groups.push(cleanGrp);
+        if (!Array.isArray(st.groups) || st.groups.length === 0 || (st.groups.length === 1 && st.groups[0] === "Umumiy")) {
+          st.groups = [cleanGrp];
         }
       }
     }
@@ -1135,10 +1135,14 @@ export async function restoreAndFindAllStudents(): Promise<{
       const gData = snapGroups.val();
       Object.keys(gData).forEach((k) => {
         const item = gData[k];
-        if (isValidName(item?.studentName) && item?.groupName) {
-          const st = getOrAddStudent(item.studentName, item.groupName);
-          if (!st.groups) st.groups = [item.groupName];
-          else if (!st.groups.includes(item.groupName)) st.groups.push(item.groupName);
+        const sName = item?.name || item?.studentName;
+        const gName = item?.group || item?.groupName;
+        if (isValidName(sName) && gName) {
+          const st = getOrAddStudent(sName, gName);
+          if (!st.groups || st.groups.length === 0 || (st.groups.length === 1 && st.groups[0] === "Umumiy")) {
+            st.groups = [gName];
+            st.group = gName;
+          }
           sources.firebase++;
         }
       });
@@ -1678,10 +1682,18 @@ export function useTeacherStore() {
         s.name.toLowerCase() === trimmedName.toLowerCase()
     );
 
-    const groups = Array.isArray(studentData.groups) && studentData.groups.length > 0
-      ? Array.from(new Set(studentData.groups.map((g) => g.trim()).filter(Boolean)))
-      : (studentData.group && studentData.group.trim() ? [studentData.group.trim()] : ["Umumiy"]);
-    const primaryGroup = studentData.group?.trim() || groups[0] || "Umumiy";
+    const primaryGroup = (studentData.group && studentData.group.trim())
+      ? studentData.group.trim()
+      : (Array.isArray(studentData.groups) && studentData.groups[0] ? studentData.groups[0].trim() : "Umumiy");
+
+    let rawGroups = Array.isArray(studentData.groups) && studentData.groups.length > 0
+      ? studentData.groups.map((g) => g.trim()).filter(Boolean)
+      : [primaryGroup];
+
+    if (!rawGroups.some((g) => g.toLowerCase() === primaryGroup.toLowerCase())) {
+      rawGroups.unshift(primaryGroup);
+    }
+    const groups = Array.from(new Set(rawGroups));
 
     const existingStudent = existingIdx !== -1 ? allStudentsRegistry.value[existingIdx] : null;
     const phone = (studentData.phone && studentData.phone.trim())
@@ -1761,9 +1773,7 @@ export function useTeacherStore() {
     syncFreezeToCloud(fullData.name, fullData.status === "frozen", fullData.group || "");
 
     // Realtime Cloud synchronization for student group
-    if (fullData.group && fullData.group.trim() && fullData.group.trim() !== "Umumiy") {
-      syncGroupTransferToCloud(fullData.name, fullData.group.trim());
-    }
+    syncGroupTransferToCloud(fullData.name, fullData.group || "Umumiy");
 
     // Sync status with session students
     const activeSessionStudent = students.value.find(
@@ -1874,6 +1884,7 @@ export function useTeacherStore() {
       allStudentsRegistry.value = [...allStudentsRegistry.value];
       localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
       syncStudentToCloud(target);
+      syncGroupTransferToCloud(target.name, target.group);
     }
   }
 
@@ -1892,6 +1903,9 @@ export function useTeacherStore() {
         if (!cur.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
           cur.push(trimmedGroup);
           target.groups = cur;
+        }
+        if (!target.group || target.group === "Umumiy") {
+          target.group = trimmedGroup;
         }
       } else {
         target.group = trimmedGroup;
@@ -1943,6 +1957,9 @@ export function useTeacherStore() {
           if (!cur.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
             cur.push(trimmedGroup);
             target.groups = cur;
+          }
+          if (!target.group || target.group === "Umumiy") {
+            target.group = trimmedGroup;
           }
         } else {
           target.group = trimmedGroup;
@@ -2377,10 +2394,29 @@ export function useTeacherStore() {
   }
 
   function deleteGroup(groupName: string) {
-    if (groupsMeta.value[groupName]) {
-      delete groupsMeta.value[groupName];
-      deleteGroupMetaFromCloud(groupName);
+    const cleanGrp = groupName.trim();
+    if (!cleanGrp) return;
+    if (groupsMeta.value[cleanGrp]) {
+      delete groupsMeta.value[cleanGrp];
+      deleteGroupMetaFromCloud(cleanGrp);
       localStorage.setItem("ha_groups_meta", JSON.stringify(groupsMeta.value));
+    }
+    // Clean up any students enrolled in this deleted group
+    let studentChanged = false;
+    allStudentsRegistry.value.forEach((s) => {
+      const curGroups = getStudentGroups(s);
+      if (curGroups.some((g) => g.toLowerCase() === cleanGrp.toLowerCase())) {
+        const remaining = curGroups.filter((g) => g.toLowerCase() !== cleanGrp.toLowerCase());
+        s.groups = remaining.length > 0 ? remaining : ["Umumiy"];
+        s.group = s.groups[0] || "Umumiy";
+        studentChanged = true;
+        syncStudentToCloud(s);
+        syncGroupTransferToCloud(s.name, s.group);
+      }
+    });
+    if (studentChanged) {
+      allStudentsRegistry.value = [...allStudentsRegistry.value];
+      localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
     }
   }
 

@@ -309,7 +309,7 @@
       Darsni Boshlash 🚀
     </button>
 
-    <!-- 4+1 SHORTCUT ACTIONS GRID -->
+    <!-- 4+2 SHORTCUT ACTIONS GRID -->
     <div class="grid grid-cols-2 gap-2.5 pt-1">
       <button
         type="button"
@@ -341,10 +341,17 @@
       </button>
       <button
         type="button"
-        @click="$emit('nav', 'students')"
-        class="col-span-2 glass-card glass-card-hover flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold text-indigo-300 border-indigo-500/30"
+        @click="$emit('nav', 'certificates')"
+        class="glass-card glass-card-hover flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold text-amber-300 border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-orange-500/10 shadow-lg shadow-amber-500/10"
       >
-        <span class="text-lg">👨‍🎓</span> <span>O'quvchilar Boshqaruvi & CRM</span>
+        <span class="text-lg">📜</span> <span>Natijalar & Sertifikatlar</span>
+      </button>
+      <button
+        type="button"
+        @click="$emit('nav', 'students')"
+        class="glass-card glass-card-hover flex items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-bold text-indigo-300 border-indigo-500/30"
+      >
+        <span class="text-lg">👨‍🎓</span> <span>CRM & O'quvchilar</span>
       </button>
     </div>
 
@@ -370,7 +377,7 @@ import DbImportModal from "./DbImportModal.vue";
 
 const emit = defineEmits<{
   (e: "startGame"): void;
-  (e: "nav", view: "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students" | "challenge" | "ai-exam"): void;
+  (e: "nav", view: "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students" | "challenge" | "ai-exam" | "certificates"): void;
 }>();
 
 const teacherStore = useTeacherStore();
