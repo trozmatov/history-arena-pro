@@ -295,8 +295,9 @@ async function loadStudentGroupMap() {
           members.forEach((m) => {
             if (typeof m === "string") {
               const clean = m.toLowerCase().trim();
-              if (!studentGroupMap.value[clean]) {
+              if (!studentGroupMap.value[clean] && (!studentGroupsMap.value[clean] || studentGroupsMap.value[clean].length === 0)) {
                 studentGroupMap.value[clean] = grp;
+                studentGroupsMap.value[clean] = [grp];
               }
             }
           });
@@ -312,26 +313,37 @@ loadStudentGroupMap();
 export function isStudentFrozen(name: string, group?: string): boolean {
   if (!name) return false;
   const clean = name.toLowerCase().trim();
-  // 1. Direct student freeze
+
+  // 1. Direct personal student freeze (highest priority)
   if (cloudFrozenStudents.value.includes(clean)) return true;
 
-  // 2. Group freeze
-  const grp = (group || studentGroupMap.value[clean] || "").toLowerCase().trim();
-  if (grp && (grp === "arxiv" || cloudFrozenGroups.value.includes(grp))) return true;
-
-  // 3. Local master list check if available
+  // Master list check for personal freeze status
+  let studentRecord: any = null;
   try {
     const saved = localStorage.getItem("ha_all_students");
     if (saved) {
       const list = JSON.parse(saved);
-      const match = list.find((s: any) => (s.name || "").toLowerCase().trim() === clean);
-      if (match) {
-        if (match.status === "frozen") return true;
-        const matchGrp = (match.group || "").toLowerCase().trim();
-        if (matchGrp && (matchGrp === "arxiv" || cloudFrozenGroups.value.includes(matchGrp))) return true;
-      }
+      studentRecord = list.find((s: any) => (s.name || "").toLowerCase().trim() === clean || (s.id && s.id === clean));
+      if (studentRecord && studentRecord.status === "frozen") return true;
     }
   } catch {}
+
+  // 2. Contextual group freeze (when group parameter is provided)
+  if (group && group.trim()) {
+    const grp = group.toLowerCase().trim();
+    if (grp === "arxiv" || cloudFrozenGroups.value.includes(grp)) return true;
+    return false;
+  }
+
+  // 3. Global context (when no group context provided, e.g. Leaderboard/Arena)
+  const allGroups = studentGroupsMap.value[clean] || (studentRecord?.groups) || (studentRecord?.group ? [studentRecord.group] : [studentGroupMap.value[clean]]).filter(Boolean);
+  if (allGroups && allGroups.length > 0) {
+    // Only frozen if ALL enrolled groups are frozen
+    return allGroups.every((g: string) => {
+      const cleanG = (g || "").toLowerCase().trim();
+      return cleanG === "arxiv" || cloudFrozenGroups.value.includes(cleanG);
+    });
+  }
 
   return false;
 }

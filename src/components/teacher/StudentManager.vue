@@ -5,121 +5,129 @@
     <!-- ======================================================== -->
     <div v-if="managerView === 'main'" class="space-y-6">
       <!-- Top Header Bar -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/80 p-5 sm:p-6 shadow-2xl backdrop-blur-2xl">
-        <div class="flex items-center gap-3">
+      <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-5 rounded-3xl border border-white/10 bg-slate-900/80 p-5 sm:p-6 shadow-2xl backdrop-blur-2xl">
+        <div class="flex items-center gap-3.5 min-w-0">
           <button
             type="button"
             @click="$emit('back')"
-            class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-base text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition"
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-base text-slate-300 hover:bg-white/10 hover:text-white active:scale-95 transition shadow-sm"
             title="Bosh menyuga qaytish"
           >
-          ⬅️
-        </button>
-        <div>
-          <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            <span>👨‍🎓</span> O'quvchilar Boshqaruvi & CRM
-          </h2>
-          <p class="text-xs text-slate-400">O'quvchilar profili, login-parollar, guruhlararo ko'chirish va eslatmalar</p>
+            ⬅️
+          </button>
+          <div class="min-w-0">
+            <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2 truncate">
+              <span>👨‍🎓</span> O'quvchilar Boshqaruvi & CRM
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5 truncate">O'quvchilar profili, login-parollar, guruhlararo ko'chirish va eslatmalar</p>
+          </div>
+        </div>
+
+        <!-- Quick Action Buttons: Organized 2-Row Control Panel -->
+        <div class="flex flex-col gap-2.5 w-full xl:w-auto">
+          <!-- Row 1: Muloqot, Do'kon & Hisobotlar (4 buttons) -->
+          <div class="flex flex-wrap items-center gap-2 xl:justify-end">
+            <!-- Live Class Chat Button -->
+            <button
+              type="button"
+              @click="$emit('nav', 'chat')"
+              class="group flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-200 hover:border-blue-500/50 hover:bg-blue-600/15 hover:text-blue-200 active:scale-95 transition-all shadow-sm backdrop-blur-md"
+              title="Umumiy sinf chati va AI suhbatini ochish"
+            >
+              <span class="text-sm group-hover:scale-110 transition-transform">💬</span>
+              <span>Sinf Chati & AI</span>
+            </button>
+
+            <!-- Store/Market Button -->
+            <button
+              type="button"
+              @click="$emit('nav', 'market')"
+              class="group flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-200 hover:border-teal-500/50 hover:bg-teal-600/15 hover:text-teal-200 active:scale-95 transition-all shadow-sm backdrop-blur-md"
+              title="O'quvchilar do'koni va tangalar boshqaruvi"
+            >
+              <span class="text-sm group-hover:scale-110 transition-transform">🛒</span>
+              <span>Do'kon Boshqaruvi</span>
+            </button>
+
+            <!-- Excel Export Button -->
+            <button
+              type="button"
+              @click="exportStudentsToExcel()"
+              class="group flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-200 hover:border-emerald-500/50 hover:bg-emerald-600/15 hover:text-emerald-200 active:scale-95 transition-all shadow-sm backdrop-blur-md"
+              title="Barcha yoki saralangan o'quvchilar ro'yxatini Excel (.xlsx) fayl qilib yuklab olish"
+            >
+              <span class="text-sm group-hover:scale-110 transition-transform">📥</span>
+              <span>Excelga Yuklash</span>
+            </button>
+
+            <!-- Reminders Button -->
+            <button
+              type="button"
+              @click="openRemindersListModal"
+              class="group relative flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-200 hover:border-purple-500/50 hover:bg-purple-600/15 hover:text-purple-200 active:scale-95 transition-all shadow-sm backdrop-blur-md"
+              title="O'quvchilar bilan bog'liq eslatmalar ro'yxati"
+            >
+              <span class="text-sm group-hover:scale-110 transition-transform">🔔</span>
+              <span>Eslatmalar</span>
+              <span
+                v-if="teacherStore.activeRemindersCount.value > 0"
+                class="rounded-full bg-purple-500 px-1.5 py-0.2 text-[10px] font-black text-white shadow-sm animate-pulse"
+              >
+                {{ teacherStore.activeRemindersCount.value }}
+              </span>
+            </button>
+          </div>
+
+          <!-- Row 2: Baza Sinxronlash, Tiklash & Asosiy Qo'shish (4 buttons) -->
+          <div class="flex flex-wrap items-center gap-2 xl:justify-end">
+            <!-- Sync from Database (Sheets) -->
+            <button
+              type="button"
+              @click="syncFromDb(true)"
+              :disabled="syncingDb"
+              class="group flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-200 hover:border-amber-500/50 hover:bg-amber-600/15 hover:text-amber-200 active:scale-95 disabled:opacity-50 transition-all shadow-sm backdrop-blur-md"
+              title="Google Sheets bazasidan barcha guruhlar va o'quvchilarni yuklash"
+            >
+              <span class="text-sm group-hover:scale-110 transition-transform" :class="{ 'animate-spin': syncingDb }">🔄</span>
+              <span>{{ syncingDb ? "Yuklanmoqda..." : "Bazadan Sinxronlash" }}</span>
+            </button>
+
+            <!-- Phone & Contact Recovery Button -->
+            <button
+              type="button"
+              @click="openPhoneRecoveryModal"
+              class="group flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-200 hover:border-rose-500/50 hover:bg-rose-600/15 hover:text-rose-200 active:scale-95 transition-all shadow-sm backdrop-blur-md"
+              title="Yo'qolgan telefon raqamlarini lokal xotiradan tiklash va yangilash"
+            >
+              <span class="text-sm group-hover:scale-110 transition-transform">📱</span>
+              <span>Telefonlarni Tiklash</span>
+            </button>
+
+            <!-- Restore Previous Students Button -->
+            <button
+              type="button"
+              @click="triggerRestoreStudents"
+              :disabled="restoringStudents"
+              class="group flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-200 hover:border-indigo-500/50 hover:bg-indigo-600/15 hover:text-indigo-200 active:scale-95 disabled:opacity-50 transition-all shadow-sm backdrop-blur-md"
+              title="Avval kiritilgan barcha o'quvchilarni lokal xotira, sessiyalar, Firebase va Google Sheets'dan qidirib tiklash"
+            >
+              <span class="text-sm group-hover:scale-110 transition-transform" :class="{ 'animate-spin': restoringStudents }">🔍</span>
+              <span>{{ restoringStudents ? "Qidirilmoqda..." : "Avvalgilarni Tiklash" }}</span>
+            </button>
+
+            <!-- Add Student Button (Hero Primary CTA) -->
+            <button
+              type="button"
+              @click="openAddModal"
+              class="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-indigo-600/30 hover:from-blue-500 hover:to-purple-500 hover:shadow-indigo-600/50 active:scale-95 transition-all border border-indigo-400/30 shrink-0"
+              title="Yangi o'quvchi qo'shish"
+            >
+              <span class="text-sm">➕</span>
+              <span>Qo'shish</span>
+            </button>
+          </div>
         </div>
       </div>
-
-      <!-- Quick Action Buttons -->
-      <div class="flex flex-wrap items-center gap-2">
-        <!-- Live Class Chat Button -->
-        <button
-          type="button"
-          @click="$emit('nav', 'chat')"
-          class="flex items-center gap-1.5 rounded-2xl border border-blue-500/30 bg-blue-600/20 px-3.5 py-2.5 text-xs font-bold text-blue-300 hover:bg-blue-600/30 active:scale-95 transition shadow-md"
-          title="Umumiy sinf chati va AI suhbatini ochish"
-        >
-          <span>💬</span>
-          <span>Sinf Chati & AI</span>
-        </button>
-
-        <!-- Sync from Database (Sheets) -->
-        <button
-          type="button"
-          @click="syncFromDb(true)"
-          :disabled="syncingDb"
-          class="flex items-center gap-1.5 rounded-2xl border border-amber-500/30 bg-amber-500/15 px-3.5 py-2.5 text-xs font-bold text-amber-300 hover:bg-amber-500/25 active:scale-95 disabled:opacity-50 transition shadow-md"
-          title="Google Sheets bazasidan barcha guruhlar va o'quvchilarni yuklash"
-        >
-          <span :class="{ 'animate-spin': syncingDb }">🔄</span>
-          <span>{{ syncingDb ? "Yuklanmoqda..." : "Bazadan Sinxronlash" }}</span>
-        </button>
-
-        <!-- Excel Export Button -->
-        <button
-          type="button"
-          @click="exportStudentsToExcel()"
-          class="flex items-center gap-1.5 rounded-2xl border border-emerald-500/40 bg-emerald-600/20 px-3.5 py-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-600/30 active:scale-95 transition shadow-md"
-          title="Barcha yoki saralangan o'quvchilar ro'yxatini Excel (.xlsx) fayl qilib yuklab olish"
-        >
-          <span>📥</span>
-          <span>Excelga Yuklash</span>
-        </button>
-
-        <!-- Phone & Contact Recovery Button -->
-        <button
-          type="button"
-          @click="openPhoneRecoveryModal"
-          class="flex items-center gap-1.5 rounded-2xl border border-rose-500/40 bg-rose-600/20 px-3.5 py-2.5 text-xs font-bold text-rose-300 hover:bg-rose-600/30 active:scale-95 transition shadow-md"
-          title="Yo'qolgan telefon raqamlarini lokal xotiradan tiklash va yangilash"
-        >
-          <span>📱</span>
-          <span>Telefonlarni Tiklash</span>
-        </button>
-
-        <!-- Restore Previous Students Button -->
-        <button
-          type="button"
-          @click="triggerRestoreStudents"
-          :disabled="restoringStudents"
-          class="flex items-center gap-1.5 rounded-2xl border border-indigo-500/40 bg-indigo-600/20 px-3.5 py-2.5 text-xs font-bold text-indigo-300 hover:bg-indigo-600/30 active:scale-95 disabled:opacity-50 transition shadow-md"
-          title="Avval kiritilgan barcha o'quvchilarni lokal xotira, sessiyalar, Firebase va Google Sheets'dan qidirib tiklash"
-        >
-          <span :class="{ 'animate-spin': restoringStudents }">🔍</span>
-          <span>{{ restoringStudents ? "Qidirilmoqda..." : "Avvalgilarni Tiklash" }}</span>
-        </button>
-
-        <!-- Store/Market Button -->
-        <button
-          type="button"
-          @click="$emit('nav', 'market')"
-          class="flex items-center gap-1.5 rounded-2xl border border-teal-500/30 bg-teal-600/20 px-3.5 py-2.5 text-xs font-bold text-teal-300 hover:bg-teal-600/30 active:scale-95 transition shadow-md"
-          title="O'quvchilar do'koni va tangalar boshqaruvi"
-        >
-          <span>🛒</span>
-          <span>Do'kon Boshqaruvi</span>
-        </button>
-
-        <!-- Reminders Button -->
-        <button
-          type="button"
-          @click="openRemindersListModal"
-          class="relative flex items-center gap-1.5 rounded-2xl border border-purple-500/30 bg-purple-500/15 px-3.5 py-2.5 text-xs font-bold text-purple-300 hover:bg-purple-500/25 active:scale-95 transition shadow-md"
-        >
-          <span>🔔</span>
-          <span>Eslatmalar</span>
-          <span
-            v-if="teacherStore.activeRemindersCount.value > 0"
-            class="ml-1 rounded-full bg-purple-500 px-2 py-0.5 text-[10px] font-black text-white"
-          >
-            {{ teacherStore.activeRemindersCount.value }}
-          </span>
-        </button>
-
-        <!-- Add Student Button -->
-        <button
-          type="button"
-          @click="openAddModal"
-          class="flex items-center gap-1.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-xl shadow-blue-600/30 hover:from-blue-500 hover:to-indigo-500 active:scale-95 transition-all"
-        >
-          <span>➕</span>
-          <span>Qo'shish</span>
-        </button>
-      </div>
-    </div>
 
     <!-- 1. Overview Dashboard Metrics Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -1125,6 +1133,146 @@
             :class="transferActionType === 'add' ? 'bg-indigo-600 text-white shadow-indigo-600/30 hover:bg-indigo-500' : 'bg-amber-500 text-slate-950 shadow-amber-500/30 hover:bg-amber-400'"
           >
             {{ transferActionType === 'add' ? "➕ Guruhga biriktirish" : "🔄 Guruhni o'zgartirish" }}
+          </button>
+        </div>
+      </div>
+    </BaseModal>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: RENAME GROUP MODAL -->
+    <!-- ======================================================== -->
+    <BaseModal
+      v-model="showRenameGroupModal"
+      title="✏️ Guruh nomini o'zgartirish"
+    >
+      <div class="py-2 space-y-4">
+        <p class="text-xs text-slate-400">
+          Guruh nomi o'zgartirilganda unga tegishli barcha o'quvchilar, jadval ma'lumotlari, darslar va davomat yozuvlari bitta atomik tranzaksiya bilan yangilanadi.
+        </p>
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            Eski guruh nomi
+          </label>
+          <input
+            :value="groupRenameOldName"
+            disabled
+            class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400 outline-none cursor-not-allowed font-bold"
+          />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            Yangi guruh nomi <span class="text-red-400">*</span>
+          </label>
+          <input
+            v-model="groupRenameNewName"
+            type="text"
+            placeholder="Masalan: 10-A Tarix"
+            @keyup.enter="submitRenameGroup"
+            class="w-full rounded-2xl border border-white/15 bg-black/40 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500 font-bold"
+          />
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-white/10">
+          <button
+            type="button"
+            @click="showRenameGroupModal = false"
+            class="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/10"
+          >
+            Bekor qilish
+          </button>
+          <button
+            type="button"
+            @click="submitRenameGroup"
+            :disabled="!groupRenameNewName.trim() || isSubmittingGroupRename"
+            class="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-blue-600/30 hover:bg-blue-500 active:scale-95 disabled:opacity-40 transition"
+          >
+            {{ isSubmittingGroupRename ? "Saqlanmoqda..." : "Saqlash" }}
+          </button>
+        </div>
+      </div>
+    </BaseModal>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: ASSIGN EXISTING STUDENTS TO GROUP MODAL -->
+    <!-- ======================================================== -->
+    <BaseModal
+      v-model="showAssignExistingModal"
+      :title="`👥 «${selectedGroupHubName}» guruhiga mavjud o'quvchilarni biriktirish`"
+    >
+      <div class="py-2 space-y-3">
+        <p class="text-xs text-slate-400">
+          Markazdagi mavjud o'quvchilarni belgilab, ushbu guruhga biriktirishingiz mumkin.
+        </p>
+
+        <input
+          v-model="assignExistingSearch"
+          type="text"
+          placeholder="Ism yoki guruh bo'yicha qidirish..."
+          class="w-full rounded-xl border border-white/15 bg-black/40 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-purple-500"
+        />
+
+        <div class="flex items-center justify-between text-[11px] text-slate-400 px-1">
+          <span>Tanlandi: <b class="text-purple-300">{{ selectedAssignStudentIds.length }} ta</b></span>
+          <button
+            type="button"
+            @click="toggleSelectAllAssign"
+            class="text-indigo-400 hover:underline font-bold"
+          >
+            {{ selectedAssignStudentIds.length === candidateAssignStudents.length ? "Barchasini bekor qilish" : "Barchasini tanlash" }}
+          </button>
+        </div>
+
+        <div class="max-h-60 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar border border-white/5 rounded-2xl p-2 bg-black/30">
+          <div
+            v-if="candidateAssignStudents.length === 0"
+            class="py-6 text-center text-xs text-slate-500"
+          >
+            Biriktirish uchun o'quvchilar topilmadi
+          </div>
+          <div
+            v-for="st in candidateAssignStudents"
+            :key="st.id || st.name"
+            @click="toggleSelectAssignStudent(st.id || st.name)"
+            class="flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition select-none"
+            :class="selectedAssignStudentIds.includes(st.id || st.name) ? 'border-purple-500/50 bg-purple-950/30' : 'border-white/5 bg-white/5 hover:bg-white/10'"
+          >
+            <div class="flex items-center gap-2.5">
+              <input
+                type="checkbox"
+                :checked="selectedAssignStudentIds.includes(st.id || st.name)"
+                class="rounded border-white/20 text-purple-600 focus:ring-0"
+              />
+              <div>
+                <div class="font-bold text-xs text-white">{{ st.name }}</div>
+                <div class="text-[10px] text-slate-400">Guruhlari: {{ getStudentGroupList(st).join(', ') }}</div>
+              </div>
+            </div>
+            <span
+              class="text-[10px] px-2 py-0.5 rounded-full font-bold"
+              :class="st.status === 'frozen' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-emerald-500/20 text-emerald-300'"
+            >
+              {{ st.status === 'frozen' ? '❄️ Muzlagan' : '🟢 Faol' }}
+            </span>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-white/10">
+          <button
+            type="button"
+            @click="showAssignExistingModal = false"
+            class="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold text-slate-300 hover:bg-white/10"
+          >
+            Bekor qilish
+          </button>
+          <button
+            type="button"
+            @click="submitAssignExisting"
+            :disabled="selectedAssignStudentIds.length === 0"
+            class="rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-black text-white shadow-lg shadow-purple-600/30 hover:bg-purple-500 active:scale-95 disabled:opacity-40 transition"
+          >
+            Guruhga biriktirish ({{ selectedAssignStudentIds.length }})
           </button>
         </div>
       </div>
@@ -2256,8 +2404,9 @@
                 <span>📋</span> <span>Login-Parollarni nusxalash</span>
               </button>
 
-              <!-- Toggle Freeze Group -->
+              <!-- Toggle Freeze Group (Disabled for protected groups) -->
               <button
+                v-if="!teacherStore.isProtectedGroup(selectedGroupHubName)"
                 type="button"
                 @click="toggleGroupFreeze(selectedGroupHubName, !isCurrentGroupAllFrozen)"
                 class="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition active:scale-95 border"
@@ -2268,6 +2417,28 @@
                 "
               >
                 <span>{{ isCurrentGroupAllFrozen ? '☀️ Eritish' : '❄️ Muzlatish' }}</span>
+              </button>
+
+              <!-- Rename Group -->
+              <button
+                v-if="!teacherStore.isProtectedGroup(selectedGroupHubName)"
+                type="button"
+                @click="openRenameGroupModal(selectedGroupHubName)"
+                class="flex items-center gap-1.5 rounded-xl bg-blue-500/20 border border-blue-500/30 px-3 py-1.5 text-xs font-bold text-blue-300 hover:bg-blue-500/40 active:scale-95 transition"
+                title="Guruh nomini o'zgartirish"
+              >
+                <span>✏️</span> <span>Nomini o'zgartirish</span>
+              </button>
+
+              <!-- Delete Group -->
+              <button
+                v-if="!teacherStore.isProtectedGroup(selectedGroupHubName)"
+                type="button"
+                @click="confirmDeleteGroup(selectedGroupHubName)"
+                class="flex items-center gap-1.5 rounded-xl bg-red-500/20 border border-red-500/30 px-3 py-1.5 text-xs font-bold text-red-300 hover:bg-red-500/40 active:scale-95 transition"
+                title="Guruhni o'chirish (o'quvchilar Umumiy guruhga o'tadi)"
+              >
+                <span>🗑️</span> <span>Guruhni o'chirish</span>
               </button>
             </div>
 
@@ -2600,17 +2771,27 @@
         <!-- ============================================ -->
         <div v-if="activeGroupTab === 'students'" class="space-y-3">
           <!-- Add Student Directly to this group -->
-          <div class="flex items-center justify-between">
+          <div class="flex flex-wrap items-center justify-between gap-2">
             <span class="text-xs font-bold text-slate-400">
               Ushbu guruhdagi barcha o'quvchilar ({{ currentGroupStudents.length }})
             </span>
-            <button
-              type="button"
-              @click="openAddStudentToGroup"
-              class="flex items-center gap-1 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-500 active:scale-95 transition shadow"
-            >
-              <span>➕</span> <span>Guruhga o'quvchi qo'shish</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                @click="openAssignExistingModal"
+                class="flex items-center gap-1 rounded-xl bg-purple-600/30 border border-purple-500/40 px-3 py-2 text-xs font-bold text-purple-200 hover:bg-purple-600/50 active:scale-95 transition shadow"
+                title="Boshqa yoki Umumiy guruhdagi o'quvchilarni ushbu guruhga biriktirish"
+              >
+                <span>👥</span> <span>Mavjud o'quvchini biriktirish</span>
+              </button>
+              <button
+                type="button"
+                @click="openAddStudentToGroup"
+                class="flex items-center gap-1 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-500 active:scale-95 transition shadow"
+              >
+                <span>➕</span> <span>Yangi o'quvchi qo'shish</span>
+              </button>
+            </div>
           </div>
 
           <!-- Students List Cards -->
@@ -2666,6 +2847,15 @@
                   title="Boshqa guruhga ko'chirish"
                 >
                   🔄
+                </button>
+                <!-- Remove from this Group -->
+                <button
+                  type="button"
+                  @click="removeStudentFromCurrentGroup(st)"
+                  class="rounded-xl bg-orange-500/20 border border-orange-500/30 p-2 text-xs text-orange-300 hover:bg-orange-500/30"
+                  :title="`«${selectedGroupHubName}» guruhidan chiqarish`"
+                >
+                  🚪
                 </button>
                 <!-- Toggle Freeze -->
                 <button
@@ -4858,6 +5048,15 @@ const isBatchTransfer = ref(false);
 const transferNewGroupName = ref("");
 const transferActionType = ref<"add" | "move">("add");
 
+const showRenameGroupModal = ref(false);
+const groupRenameOldName = ref("");
+const groupRenameNewName = ref("");
+const isSubmittingGroupRename = ref(false);
+
+const showAssignExistingModal = ref(false);
+const assignExistingSearch = ref("");
+const selectedAssignStudentIds = ref<string[]>([]);
+
 const showReminderModal = ref(false);
 const reminderTargetStudent = ref<Student | null>(null);
 const showRemindersListModal = ref(false);
@@ -4934,9 +5133,9 @@ const groupsList = computed(() => {
     }
   > = {};
 
-  // 1. Seed with groups from groupsMeta so newly created or cloud-synced empty groups are always listed!
+  // 1. Seed with groups from groupsMeta (exclude soft-deleted)
   for (const [gName, meta] of Object.entries(teacherStore.groupsMeta.value)) {
-    if (gName && gName.trim()) {
+    if (gName && gName.trim() && !meta?.deleted) {
       const cleanName = gName.trim();
       map[cleanName] = {
         name: cleanName,
@@ -4953,6 +5152,24 @@ const groupsList = computed(() => {
         note: meta?.note || "",
       };
     }
+  }
+
+  // Always ensure 'Umumiy' is included for unassigned students
+  if (!map["Umumiy"]) {
+    map["Umumiy"] = {
+      name: "Umumiy",
+      count: 0,
+      activeCount: 0,
+      frozenCount: 0,
+      isAllFrozen: false,
+      totalAccuracy: 0,
+      avgAccuracy: 0,
+      days: ["Du", "Chor", "Juma"],
+      time: "14:00 - 15:30",
+      room: "",
+      subject: "Tarix",
+      note: "Biriktirilmagan / umumiy o'quvchilar",
+    };
   }
 
   // 2. Count students for each group (multi-group support)
@@ -4979,7 +5196,7 @@ const groupsList = computed(() => {
         };
       }
       map[cleanG].count++;
-      if (s.status === "frozen") {
+      if (teacherStore.isStudentFrozen(s, cleanG)) {
         map[cleanG].frozenCount++;
       } else {
         map[cleanG].activeCount++;
@@ -5035,7 +5252,7 @@ const currentGroupStudents = computed(() => {
 
 const currentGroupActiveStudents = computed(() => {
   return currentGroupStudents.value.filter(
-    (s) => s.status !== "frozen" && !teacherStore.isStudentFrozen(s.name, s.group)
+    (s) => s.status !== "frozen" && !teacherStore.isStudentFrozen(s, selectedGroupHubName.value)
   );
 });
 
@@ -5058,7 +5275,7 @@ const availableGuestStudents = computed(() => {
     const normName = s.name.toLowerCase().trim();
     const sGroup = (s.group || "Umumiy").toLowerCase().trim();
     if (currentAddedNames.has(normName)) return false;
-    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name, s.group)) return false;
+    if (s.status === "frozen" || teacherStore.isStudentFrozen(s, s.group)) return false;
     if (guestGroupFilter.value !== "all" && sGroup !== guestGroupFilter.value.toLowerCase().trim()) return false;
     if (guestSearchQuery.value.trim()) {
       const q = guestSearchQuery.value.toLowerCase().trim();
@@ -5876,7 +6093,7 @@ function doConfirmTransfer() {
     teacherStore.transferMultipleStudentsGroup(selectedStudentNames.value, newGroup, isAdd);
     selectedStudentNames.value = [];
   } else if (transferTargetStudent.value) {
-    teacherStore.transferStudentGroup(transferTargetStudent.value.name, newGroup, isAdd);
+    teacherStore.transferStudentGroup(transferTargetStudent.value, newGroup, isAdd);
   }
 
   showTransferModal.value = false;
@@ -5885,6 +6102,129 @@ function doConfirmTransfer() {
       ? `✅ Tanlangan o'quvchi(lar) "${newGroup}" guruhiga ham muvaffaqiyatli a'zo qilindi!`
       : `✅ Tanlangan o'quvchi(lar) "${newGroup}" guruhiga ko'chirildi!`
   );
+}
+
+// Candidate students for assignment to selected group in Group Hub
+const candidateAssignStudents = computed(() => {
+  if (!selectedGroupHubName.value) return [];
+  const currentGroup = selectedGroupHubName.value.toLowerCase().trim();
+  const q = assignExistingSearch.value.trim().toLowerCase();
+  return teacherStore.allStudentsRegistry.value.filter((s) => {
+    const groups = getStudentGroupList(s).map((g) => g.toLowerCase().trim());
+    if (groups.includes(currentGroup)) return false;
+
+    if (q) {
+      const matchName = s.name.toLowerCase().includes(q);
+      const matchGroup = groups.some((g) => g.includes(q));
+      return matchName || matchGroup;
+    }
+    return true;
+  });
+});
+
+function openRenameGroupModal(groupName: string) {
+  if (teacherStore.isProtectedGroup(groupName)) {
+    alert(`«${groupName}» tizim guruhini qayta nomlash mumkin emas!`);
+    return;
+  }
+  groupRenameOldName.value = groupName;
+  groupRenameNewName.value = groupName;
+  showRenameGroupModal.value = true;
+}
+
+async function submitRenameGroup() {
+  const oldName = groupRenameOldName.value.trim();
+  const newName = groupRenameNewName.value.trim();
+  if (!newName) {
+    alert("Iltimos, yangi guruh nomini kiriting!");
+    return;
+  }
+  if (oldName.toLowerCase() === newName.toLowerCase()) {
+    showRenameGroupModal.value = false;
+    return;
+  }
+
+  isSubmittingGroupRename.value = true;
+  try {
+    const res = await teacherStore.renameGroup(oldName, newName);
+    if (!res.success) {
+      alert("Xatolik: " + (res.error || "Guruh nomini o'zgartirib bo'lmadi"));
+      return;
+    }
+    if (selectedGroupHubName.value.toLowerCase() === oldName.toLowerCase()) {
+      selectedGroupHubName.value = newName;
+    }
+    if (selectedGroupFilter.value.toLowerCase() === oldName.toLowerCase()) {
+      selectedGroupFilter.value = newName;
+    }
+    showRenameGroupModal.value = false;
+    alert(`✅ Guruh nomi muvaffaqiyatli «${newName}» ga o'zgartirildi!`);
+  } catch (e: any) {
+    alert("Xatolik: " + (e?.message || "Tarmoq xatosi"));
+  } finally {
+    isSubmittingGroupRename.value = false;
+  }
+}
+
+async function confirmDeleteGroup(groupName: string) {
+  if (teacherStore.isProtectedGroup(groupName)) {
+    alert(`«${groupName}» tizim guruhini o'chirish mumkin emas!`);
+    return;
+  }
+  if (!confirm(`Haqiqatan ham «${groupName}» guruhini o'chirmoqchimisiz?\n\nℹ️ Guruhdagi barcha o'quvchilar «Umumiy» guruhga o'tkaziladi. O'quvchilar profili, test tarixi va davomat yozuvlari to'liq saqlanadi.`)) {
+    return;
+  }
+
+  const res = await teacherStore.deleteGroup(groupName);
+  if (!res.success) {
+    alert("Xatolik: " + (res.error || "Guruhni o'chirib bo'lmadi"));
+    return;
+  }
+  selectedGroupHubName.value = "";
+  managerView.value = "groups";
+  alert(`✅ «${groupName}» guruhi o'chirildi va barcha a'zolari «Umumiy» guruhga o'tkazildi.`);
+}
+
+function openAssignExistingModal() {
+  selectedAssignStudentIds.value = [];
+  assignExistingSearch.value = "";
+  showAssignExistingModal.value = true;
+}
+
+function toggleSelectAssignStudent(idOrName: string) {
+  const idx = selectedAssignStudentIds.value.indexOf(idOrName);
+  if (idx > -1) {
+    selectedAssignStudentIds.value.splice(idx, 1);
+  } else {
+    selectedAssignStudentIds.value.push(idOrName);
+  }
+}
+
+function toggleSelectAllAssign() {
+  if (selectedAssignStudentIds.value.length === candidateAssignStudents.value.length) {
+    selectedAssignStudentIds.value = [];
+  } else {
+    selectedAssignStudentIds.value = candidateAssignStudents.value.map((s) => s.id || s.name);
+  }
+}
+
+async function submitAssignExisting() {
+  if (!selectedGroupHubName.value || selectedAssignStudentIds.value.length === 0) return;
+  const targetGroup = selectedGroupHubName.value.trim();
+
+  await teacherStore.transferMultipleStudentsGroup(selectedAssignStudentIds.value, targetGroup, true);
+  const count = selectedAssignStudentIds.value.length;
+  selectedAssignStudentIds.value = [];
+  showAssignExistingModal.value = false;
+  alert(`✅ ${count} ta o'quvchi «${targetGroup}» guruhiga muvaffaqiyatli biriktirildi!`);
+}
+
+async function removeStudentFromCurrentGroup(student: Student) {
+  if (!selectedGroupHubName.value) return;
+  const group = selectedGroupHubName.value.trim();
+  if (confirm(`«${student.name}» o'quvchisini «${group}» guruhidan chiqarmoqchimisiz?`)) {
+    await teacherStore.removeStudentFromGroup(student, group);
+  }
 }
 
 // --- Sync Real Students from Google Sheets Database ---
@@ -6180,12 +6520,12 @@ function saveStudentData() {
 }
 
 function toggleFreeze(student: Student) {
-  teacherStore.toggleFreezeStudent(student.name);
+  teacherStore.toggleFreezeStudent(student);
 }
 
 function confirmDelete(student: Student) {
   if (confirm(`Haqiqatan ham "${student.name}"ni ro'yxatdan o'chirmoqchimisiz?`)) {
-    teacherStore.deleteStudentPermanently(student.name);
+    teacherStore.deleteStudentPermanently(student);
   }
 }
 

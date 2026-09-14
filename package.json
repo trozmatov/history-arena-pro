@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "npx tsx test-architecture-v6.ts",
+    "test:v6": "npx tsx test-architecture-v6.ts"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

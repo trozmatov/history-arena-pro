@@ -1,25 +1,57 @@
 import { ref, computed, watch } from "vue";
 import { callApi } from "../services/api";
 import { soundManager, fireConfetti, fireVictoryConfetti } from "./useAudio";
-import { db, ref as fbRef, set as fbSet, remove as fbRemove, get as fbGet, onChildAdded, onChildChanged, onChildRemoved } from "../services/firebase";
+import {
+  db,
+  ref as fbRef,
+  set as fbSet,
+  remove as fbRemove,
+  get as fbGet,
+  update as fbUpdate,
+  onChildAdded,
+  onChildChanged,
+  onChildRemoved,
+} from "../services/firebase";
 import { getStudentDefaultPin } from "./useStudentStore";
 
+export const PROTECTED_GROUPS = ["umumiy", "arxiv"];
+export function isProtectedGroup(groupName: string): boolean {
+  if (!groupName) return false;
+  return PROTECTED_GROUPS.includes(groupName.toLowerCase().trim());
+}
 
 export function sanitizeFbKey(name: string): string {
   return encodeURIComponent(name.toLowerCase().trim()).replace(/\./g, "%2E");
 }
 
-export function syncFreezeToCloud(studentName: string, isFrozen: boolean, group: string = "") {
+export function getStudentFbKey(student: Partial<Student>): string {
+  if (student.id && student.id.trim()) {
+    return sanitizeFbKey(student.id.trim());
+  }
+  if (student.name && student.name.trim()) {
+    return sanitizeFbKey(student.name.trim());
+  }
+  return "unknown_" + Date.now();
+}
+
+export function syncFreezeToCloud(studentOrName: Student | string, isFrozen: boolean, group: string = "") {
   try {
-    const key = sanitizeFbKey(studentName);
+    const name = typeof studentOrName === "object" ? studentOrName.name : studentOrName;
+    const key = typeof studentOrName === "object" ? getStudentFbKey(studentOrName) : sanitizeFbKey(name);
+    const id = typeof studentOrName === "object" ? studentOrName.id || "" : "";
     if (isFrozen) {
       fbSet(fbRef(db, `frozen_students/${key}`), {
-        name: studentName,
+        id,
+        name,
         group: group || "",
         frozenAt: Date.now(),
       }).catch((e: any) => console.warn("Firebase sync error:", e));
     } else {
       fbRemove(fbRef(db, `frozen_students/${key}`)).catch((e: any) => console.warn("Firebase sync error:", e));
+      const legacyKey = sanitizeFbKey(name);
+      if (legacyKey !== key) {
+        fbRemove(fbRef(db, `frozen_students/${legacyKey}`)).catch(() => {});
+      }
     }
   } catch (e) {
     console.warn("syncFreezeToCloud error:", e);
@@ -28,10 +60,15 @@ export function syncFreezeToCloud(studentName: string, isFrozen: boolean, group:
 
 export function syncGroupFreezeToCloud(groupName: string, isFrozen: boolean) {
   try {
-    const key = sanitizeFbKey(groupName);
+    const cleanGrp = groupName.toLowerCase().trim();
+    if (isProtectedGroup(cleanGrp)) {
+      console.warn(`Cannot freeze protected group: ${groupName}`);
+      return;
+    }
+    const key = sanitizeFbKey(cleanGrp);
     if (isFrozen) {
       fbSet(fbRef(db, `frozen_groups/${key}`), {
-        group: groupName,
+        group: groupName.trim(),
         frozenAt: Date.now(),
       }).catch((e: any) => console.warn("Firebase group sync error:", e));
     } else {
@@ -67,9 +104,11 @@ export function isStudentInGroup(student: Partial<Student>, groupName: string): 
 
 export function syncStudentToCloud(student: Student) {
   try {
-    const key = sanitizeFbKey(student.name);
+    const key = getStudentFbKey(student);
     const groupsList = getStudentGroups(student);
     const primaryGroup = student.group?.trim() || groupsList[0] || "Umumiy";
+    const now = student.updatedAt || Date.now();
+    student.updatedAt = now;
 
     fbSet(fbRef(db, `master_students/${key}`), {
       id: student.id,
@@ -89,17 +128,36 @@ export function syncStudentToCloud(student: Student) {
       coins: student.coins || 0,
       totalTests: student.totalTests || 0,
       avgAccuracy: student.avgAccuracy || 0,
-      updatedAt: Date.now(),
+      updatedAt: now,
     }).catch((e: any) => console.warn("Firebase master_students sync error:", e));
+
+    // Also sync to legacy student_groups path
+    fbSet(fbRef(db, `student_groups/${sanitizeFbKey(student.name)}`), {
+      name: student.name,
+      group: primaryGroup,
+      groups: groupsList,
+      updatedAt: now,
+    }).catch(() => {});
   } catch (e) {
     console.warn("syncStudentToCloud error:", e);
   }
 }
 
-export function deleteStudentFromCloud(studentName: string) {
+export function deleteStudentFromCloud(studentOrName: Student | string) {
   try {
-    const key = sanitizeFbKey(studentName);
+    const name = typeof studentOrName === "object" ? studentOrName.name : studentOrName;
+    const key = typeof studentOrName === "object" ? getStudentFbKey(studentOrName) : sanitizeFbKey(name);
+    const legacyKey = sanitizeFbKey(name);
+
     fbRemove(fbRef(db, `master_students/${key}`)).catch(() => {});
+    if (legacyKey !== key) {
+      fbRemove(fbRef(db, `master_students/${legacyKey}`)).catch(() => {});
+    }
+    fbRemove(fbRef(db, `student_groups/${legacyKey}`)).catch(() => {});
+    fbRemove(fbRef(db, `frozen_students/${key}`)).catch(() => {});
+    if (legacyKey !== key) {
+      fbRemove(fbRef(db, `frozen_students/${legacyKey}`)).catch(() => {});
+    }
   } catch (e) {
     console.warn("deleteStudentFromCloud error:", e);
   }
@@ -155,40 +213,15 @@ export function openStudentDoskaGlobal(studentOrName: Student | string) {
   requestedTeacherSubview.value = "students";
 }
 
-// Realtime Cloud synchronization for frozen groups
+// Realtime Cloud synchronization for frozen groups and frozen students
 export const cloudFrozenGroups = ref<string[]>(["arxiv"]); // 'arxiv' is always frozen
+export const cloudFrozenStudents = ref<string[]>([]);
 
 export function isGroupFrozen(groupName: string): boolean {
   if (!groupName) return false;
   const clean = groupName.toLowerCase().trim();
   return clean === "arxiv" || cloudFrozenGroups.value.includes(clean);
 }
-
-let teacherFreezeListenerActive = false;
-function initTeacherFreezeListener() {
-  if (teacherFreezeListenerActive || typeof window === "undefined") return;
-  teacherFreezeListenerActive = true;
-  try {
-    const fgRef = fbRef(db, "frozen_groups");
-    onChildAdded(fgRef, (snap: any) => {
-      const val = snap.val();
-      const grp = (val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
-      if (grp && !cloudFrozenGroups.value.includes(grp)) {
-        cloudFrozenGroups.value = [...cloudFrozenGroups.value, grp];
-      }
-    });
-    onChildRemoved(fgRef, (snap: any) => {
-      const val = snap.val();
-      const grp = (val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
-      if (grp && grp !== "arxiv") {
-        cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== grp);
-      }
-    });
-  } catch (e) {
-    console.warn("initTeacherFreezeListener error:", e);
-  }
-}
-initTeacherFreezeListener();
 
 export function syncGroupTransferToCloud(studentName: string, newGroup: string) {
   try {
@@ -305,6 +338,7 @@ export interface Student {
   totalTests?: number;
   avgAccuracy?: number;
   attendanceStats?: { present: number; excused: number; unexcused: number };
+  updatedAt?: number;
 }
 
 export interface GroupReminder {
@@ -326,6 +360,9 @@ export interface GroupMeta {
   paymentFee?: number; // e.g. 300000 (so'm)
   reminders?: GroupReminder[];
   studentPayments?: Record<string, { status: "paid" | "pending" | "debt"; month: string; paidDate?: string; amount?: number }>;
+  deleted?: boolean;
+  deletedAt?: number;
+  updatedAt?: number;
 }
 
 export interface LessonSessionStudentResult {
@@ -596,18 +633,6 @@ function loadInitialMasterStudents(): Student[] {
     }
   });
 
-  // Self-healing migration: restore any students incorrectly marked frozen by runaway loop
-  const freezeBugRepaired = localStorage.getItem("ha_freeze_repaired_v3");
-  if (!freezeBugRepaired) {
-    list.forEach((s) => {
-      if ((s.group || "").toLowerCase().trim() !== "arxiv") {
-        s.status = "active";
-      }
-    });
-    localStorage.setItem("ha_freeze_repaired_v3", "true");
-    needsSave = true;
-  }
-
   if (needsSave && list.length > 0) {
     localStorage.setItem("ha_all_students", JSON.stringify(list));
   }
@@ -626,27 +651,81 @@ watch(
   { deep: true }
 );
 
-let masterStudentsListenerActive = false;
-function initMasterStudentsListener() {
-  if (masterStudentsListenerActive || typeof window === "undefined") return;
-  masterStudentsListenerActive = true;
+export function findStudentInRegistry(studentOrIdOrName: Partial<Student> | string): Student | undefined {
+  if (!studentOrIdOrName) return undefined;
+  if (typeof studentOrIdOrName === "object") {
+    if (studentOrIdOrName.id) {
+      const found = allStudentsRegistry.value.find((s) => s.id === studentOrIdOrName.id);
+      if (found) return found;
+    }
+    if (studentOrIdOrName.name) {
+      const cleanName = studentOrIdOrName.name.toLowerCase().trim();
+      return allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === cleanName);
+    }
+    return undefined;
+  }
+  const query = studentOrIdOrName.trim();
+  const byId = allStudentsRegistry.value.find((s) => s.id === query);
+  if (byId) return byId;
+  const cleanName = query.toLowerCase();
+  return allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === cleanName);
+}
+
+let teacherStoreSyncActive = false;
+let batchIdTimeout: any = null;
+const pendingBatchIdUpdates: Record<string, any> = {};
+
+function scheduleBatchIdSync(student: Student) {
+  const key = getStudentFbKey(student);
+  pendingBatchIdUpdates[`master_students/${key}/id`] = student.id;
+  if (batchIdTimeout) clearTimeout(batchIdTimeout);
+  batchIdTimeout = setTimeout(() => {
+    if (Object.keys(pendingBatchIdUpdates).length > 0) {
+      fbUpdate(fbRef(db), { ...pendingBatchIdUpdates }).catch((e) => console.warn("Batch ID update error:", e));
+      Object.keys(pendingBatchIdUpdates).forEach((k) => delete pendingBatchIdUpdates[k]);
+    }
+  }, 1000);
+}
+
+export function initTeacherStoreSync() {
+  if (teacherStoreSyncActive || typeof window === "undefined") return;
+  teacherStoreSyncActive = true;
+
   try {
+    let firstSnapshotReceived = false;
+
+    // 1. Synchronize master_students
     const msRef = fbRef(db, "master_students");
     onChildAdded(msRef, (snap: any) => {
       const data = snap.val();
       if (!data || !data.name) return;
+
+      if (!firstSnapshotReceived) {
+        firstSnapshotReceived = true;
+        localStorage.setItem("ha_v6_clean_sync", "true");
+      }
+
       const cleanName = data.name.toLowerCase().trim();
-      const existing = allStudentsRegistry.value.find(
-        (s) => s.name.toLowerCase().trim() === cleanName
-      );
+      const existing = findStudentInRegistry(data.id ? data.id : cleanName);
+
+      // Prevent local echo reverting more recent local writes
+      if (existing && existing.updatedAt && data.updatedAt && data.updatedAt < existing.updatedAt) {
+        return;
+      }
+
       const rawGroups = Array.isArray(data.groups) && data.groups.length > 0
-        ? data.groups
-        : (data.group ? [data.group] : ["Umumiy"]);
+        ? data.groups.map((g: string) => g.trim()).filter(Boolean)
+        : (data.group ? [data.group.trim()] : ["Umumiy"]);
+
+      let assignedId = data.id;
+      if (!assignedId) {
+        assignedId = "std-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7);
+      }
 
       if (!existing) {
-        allStudentsRegistry.value.push({
-          id: data.id || "std-" + Date.now(),
-          name: data.name,
+        const newStudent: Student = {
+          id: assignedId,
+          name: data.name.trim(),
           group: data.group || rawGroups[0] || "Umumiy",
           groups: rawGroups,
           status: data.status || "active",
@@ -670,12 +749,23 @@ function initMasterStudentsListener() {
           totalTests: data.totalTests || 0,
           avgAccuracy: data.avgAccuracy || 0,
           attendanceStats: { present: 0, excused: 0, unexcused: 0 },
-        });
+          updatedAt: data.updatedAt || Date.now(),
+        };
+        allStudentsRegistry.value.push(newStudent);
         allStudentsRegistry.value = [...allStudentsRegistry.value];
         localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+        if (!data.id) {
+          scheduleBatchIdSync(newStudent);
+        }
       } else {
-        // Real-time hydrate missing cloud fields
+        // Hydrate cloud fields into existing student
         let changed = false;
+        if (!existing.id && assignedId) {
+          existing.id = assignedId;
+          changed = true;
+          if (!data.id) scheduleBatchIdSync(existing);
+        }
         if (data.phone && data.phone.trim() && !existing.phone) { existing.phone = data.phone.trim(); changed = true; }
         if (data.parentName && data.parentName.trim() && !existing.parentName) { existing.parentName = data.parentName.trim(); changed = true; }
         if (data.parentPhone && data.parentPhone.trim() && !existing.parentPhone) { existing.parentPhone = data.parentPhone.trim(); changed = true; }
@@ -683,6 +773,14 @@ function initMasterStudentsListener() {
         if (data.notes && data.notes.trim() && !existing.notes) { existing.notes = data.notes.trim(); changed = true; }
         if (Array.isArray(data.groups) && data.groups.length > 0) {
           existing.groups = data.groups;
+          changed = true;
+        }
+        if (data.group && data.group !== existing.group) {
+          existing.group = data.group;
+          changed = true;
+        }
+        if (data.status && data.status !== existing.status) {
+          existing.status = data.status;
           changed = true;
         }
         if (changed) {
@@ -698,28 +796,37 @@ function initMasterStudentsListener() {
       if (!data || !data.name) return;
       const cleanName = data.name.toLowerCase().trim();
       const existingIdx = allStudentsRegistry.value.findIndex(
-        (s) => s.name.toLowerCase().trim() === cleanName
+        (s) => (data.id && s.id === data.id) || s.name.toLowerCase().trim() === cleanName
       );
       if (existingIdx !== -1) {
+        const existing = allStudentsRegistry.value[existingIdx];
+        if (existing.updatedAt && data.updatedAt && data.updatedAt < existing.updatedAt) {
+          return; // Skip stale snapshot
+        }
+
         const rawGroups = Array.isArray(data.groups) && data.groups.length > 0
-          ? data.groups
-          : (data.group ? [data.group] : ["Umumiy"]);
+          ? data.groups.map((g: string) => g.trim()).filter(Boolean)
+          : (data.group ? [data.group.trim()] : ["Umumiy"]);
+
         allStudentsRegistry.value[existingIdx] = {
-          ...allStudentsRegistry.value[existingIdx],
-          phone: (data.phone && data.phone.trim()) ? data.phone.trim() : (allStudentsRegistry.value[existingIdx].phone || ""),
-          parentName: (data.parentName && data.parentName.trim()) ? data.parentName.trim() : (allStudentsRegistry.value[existingIdx].parentName || ""),
-          parentPhone: (data.parentPhone && data.parentPhone.trim()) ? data.parentPhone.trim() : (allStudentsRegistry.value[existingIdx].parentPhone || ""),
-          parentTg: (data.parentTg && data.parentTg.trim()) ? data.parentTg.trim() : (allStudentsRegistry.value[existingIdx].parentTg || ""),
-          group: data.group || rawGroups[0] || allStudentsRegistry.value[existingIdx].group,
+          ...existing,
+          id: data.id || existing.id,
+          name: data.name.trim(),
+          phone: (data.phone && data.phone.trim()) ? data.phone.trim() : (existing.phone || ""),
+          parentName: (data.parentName && data.parentName.trim()) ? data.parentName.trim() : (existing.parentName || ""),
+          parentPhone: (data.parentPhone && data.parentPhone.trim()) ? data.parentPhone.trim() : (existing.parentPhone || ""),
+          parentTg: (data.parentTg && data.parentTg.trim()) ? data.parentTg.trim() : (existing.parentTg || ""),
+          group: data.group || rawGroups[0] || existing.group,
           groups: rawGroups,
-          status: data.status || allStudentsRegistry.value[existingIdx].status,
-          pin: data.pin || allStudentsRegistry.value[existingIdx].pin,
-          password: data.password || allStudentsRegistry.value[existingIdx].password,
-          pattern: data.pattern !== undefined ? data.pattern : allStudentsRegistry.value[existingIdx].pattern,
-          notes: (data.notes && data.notes.trim()) ? data.notes.trim() : (allStudentsRegistry.value[existingIdx].notes || ""),
-          coins: data.coins !== undefined ? data.coins : allStudentsRegistry.value[existingIdx].coins,
-          avgAccuracy: data.avgAccuracy !== undefined ? data.avgAccuracy : allStudentsRegistry.value[existingIdx].avgAccuracy,
-          totalTests: data.totalTests !== undefined ? data.totalTests : allStudentsRegistry.value[existingIdx].totalTests,
+          status: data.status || existing.status,
+          pin: data.pin || existing.pin,
+          password: data.password || existing.password,
+          pattern: data.pattern !== undefined ? data.pattern : existing.pattern,
+          notes: (data.notes && data.notes.trim()) ? data.notes.trim() : (existing.notes || ""),
+          coins: data.coins !== undefined ? data.coins : existing.coins,
+          avgAccuracy: data.avgAccuracy !== undefined ? data.avgAccuracy : existing.avgAccuracy,
+          totalTests: data.totalTests !== undefined ? data.totalTests : existing.totalTests,
+          updatedAt: data.updatedAt || Date.now(),
         };
         allStudentsRegistry.value = [...allStudentsRegistry.value];
         localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
@@ -731,16 +838,148 @@ function initMasterStudentsListener() {
       const data = snap.val();
       if (!data || !data.name) return;
       const cleanName = data.name.toLowerCase().trim();
+      const targetId = data.id;
       allStudentsRegistry.value = allStudentsRegistry.value.filter(
-        (s) => s.name.toLowerCase().trim() !== cleanName
+        (s) => (targetId ? s.id !== targetId : true) && s.name.toLowerCase().trim() !== cleanName
       );
       localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
     });
+
+    // 2. Synchronize frozen_groups
+    const fgRef = fbRef(db, "frozen_groups");
+    onChildAdded(fgRef, (snap: any) => {
+      const val = snap.val();
+      const grp = (val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (grp && !cloudFrozenGroups.value.includes(grp)) {
+        cloudFrozenGroups.value = [...cloudFrozenGroups.value, grp];
+      }
+    });
+    onChildRemoved(fgRef, (snap: any) => {
+      const val = snap.val();
+      const grp = (val?.group || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (grp && grp !== "arxiv") {
+        cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== grp);
+      }
+    });
+
+    // 3. Synchronize frozen_students
+    const fsRef = fbRef(db, "frozen_students");
+    onChildAdded(fsRef, (snap: any) => {
+      const val = snap.val();
+      const sName = (val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      const sId = val?.id ? val.id.toLowerCase().trim() : "";
+      const sKey = snap.key ? snap.key.toLowerCase().trim() : "";
+
+      if (sName && !cloudFrozenStudents.value.includes(sName)) cloudFrozenStudents.value.push(sName);
+      if (sId && !cloudFrozenStudents.value.includes(sId)) cloudFrozenStudents.value.push(sId);
+      if (sKey && !cloudFrozenStudents.value.includes(sKey)) cloudFrozenStudents.value.push(sKey);
+
+      // Update target student status in memory
+      const target = findStudentInRegistry(val?.id || sName);
+      if (target && target.status !== "frozen") {
+        target.status = "frozen";
+        allStudentsRegistry.value = [...allStudentsRegistry.value];
+      }
+    });
+    onChildRemoved(fsRef, (snap: any) => {
+      const val = snap.val();
+      const sName = (val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      const sId = val?.id ? val.id.toLowerCase().trim() : "";
+      const sKey = snap.key ? snap.key.toLowerCase().trim() : "";
+
+      cloudFrozenStudents.value = cloudFrozenStudents.value.filter(
+        (x) => x !== sName && x !== sId && x !== sKey
+      );
+
+      const target = findStudentInRegistry(val?.id || sName);
+      if (target && target.status === "frozen") {
+        target.status = "active";
+        allStudentsRegistry.value = [...allStudentsRegistry.value];
+      }
+    });
+
+    // 4. Synchronize groups_meta
+    const gmRef = fbRef(db, "groups_meta");
+    const handleGroupMetaSnap = (snap: any) => {
+      const val = snap.val();
+      if (val && val.name) {
+        if (val.deleted) {
+          delete groupsMeta.value[val.name];
+        } else {
+          groupsMeta.value[val.name] = {
+            ...groupsMeta.value[val.name],
+            ...val,
+          };
+        }
+        localStorage.setItem("ha_groups_meta", JSON.stringify(groupsMeta.value));
+      }
+    };
+    onChildAdded(gmRef, handleGroupMetaSnap);
+    onChildChanged(gmRef, handleGroupMetaSnap);
+    onChildRemoved(gmRef, (snap: any) => {
+      const val = snap.val();
+      const gName = val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."));
+      if (gName && groupsMeta.value[gName]) {
+        delete groupsMeta.value[gName];
+        localStorage.setItem("ha_groups_meta", JSON.stringify(groupsMeta.value));
+      }
+    });
+
+    // 5. Synchronize student_patterns
+    const spRef = fbRef(db, "student_patterns");
+    onChildAdded(spRef, (snap: any) => {
+      const val = snap.val();
+      const sName = (val?.name || decodeURIComponent(snap.key.replace(/%2E/g, "."))).toLowerCase().trim();
+      if (sName && val?.pattern) {
+        const target = findStudentInRegistry(sName);
+        if (target && target.pattern !== val.pattern) {
+          target.pattern = val.pattern;
+          allStudentsRegistry.value = [...allStudentsRegistry.value];
+        }
+      }
+    });
+    onChildRemoved(spRef, (snap: any) => {
+      const sName = decodeURIComponent(snap.key.replace(/%2E/g, ".")).toLowerCase().trim();
+      if (sName) {
+        const target = findStudentInRegistry(sName);
+        if (target && target.pattern) {
+          target.pattern = "";
+          allStudentsRegistry.value = [...allStudentsRegistry.value];
+        }
+      }
+    });
+
+    // 6. Synchronize attendance_logs
+    const attLogsRef = fbRef(db, "attendance_logs");
+    const handleAttLogSnap = (snap: any) => {
+      const val = snap.val();
+      if (val && val.name && val.date && val.status) {
+        const existing = localAttendanceLogs.value.find(
+          (l) => l.name.toLowerCase().trim() === val.name.toLowerCase().trim() && l.date === val.date
+        );
+        if (existing) {
+          existing.status = val.status;
+          existing.group = val.group || existing.group;
+          existing.reason = val.reason || existing.reason;
+        } else {
+          localAttendanceLogs.value.push({
+            name: val.name,
+            date: val.date,
+            status: val.status,
+            group: val.group || "Umumiy",
+            reason: val.reason || "",
+          });
+        }
+      }
+    };
+    onChildAdded(attLogsRef, handleAttLogSnap);
+    onChildChanged(attLogsRef, handleAttLogSnap);
+
   } catch (e) {
-    console.warn("initMasterStudentsListener error:", e);
+    console.warn("initTeacherStoreSync error:", e);
   }
 }
-initMasterStudentsListener();
+initTeacherStoreSync();
 
 export function updateProtectedContactsBackup() {
   if (typeof window === "undefined") return;
@@ -1184,8 +1423,10 @@ export async function restoreAndFindAllStudents(): Promise<{
         members.forEach((name) => {
           if (isValidName(name)) {
             const st = getOrAddStudent(name, groupName);
-            if (!st.groups) st.groups = [groupName];
-            else if (!st.groups.includes(groupName)) st.groups.push(groupName);
+            if (!st.groups || st.groups.length === 0 || (st.groups.length === 1 && st.groups[0] === "Umumiy")) {
+              st.groups = [groupName];
+              st.group = groupName;
+            }
             sources.sheets++;
           }
         });
@@ -1438,15 +1679,35 @@ watch(
 export function useTeacherStore() {
   const isTeacherLoggedIn = computed(() => !!teacherName.value);
 
-  const isStudentFrozen = (name: string, group?: string): boolean => {
-    if (!name) return false;
-    const cleanName = name.toLowerCase().trim();
-    const target = allStudentsRegistry.value.find(
-      (s) => s.name.toLowerCase().trim() === cleanName
-    );
-    const grp = (group || target?.group || "").toLowerCase().trim();
-    if (grp && isGroupFrozen(grp)) return true;
-    return target?.status === "frozen";
+  const isStudentFrozen = (studentOrIdOrName: Student | string, contextGroup?: string): boolean => {
+    if (!studentOrIdOrName) return false;
+    const target = typeof studentOrIdOrName === "object"
+      ? studentOrIdOrName
+      : findStudentInRegistry(studentOrIdOrName);
+    const targetName = (typeof studentOrIdOrName === "string" ? studentOrIdOrName : target?.name || "").toLowerCase().trim();
+    const targetId = target?.id ? target.id.trim() : "";
+    const targetKey = target ? getStudentFbKey(target) : (targetId ? sanitizeFbKey(targetId) : sanitizeFbKey(targetName));
+
+    // 1. Personal Freeze check (Highest priority: personally frozen students are blocked everywhere)
+    if (target?.status === "frozen") return true;
+    if (targetId && cloudFrozenStudents.value.includes(targetId.toLowerCase())) return true;
+    if (targetName && cloudFrozenStudents.value.includes(targetName)) return true;
+    if (targetKey && cloudFrozenStudents.value.includes(targetKey)) return true;
+
+    // 2. Contextual Group Freeze check (When evaluated within a specific group)
+    if (contextGroup && contextGroup.trim()) {
+      const cleanCtx = contextGroup.toLowerCase().trim();
+      return isGroupFrozen(cleanCtx);
+    }
+
+    // 3. Global Context check (e.g. Arena, Duel, Leaderboard where no single group is specified)
+    // If student has enrolled groups, frozen globally ONLY IF ALL enrolled groups are frozen.
+    const studentGroups = target ? getStudentGroups(target) : [];
+    if (studentGroups.length > 0) {
+      return studentGroups.every((g) => isGroupFrozen(g));
+    }
+
+    return false;
   };
 
   const standardStudents = computed(() =>
@@ -1785,36 +2046,81 @@ export function useTeacherStore() {
     }
   }
 
-  function toggleFreezeStudent(studentName: string) {
-    const clean = studentName.toLowerCase().trim();
-    const target = allStudentsRegistry.value.find(
-      (s) => s.name.toLowerCase().trim() === clean
-    );
-    if (target) {
-      target.status = target.status === "frozen" ? "active" : "frozen";
-      const isFrozen = target.status === "frozen";
-      syncFreezeToCloud(target.name, isFrozen, target.group || "");
+  async function toggleFreezeStudent(studentOrIdOrName: Student | string) {
+    const target = typeof studentOrIdOrName === "object"
+      ? studentOrIdOrName
+      : findStudentInRegistry(studentOrIdOrName);
+    if (!target) return;
 
-      // If frozen, immediately eject from active game session
+    const newStatus: "active" | "frozen" = target.status === "frozen" ? "active" : "frozen";
+    const isFrozen = newStatus === "frozen";
+    const now = Date.now();
+
+    target.status = newStatus;
+    target.updatedAt = now;
+
+    const sKey = getStudentFbKey(target);
+    const cleanName = target.name.toLowerCase().trim();
+    const cleanId = target.id ? target.id.toLowerCase().trim() : "";
+
+    if (isFrozen) {
+      if (!cloudFrozenStudents.value.includes(sKey)) cloudFrozenStudents.value.push(sKey);
+      if (cleanName && !cloudFrozenStudents.value.includes(cleanName)) cloudFrozenStudents.value.push(cleanName);
+      if (cleanId && !cloudFrozenStudents.value.includes(cleanId)) cloudFrozenStudents.value.push(cleanId);
+    } else {
+      cloudFrozenStudents.value = cloudFrozenStudents.value.filter(
+        (x) => x !== sKey && x !== cleanName && x !== cleanId
+      );
+    }
+
+    // Immediately eject/restore in active session
+    if (isFrozen) {
+      students.value = students.value.filter(
+        (s) => (target.id ? s.id !== target.id : true) && s.name.toLowerCase().trim() !== cleanName
+      );
+    } else {
+      const inSession = students.value.find(
+        (s) => (target.id && s.id === target.id) || s.name.toLowerCase().trim() === cleanName
+      );
+      if (inSession) inSession.status = "active";
+    }
+
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+    // Multi-path atomic update in Firebase
+    try {
+      const updates: Record<string, any> = {};
+      updates[`master_students/${sKey}/status`] = newStatus;
+      updates[`master_students/${sKey}/updatedAt`] = now;
       if (isFrozen) {
-        students.value = students.value.filter(
-          (s) => s.name.toLowerCase().trim() !== clean
-        );
+        updates[`frozen_students/${sKey}`] = {
+          id: target.id || "",
+          name: target.name,
+          group: target.group || "Umumiy",
+          frozenAt: now,
+        };
       } else {
-        const inSession = students.value.find(
-          (s) => s.name.toLowerCase().trim() === clean
-        );
-        if (inSession) inSession.status = "active";
+        updates[`frozen_students/${sKey}`] = null;
+        const legacyKey = sanitizeFbKey(target.name);
+        if (legacyKey !== sKey) {
+          updates[`frozen_students/${legacyKey}`] = null;
+        }
       }
-
-      allStudentsRegistry.value = [...allStudentsRegistry.value];
+      await fbUpdate(fbRef(db), updates);
+    } catch (e) {
+      console.warn("toggleFreezeStudent cloud update error:", e);
     }
   }
 
-  function toggleFreezeGroup(groupName: string, freeze: boolean) {
+  async function toggleFreezeGroup(groupName: string, freeze: boolean) {
     const cleanGrp = groupName.toLowerCase().trim();
-    const newStatus: "active" | "frozen" = freeze ? "frozen" : "active";
-    syncGroupFreezeToCloud(groupName.trim(), freeze);
+    if (isProtectedGroup(cleanGrp)) {
+      console.warn(`Cannot freeze protected group: ${groupName}`);
+      return;
+    }
+
+    const gKey = sanitizeFbKey(cleanGrp);
     if (freeze) {
       if (!cloudFrozenGroups.value.includes(cleanGrp)) {
         cloudFrozenGroups.value = [...cloudFrozenGroups.value, cleanGrp];
@@ -1822,87 +2128,189 @@ export function useTeacherStore() {
     } else {
       cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== cleanGrp);
     }
-    allStudentsRegistry.value.forEach((s) => {
-      if ((s.group || "").toLowerCase().trim() === cleanGrp) {
-        s.status = newStatus;
-        syncFreezeToCloud(s.name, freeze, s.group || "");
-      }
-    });
-    // If frozen, immediately eject all group members from active game session
+
+    // NOTE: Group freeze/unfreeze NEVER touches any student's personal status or frozen_students record!
+    // If group is frozen, eject active session students enrolled ONLY in this group
     if (freeze) {
-      students.value = students.value.filter(
-        (s) => (s.group || "").toLowerCase().trim() !== cleanGrp
-      );
-    } else {
-      students.value.forEach((s) => {
-        if ((s.group || "").toLowerCase().trim() === cleanGrp) {
-          s.status = "active";
-        }
+      students.value = students.value.filter((s) => {
+        const groups = getStudentGroups(s);
+        return groups.some((g) => g.toLowerCase().trim() !== cleanGrp && !isGroupFrozen(g));
       });
     }
-    allStudentsRegistry.value = [...allStudentsRegistry.value];
+
+    try {
+      const updates: Record<string, any> = {};
+      if (freeze) {
+        updates[`frozen_groups/${gKey}`] = {
+          group: groupName.trim(),
+          frozenAt: Date.now(),
+        };
+      } else {
+        updates[`frozen_groups/${gKey}`] = null;
+      }
+      await fbUpdate(fbRef(db), updates);
+    } catch (e) {
+      console.warn("toggleFreezeGroup cloud update error:", e);
+    }
   }
 
-  function addStudentToGroup(studentName: string, newGroup: string) {
-    const cleanName = studentName.toLowerCase().trim();
+  async function addStudentToGroup(studentOrIdOrName: Student | string, newGroup: string) {
     const trimmedGroup = newGroup.trim();
-    if (!trimmedGroup || !cleanName) return;
+    if (!trimmedGroup) return;
 
-    const target = allStudentsRegistry.value.find(
-      (s) => s.name.toLowerCase().trim() === cleanName
-    );
-    if (target) {
-      const currentGroups = getStudentGroups(target);
-      if (!currentGroups.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
-        currentGroups.push(trimmedGroup);
-        target.groups = currentGroups;
-        if (!target.group || target.group === "Umumiy") {
-          target.group = trimmedGroup;
-        }
-        allStudentsRegistry.value = [...allStudentsRegistry.value];
-        localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
-        syncStudentToCloud(target);
-        syncGroupTransferToCloud(target.name, trimmedGroup);
+    const target = typeof studentOrIdOrName === "object"
+      ? studentOrIdOrName
+      : findStudentInRegistry(studentOrIdOrName);
+    if (!target) return;
+
+    const now = Date.now();
+    const currentGroups = getStudentGroups(target);
+    if (!currentGroups.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
+      const filtered = currentGroups.filter((g) => g !== "Umumiy");
+      filtered.push(trimmedGroup);
+      target.groups = filtered;
+      if (!target.group || target.group === "Umumiy") {
+        target.group = trimmedGroup;
+      }
+      target.updatedAt = now;
+
+      allStudentsRegistry.value = [...allStudentsRegistry.value];
+      localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+      try {
+        const sKey = getStudentFbKey(target);
+        const updates: Record<string, any> = {};
+        updates[`master_students/${sKey}/group`] = target.group;
+        updates[`master_students/${sKey}/groups`] = target.groups;
+        updates[`master_students/${sKey}/updatedAt`] = now;
+        updates[`student_groups/${sanitizeFbKey(target.name)}`] = {
+          name: target.name,
+          group: target.group,
+          groups: target.groups,
+          updatedAt: now,
+        };
+        await fbUpdate(fbRef(db), updates);
+      } catch (e) {
+        console.warn("addStudentToGroup cloud update error:", e);
       }
     }
   }
 
-  function removeStudentFromGroup(studentName: string, groupToRemove: string) {
-    const cleanName = studentName.toLowerCase().trim();
+  async function removeStudentFromGroup(studentOrIdOrName: Student | string, groupToRemove: string) {
     const trimmedGroup = groupToRemove.trim();
-    if (!trimmedGroup || !cleanName) return;
+    if (!trimmedGroup) return;
 
-    const target = allStudentsRegistry.value.find(
-      (s) => s.name.toLowerCase().trim() === cleanName
+    const target = typeof studentOrIdOrName === "object"
+      ? studentOrIdOrName
+      : findStudentInRegistry(studentOrIdOrName);
+    if (!target) return;
+
+    const now = Date.now();
+    const currentGroups = getStudentGroups(target).filter(
+      (g) => g.toLowerCase() !== trimmedGroup.toLowerCase()
     );
-    if (target) {
-      const currentGroups = getStudentGroups(target).filter(
-        (g) => g.toLowerCase() !== trimmedGroup.toLowerCase()
-      );
-      target.groups = currentGroups.length > 0 ? currentGroups : ["Umumiy"];
-      target.group = target.groups[0] || "Umumiy";
-      allStudentsRegistry.value = [...allStudentsRegistry.value];
-      localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
-      syncStudentToCloud(target);
-      syncGroupTransferToCloud(target.name, target.group);
+    // Fall back to "Umumiy" if no groups remain (prevents orphan students)
+    target.groups = currentGroups.length > 0 ? currentGroups : ["Umumiy"];
+    target.group = target.groups[0] || "Umumiy";
+    target.updatedAt = now;
+
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+    try {
+      const sKey = getStudentFbKey(target);
+      const updates: Record<string, any> = {};
+      updates[`master_students/${sKey}/group`] = target.group;
+      updates[`master_students/${sKey}/groups`] = target.groups;
+      updates[`master_students/${sKey}/updatedAt`] = now;
+      updates[`student_groups/${sanitizeFbKey(target.name)}`] = {
+        name: target.name,
+        group: target.group,
+        groups: target.groups,
+        updatedAt: now,
+      };
+      await fbUpdate(fbRef(db), updates);
+    } catch (e) {
+      console.warn("removeStudentFromGroup cloud update error:", e);
     }
   }
 
-  function transferStudentGroup(studentName: string, newGroup: string, addToExisting = false) {
-    const cleanName = studentName.toLowerCase().trim();
+  async function transferStudentGroup(studentOrIdOrName: Student | string, newGroup: string, addToExisting = false) {
     const trimmedGroup = newGroup.trim();
-    if (!trimmedGroup || !cleanName) return;
-    const isNewGroupFrozen = isGroupFrozen(trimmedGroup);
+    if (!trimmedGroup) return;
 
-    const target = allStudentsRegistry.value.find(
-      (s) => s.name.toLowerCase().trim() === cleanName
+    const target = typeof studentOrIdOrName === "object"
+      ? studentOrIdOrName
+      : findStudentInRegistry(studentOrIdOrName);
+    if (!target) return;
+
+    const now = Date.now();
+    target.updatedAt = now;
+
+    if (addToExisting) {
+      const cur = getStudentGroups(target);
+      if (!cur.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
+        const filtered = cur.filter((g) => g !== "Umumiy");
+        filtered.push(trimmedGroup);
+        target.groups = filtered;
+      }
+      if (!target.group || target.group === "Umumiy") {
+        target.group = trimmedGroup;
+      }
+    } else {
+      target.group = trimmedGroup;
+      target.groups = [trimmedGroup];
+    }
+
+    // In-session update
+    const cleanName = target.name.toLowerCase().trim();
+    const inSession = students.value.find(
+      (s) => (target.id && s.id === target.id) || s.name.toLowerCase().trim() === cleanName
     );
-    if (target) {
+    if (inSession) {
+      inSession.group = target.group;
+      inSession.groups = target.groups;
+    }
+
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+    try {
+      const sKey = getStudentFbKey(target);
+      const updates: Record<string, any> = {};
+      updates[`master_students/${sKey}/group`] = target.group;
+      updates[`master_students/${sKey}/groups`] = target.groups;
+      updates[`master_students/${sKey}/updatedAt`] = now;
+      updates[`student_groups/${sanitizeFbKey(target.name)}`] = {
+        name: target.name,
+        group: target.group,
+        groups: target.groups,
+        updatedAt: now,
+      };
+      await fbUpdate(fbRef(db), updates);
+    } catch (e) {
+      console.warn("transferStudentGroup cloud update error:", e);
+    }
+  }
+
+  async function transferMultipleStudentsGroup(studentsOrNames: (Student | string)[], newGroup: string, addToExisting = false) {
+    const trimmedGroup = newGroup.trim();
+    if (!trimmedGroup || studentsOrNames.length === 0) return;
+
+    const now = Date.now();
+    const updates: Record<string, any> = {};
+
+    studentsOrNames.forEach((item) => {
+      const target = typeof item === "object" ? item : findStudentInRegistry(item);
+      if (!target) return;
+
+      target.updatedAt = now;
       if (addToExisting) {
         const cur = getStudentGroups(target);
         if (!cur.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
-          cur.push(trimmedGroup);
-          target.groups = cur;
+          const filtered = cur.filter((g) => g !== "Umumiy");
+          filtered.push(trimmedGroup);
+          target.groups = filtered;
         }
         if (!target.group || target.group === "Umumiy") {
           target.group = trimmedGroup;
@@ -1912,103 +2320,56 @@ export function useTeacherStore() {
         target.groups = [trimmedGroup];
       }
 
-      if (isNewGroupFrozen) {
-        target.status = "frozen";
-        syncFreezeToCloud(target.name, true, trimmedGroup);
-      } else {
-        target.status = "active";
-        syncFreezeToCloud(target.name, false, trimmedGroup);
-      }
-      syncStudentToCloud(target);
-    }
-
-    const inSession = students.value.find(
-      (s) => s.name.toLowerCase().trim() === cleanName
-    );
-    if (inSession) {
-      inSession.group = trimmedGroup;
-      if (isNewGroupFrozen) {
-        students.value = students.value.filter(
-          (s) => s.name.toLowerCase().trim() !== cleanName
-        );
-      } else {
-        inSession.status = "active";
-      }
-    }
-
-    allStudentsRegistry.value = [...allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
-    syncGroupTransferToCloud(target?.name || studentName, trimmedGroup);
-  }
-
-  function transferMultipleStudentsGroup(studentNames: string[], newGroup: string, addToExisting = false) {
-    const trimmedGroup = newGroup.trim();
-    if (!trimmedGroup || studentNames.length === 0) return;
-    const isNewGroupFrozen = isGroupFrozen(trimmedGroup);
-
-    studentNames.forEach((name) => {
-      const cleanName = name.toLowerCase().trim();
-      const target = allStudentsRegistry.value.find(
-        (s) => s.name.toLowerCase().trim() === cleanName
-      );
-      if (target) {
-        if (addToExisting) {
-          const cur = getStudentGroups(target);
-          if (!cur.some((g) => g.toLowerCase() === trimmedGroup.toLowerCase())) {
-            cur.push(trimmedGroup);
-            target.groups = cur;
-          }
-          if (!target.group || target.group === "Umumiy") {
-            target.group = trimmedGroup;
-          }
-        } else {
-          target.group = trimmedGroup;
-          target.groups = [trimmedGroup];
-        }
-
-        if (isNewGroupFrozen) {
-          target.status = "frozen";
-          syncFreezeToCloud(target.name, true, trimmedGroup);
-        } else {
-          target.status = "active";
-          syncFreezeToCloud(target.name, false, trimmedGroup);
-        }
-        syncStudentToCloud(target);
-      }
+      const cleanName = target.name.toLowerCase().trim();
       const inSession = students.value.find(
-        (s) => s.name.toLowerCase().trim() === cleanName
+        (s) => (target.id && s.id === target.id) || s.name.toLowerCase().trim() === cleanName
       );
       if (inSession) {
-        inSession.group = trimmedGroup;
-        if (isNewGroupFrozen) {
-          students.value = students.value.filter(
-            (s) => s.name.toLowerCase().trim() !== cleanName
-          );
-        } else {
-          inSession.status = "active";
-        }
+        inSession.group = target.group;
+        inSession.groups = target.groups;
       }
-      syncGroupTransferToCloud(target?.name || name, trimmedGroup);
+
+      const sKey = getStudentFbKey(target);
+      updates[`master_students/${sKey}/group`] = target.group;
+      updates[`master_students/${sKey}/groups`] = target.groups;
+      updates[`master_students/${sKey}/updatedAt`] = now;
+      updates[`student_groups/${sanitizeFbKey(target.name)}`] = {
+        name: target.name,
+        group: target.group,
+        groups: target.groups,
+        updatedAt: now,
+      };
     });
 
     allStudentsRegistry.value = [...allStudentsRegistry.value];
     localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+    try {
+      await fbUpdate(fbRef(db), updates);
+    } catch (e) {
+      console.warn("transferMultipleStudentsGroup cloud update error:", e);
+    }
   }
 
-  function deleteStudentPermanently(studentName: string) {
-    const clean = studentName.toLowerCase().trim();
+  function deleteStudentPermanently(studentOrIdOrName: Student | string) {
+    const target = typeof studentOrIdOrName === "object"
+      ? studentOrIdOrName
+      : findStudentInRegistry(studentOrIdOrName);
+    const cleanName = (typeof studentOrIdOrName === "string" ? studentOrIdOrName : target?.name || "").toLowerCase().trim();
+    const targetId = target?.id;
+
     allStudentsRegistry.value = allStudentsRegistry.value.filter(
-      (s) => s.name.toLowerCase().trim() !== clean
+      (s) => (targetId ? s.id !== targetId : true) && s.name.toLowerCase().trim() !== cleanName
     );
     students.value = students.value.filter(
-      (s) => s.name.toLowerCase().trim() !== clean
+      (s) => (targetId ? s.id !== targetId : true) && s.name.toLowerCase().trim() !== cleanName
     );
     reminders.value = reminders.value.filter(
-      (r) => (r.studentName || "").toLowerCase().trim() !== clean
+      (r) => (r.studentName || "").toLowerCase().trim() !== cleanName
     );
     allStudentsRegistry.value = [...allStudentsRegistry.value];
     localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
-    deleteStudentFromCloud(studentName);
+    deleteStudentFromCloud(target || cleanName);
   }
 
   // --- Teacher Reminders Management ---
@@ -2372,9 +2733,10 @@ export function useTeacherStore() {
 
   // --- Group CRM Meta & Schedule Functions ---
   function getGroupMeta(groupName: string): GroupMeta {
-    if (!groupsMeta.value[groupName]) {
-      groupsMeta.value[groupName] = {
-        name: groupName,
+    const cleanName = groupName.trim();
+    if (!groupsMeta.value[cleanName]) {
+      return {
+        name: cleanName,
         days: ["Du", "Chor", "Juma"],
         time: "14:00 - 15:30",
         room: "1-xona",
@@ -2385,38 +2747,184 @@ export function useTeacherStore() {
         studentPayments: {},
       };
     }
-    return groupsMeta.value[groupName];
+    return groupsMeta.value[cleanName];
   }
 
   function saveGroupMeta(meta: GroupMeta) {
-    groupsMeta.value[meta.name] = { ...meta };
-    syncGroupMetaToCloud(meta);
+    const now = Date.now();
+    const updatedMeta: GroupMeta = {
+      ...meta,
+      updatedAt: now,
+    };
+    groupsMeta.value[meta.name] = updatedMeta;
+    syncGroupMetaToCloud(updatedMeta);
   }
 
-  function deleteGroup(groupName: string) {
-    const cleanGrp = groupName.trim();
-    if (!cleanGrp) return;
-    if (groupsMeta.value[cleanGrp]) {
-      delete groupsMeta.value[cleanGrp];
-      deleteGroupMetaFromCloud(cleanGrp);
-      localStorage.setItem("ha_groups_meta", JSON.stringify(groupsMeta.value));
+  async function renameGroup(oldName: string, newName: string): Promise<{ success: boolean; error?: string }> {
+    const cleanOld = oldName.trim();
+    const cleanNew = newName.trim();
+    if (!cleanOld || !cleanNew) return { success: false, error: "Guruh nomi bo'sh bo'lishi mumkin emas" };
+    if (cleanOld.toLowerCase() === cleanNew.toLowerCase()) return { success: true };
+
+    if (isProtectedGroup(cleanOld)) {
+      return { success: false, error: `«${cleanOld}» tizim guruhini qayta nomlash mumkin emas!` };
     }
-    // Clean up any students enrolled in this deleted group
-    let studentChanged = false;
+    if (isProtectedGroup(cleanNew)) {
+      return { success: false, error: `«${cleanNew}» nomi tizim tomonidan band qilingan!` };
+    }
+
+    const oldKey = sanitizeFbKey(cleanOld);
+    const newKey = sanitizeFbKey(cleanNew);
+    const now = Date.now();
+    const updates: Record<string, any> = {};
+
+    // 1. Update master_students
+    allStudentsRegistry.value.forEach((s) => {
+      const sGroups = getStudentGroups(s);
+      if (sGroups.some((g) => g.toLowerCase() === cleanOld.toLowerCase())) {
+        const updatedGroups = sGroups.map((g) => g.toLowerCase() === cleanOld.toLowerCase() ? cleanNew : g);
+        const updatedPrimary = (s.group && s.group.toLowerCase() === cleanOld.toLowerCase()) ? cleanNew : (s.group || cleanNew);
+        s.groups = updatedGroups;
+        s.group = updatedPrimary;
+        s.updatedAt = now;
+
+        const sKey = getStudentFbKey(s);
+        updates[`master_students/${sKey}/group`] = updatedPrimary;
+        updates[`master_students/${sKey}/groups`] = updatedGroups;
+        updates[`master_students/${sKey}/updatedAt`] = now;
+        updates[`student_groups/${sanitizeFbKey(s.name)}/group`] = updatedPrimary;
+        updates[`student_groups/${sanitizeFbKey(s.name)}/groups`] = updatedGroups;
+        updates[`student_groups/${sanitizeFbKey(s.name)}/updatedAt`] = now;
+      }
+    });
+
+    // 2. Update groups_meta
+    const existingMeta = groupsMeta.value[cleanOld] || {
+      name: cleanOld,
+      days: ["Du", "Chor", "Juma"],
+      time: "14:00 - 15:30",
+      room: "1-xona",
+      subject: "Tarix",
+      paymentFee: 300000,
+    };
+    const newMeta: GroupMeta = {
+      ...existingMeta,
+      name: cleanNew,
+      updatedAt: now,
+    };
+    delete groupsMeta.value[cleanOld];
+    groupsMeta.value[cleanNew] = newMeta;
+    updates[`groups_meta/${oldKey}`] = null;
+    updates[`groups_meta/${newKey}`] = newMeta;
+
+    // 3. Update frozen_groups if it was frozen
+    if (cloudFrozenGroups.value.includes(cleanOld.toLowerCase())) {
+      cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== cleanOld.toLowerCase());
+      cloudFrozenGroups.value.push(cleanNew.toLowerCase());
+      updates[`frozen_groups/${oldKey}`] = null;
+      updates[`frozen_groups/${newKey}`] = {
+        group: cleanNew,
+        frozenAt: now,
+      };
+    }
+
+    // 4. Update local and cloud attendance_logs
+    localAttendanceLogs.value.forEach((log) => {
+      if (log.group && log.group.toLowerCase() === cleanOld.toLowerCase()) {
+        log.group = cleanNew;
+        const logKey = `${sanitizeFbKey(log.name)}_${log.date}`;
+        updates[`attendance_logs/${logKey}/group`] = cleanNew;
+      }
+    });
+
+    // 5. Update lesson_sessions
+    lessonSessions.value.forEach((sess) => {
+      if (sess.group && sess.group.toLowerCase() === cleanOld.toLowerCase()) {
+        sess.group = cleanNew;
+        if (sess.id) {
+          updates[`lesson_sessions/${sess.id}/group`] = cleanNew;
+        }
+      }
+    });
+
+    // Save local caches
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    localStorage.setItem("ha_groups_meta", JSON.stringify(groupsMeta.value));
+    localStorage.setItem("ha_attendance_logs", JSON.stringify(localAttendanceLogs.value));
+    localStorage.setItem("ha_lesson_sessions", JSON.stringify(lessonSessions.value));
+
+    // Execute atomic multi-path update
+    try {
+      await fbUpdate(fbRef(db), updates);
+      return { success: true };
+    } catch (e: any) {
+      console.error("renameGroup atomic update failed:", e);
+      return { success: false, error: e?.message || "Tarmoq xatosi yuz berdi" };
+    }
+  }
+
+  async function deleteGroup(groupName: string): Promise<{ success: boolean; error?: string }> {
+    const cleanGrp = groupName.trim();
+    if (!cleanGrp) return { success: false, error: "Guruh nomi ko'rsatilmadi" };
+
+    if (isProtectedGroup(cleanGrp)) {
+      return { success: false, error: `«${cleanGrp}» tizim guruhini o'chirish mumkin emas!` };
+    }
+
+    const gKey = sanitizeFbKey(cleanGrp);
+    const now = Date.now();
+    const updates: Record<string, any> = {};
+
+    // 1. Move all enrolled students to "Umumiy" (clean fallback, no orphans)
     allStudentsRegistry.value.forEach((s) => {
       const curGroups = getStudentGroups(s);
       if (curGroups.some((g) => g.toLowerCase() === cleanGrp.toLowerCase())) {
         const remaining = curGroups.filter((g) => g.toLowerCase() !== cleanGrp.toLowerCase());
         s.groups = remaining.length > 0 ? remaining : ["Umumiy"];
         s.group = s.groups[0] || "Umumiy";
-        studentChanged = true;
-        syncStudentToCloud(s);
-        syncGroupTransferToCloud(s.name, s.group);
+        s.updatedAt = now;
+
+        const sKey = getStudentFbKey(s);
+        updates[`master_students/${sKey}/group`] = s.group;
+        updates[`master_students/${sKey}/groups`] = s.groups;
+        updates[`master_students/${sKey}/updatedAt`] = now;
+        updates[`student_groups/${sanitizeFbKey(s.name)}/group`] = s.group;
+        updates[`student_groups/${sanitizeFbKey(s.name)}/groups`] = s.groups;
+        updates[`student_groups/${sanitizeFbKey(s.name)}/updatedAt`] = now;
       }
     });
-    if (studentChanged) {
-      allStudentsRegistry.value = [...allStudentsRegistry.value];
-      localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+
+    // 2. Soft-delete groups_meta (Preserve record for history, mark deleted)
+    const existingMeta = groupsMeta.value[cleanGrp] || { name: cleanGrp };
+    const softDeletedMeta = {
+      ...existingMeta,
+      deleted: true,
+      deletedAt: now,
+    };
+    delete groupsMeta.value[cleanGrp];
+    updates[`groups_meta/${gKey}`] = softDeletedMeta;
+
+    // 3. Remove from frozen_groups if present
+    if (cloudFrozenGroups.value.includes(cleanGrp.toLowerCase())) {
+      cloudFrozenGroups.value = cloudFrozenGroups.value.filter((g) => g !== cleanGrp.toLowerCase());
+      updates[`frozen_groups/${gKey}`] = null;
+    }
+
+    // Historical attendance_logs and lesson_sessions are KEPT intact for reports and financial history!
+
+    // Save local caches
+    allStudentsRegistry.value = [...allStudentsRegistry.value];
+    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    localStorage.setItem("ha_groups_meta", JSON.stringify(groupsMeta.value));
+
+    // Execute atomic multi-path update
+    try {
+      await fbUpdate(fbRef(db), updates);
+      return { success: true };
+    } catch (e: any) {
+      console.error("deleteGroup atomic update failed:", e);
+      return { success: false, error: e?.message || "Tarmoq xatosi yuz berdi" };
     }
   }
 
@@ -2575,7 +3083,13 @@ export function useTeacherStore() {
     suggestedLiveDuel,
     getGroupMeta,
     saveGroupMeta,
+    renameGroup,
     deleteGroup,
+    isProtectedGroup,
+    PROTECTED_GROUPS,
+    findStudentInRegistry,
+    getStudentFbKey,
+    initTeacherStoreSync,
     addGroupReminder,
     toggleCompleteGroupReminder,
     deleteGroupReminder,
@@ -2626,6 +3140,7 @@ export function useTeacherStore() {
     TEST_TYPES,
     syncGroupFreezeToCloud,
     cloudFrozenGroups,
+    cloudFrozenStudents,
     isGroupFrozen,
     syncAllExistingLessonSessionsToCloud,
     syncStudentToCloud,
