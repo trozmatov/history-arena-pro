@@ -46,8 +46,8 @@
         <button
           type="button"
           @click="exportToPdf"
-          :disabled="(activeStatsTab === 'lessons' ? filteredRecords.length === 0 : filteredTestSessions.length === 0) || loading"
-          class="flex items-center gap-1.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-rose-600/30 hover:from-red-500 hover:to-rose-500 active:scale-95 disabled:opacity-40 transition-all"
+          :disabled="(activeStatsTab === 'lessons' ? filteredRecords.length === 0 : activeStatsTab === 'tests' ? filteredTestSessions.length === 0 : false) || loading"
+          class="flex items-center gap-1.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-rose-600/30 hover:from-red-500 hover:to-rose-500 active:scale-95 disabled:opacity-40 transition-all cursor-pointer"
         >
           <span>📄</span>
           <span>PDF Hisobot</span>
@@ -55,16 +55,16 @@
       </div>
     </div>
 
-    <!-- PRIMARY TAB NAVIGATION (Darslar vs Testlar Statistikasi) -->
-    <div class="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-900/90 border border-white/10 w-fit backdrop-blur-xl shadow-lg">
+    <!-- PRIMARY TAB NAVIGATION (Darslar vs Reyting vs Testlar) -->
+    <div class="flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl bg-white/70 dark:bg-slate-900/90 border border-white/60 dark:border-white/10 w-fit backdrop-blur-xl shadow-lg">
       <button
         type="button"
         @click="switchStatsTab('lessons')"
-        class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all"
+        class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer"
         :class="
           activeStatsTab === 'lessons'
             ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/30'
-            : 'text-slate-400 hover:text-white'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
         "
       >
         <span>🎮</span>
@@ -73,12 +73,26 @@
 
       <button
         type="button"
+        @click="switchStatsTab('leaderboard')"
+        class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer"
+        :class="
+          activeStatsTab === 'leaderboard'
+            ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+        "
+      >
+        <span>🏆</span>
+        <span>Umumiy Reyting</span>
+      </button>
+
+      <button
+        type="button"
         @click="switchStatsTab('tests')"
-        class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all"
+        class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer"
         :class="
           activeStatsTab === 'tests'
             ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-600/30'
-            : 'text-slate-400 hover:text-white'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
         "
       >
         <span>📝</span>
@@ -342,7 +356,14 @@
     </div>
 
     <!-- ======================================================== -->
-    <!-- TAB 2: COMPREHENSIVE TEST ANALYTICS & EXAM HUB -->
+    <!-- TAB 2: OVERALL LEADERBOARD (COINS, STRIKES & PENALTIES)  -->
+    <!-- ======================================================== -->
+    <div v-else-if="activeStatsTab === 'leaderboard'" class="space-y-6">
+      <LeaderboardView :embedded="true" />
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 3: COMPREHENSIVE TEST ANALYTICS & EXAM HUB           -->
     <!-- ======================================================== -->
     <div v-else-if="activeStatsTab === 'tests'" class="space-y-6">
       <!-- Test Filters: Group, Test Type, Book & Search -->
@@ -811,15 +832,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from "vue";
+import { ref, computed, onMounted, nextTick, watch } from "vue";
 import { Chart, registerables } from "chart.js";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { callApi } from "../../services/api";
 import { useTeacherStore, BOOK_LIST, TEST_TYPES, LessonSessionRecord, normalizeDateToDDMM } from "../../composables/useTeacherStore";
 import BaseModal from "../common/BaseModal.vue";
+import LeaderboardView from "./LeaderboardView.vue";
 
 Chart.register(...registerables);
+
+const props = withDefaults(
+  defineProps<{
+    initialTab?: "lessons" | "leaderboard" | "tests";
+  }>(),
+  {
+    initialTab: "lessons",
+  }
+);
 
 defineEmits<{
   (e: "back"): void;
@@ -828,14 +859,21 @@ defineEmits<{
 const teacherStore = useTeacherStore();
 
 // Navigation tab state
-const activeStatsTab = ref<"lessons" | "tests">("lessons");
+const activeStatsTab = ref<"lessons" | "leaderboard" | "tests">(props.initialTab || "lessons");
 
-function switchStatsTab(tab: "lessons" | "tests") {
+watch(
+  () => props.initialTab,
+  (val) => {
+    if (val) activeStatsTab.value = val;
+  }
+);
+
+function switchStatsTab(tab: "lessons" | "leaderboard" | "tests") {
   activeStatsTab.value = tab;
   nextTick(() => {
     if (tab === "lessons") {
       updateCharts();
-    } else {
+    } else if (tab === "tests") {
       updateTestCharts();
     }
   });

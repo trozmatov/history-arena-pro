@@ -116,6 +116,24 @@ export function getEffectiveStudentGroup(name: string, fallbackGroup?: string): 
   return studentGroupMap.value[clean] || fallbackGroup || "Umumiy";
 }
 
+let cachedMasterStudents: any[] | null = null;
+let lastMasterReadTime = 0;
+
+export function getCachedMasterStudents(): any[] {
+  const now = Date.now();
+  if (cachedMasterStudents && now - lastMasterReadTime < 3000) {
+    return cachedMasterStudents;
+  }
+  try {
+    const saved = localStorage.getItem("ha_all_students");
+    cachedMasterStudents = saved ? JSON.parse(saved) : [];
+    lastMasterReadTime = now;
+    return cachedMasterStudents || [];
+  } catch {
+    return [];
+  }
+}
+
 export function getStudentEnrolledGroups(name: string): string[] {
   if (!name) return ["Umumiy"];
   const clean = name.toLowerCase().trim();
@@ -124,17 +142,12 @@ export function getStudentEnrolledGroups(name: string): string[] {
   }
   const single = studentGroupMap.value[clean];
   if (single) return [single];
-  try {
-    const saved = localStorage.getItem("ha_all_students");
-    if (saved) {
-      const list = JSON.parse(saved);
-      const match = list.find((s: any) => (s.name || "").toLowerCase().trim() === clean);
-      if (match) {
-        if (Array.isArray(match.groups) && match.groups.length > 0) return match.groups;
-        if (match.group) return [match.group];
-      }
-    }
-  } catch (e) {}
+  const list = getCachedMasterStudents();
+  const match = list.find((s: any) => (s.name || "").toLowerCase().trim() === clean);
+  if (match) {
+    if (Array.isArray(match.groups) && match.groups.length > 0) return match.groups;
+    if (match.group) return [match.group];
+  }
   return ["Umumiy"];
 }
 
@@ -181,18 +194,6 @@ function initFreezeListener() {
       if (val && val.name && val.group) {
         const cleanName = val.name.toLowerCase().trim();
         studentGroupMap.value[cleanName] = val.group;
-        // Keep local storage updated in background
-        try {
-          const saved = localStorage.getItem("ha_all_students");
-          if (saved) {
-            const list = JSON.parse(saved);
-            const match = list.find((s: any) => (s.name || "").toLowerCase().trim() === cleanName);
-            if (match && match.group !== val.group) {
-              match.group = val.group;
-              localStorage.setItem("ha_all_students", JSON.stringify(list));
-            }
-          }
-        } catch (e) {}
       }
     };
     onChildAdded(sgRef, handleGroupSnap);
@@ -318,15 +319,9 @@ export function isStudentFrozen(name: string, group?: string): boolean {
   if (cloudFrozenStudents.value.includes(clean)) return true;
 
   // Master list check for personal freeze status
-  let studentRecord: any = null;
-  try {
-    const saved = localStorage.getItem("ha_all_students");
-    if (saved) {
-      const list = JSON.parse(saved);
-      studentRecord = list.find((s: any) => (s.name || "").toLowerCase().trim() === clean || (s.id && s.id === clean));
-      if (studentRecord && studentRecord.status === "frozen") return true;
-    }
-  } catch {}
+  const list = getCachedMasterStudents();
+  const studentRecord = list.find((s: any) => (s.name || "").toLowerCase().trim() === clean || (s.id && s.id === clean));
+  if (studentRecord && studentRecord.status === "frozen") return true;
 
   // 2. Contextual group freeze (when group parameter is provided)
   if (group && group.trim()) {

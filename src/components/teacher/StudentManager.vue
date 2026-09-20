@@ -507,11 +507,11 @@
         <div
           v-for="st in paginatedStudents"
           :key="st.id || st.name"
-          class="rounded-2xl border p-3 sm:p-4 transition-all duration-200 shadow-md flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 overflow-hidden"
+          class="rounded-3xl border p-3 sm:p-4 transition-all duration-200 shadow-md flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 overflow-hidden backdrop-blur-xl"
           :class="
             st.status === 'frozen'
-              ? 'border-cyan-500/30 bg-cyan-950/20 opacity-80 hover:opacity-100'
-              : 'border-white/10 bg-black/40 hover:border-white/25'
+              ? 'border-cyan-500/40 bg-cyan-500/10 dark:bg-cyan-950/25 opacity-85 hover:opacity-100'
+              : 'liquid-glass-card hover:border-blue-400/40 dark:hover:border-cyan-400/30'
           "
         >
           <!-- Left: Checkbox, Avatar, Name, Group, Credentials & Contacts -->
@@ -530,7 +530,7 @@
               class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-black text-sm shadow-md cursor-pointer hover:scale-105 transition"
               :class="
                 st.status === 'frozen'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30'
                   : 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-blue-500/25'
               "
               title="Shaxsiy doskani ochish"
@@ -543,7 +543,7 @@
               <div class="flex flex-wrap items-center gap-2">
                 <span
                   @click="openStudentDetail(st)"
-                  class="font-black text-sm sm:text-base text-white truncate cursor-pointer hover:text-indigo-400 hover:underline transition"
+                  class="font-black text-sm sm:text-base text-slate-900 dark:text-white truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline transition"
                   title="Shaxsiy doskasini ochish"
                 >
                   {{ st.name }}
@@ -552,8 +552,8 @@
                   class="rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-wider"
                   :class="
                     st.status === 'frozen'
-                      ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300'
-                      : 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-300'
+                      ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-700 dark:text-cyan-300'
+                      : 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
                   "
                 >
                   {{ st.status === 'frozen' ? '❄️ Muzlagan' : '🟢 Faol' }}
@@ -562,7 +562,7 @@
                   <span
                     v-for="grp in getStudentGroupList(st)"
                     :key="grp"
-                    class="rounded-lg bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-bold text-indigo-300"
+                    class="apple-glass-pill rounded-lg bg-indigo-500/15 dark:bg-indigo-500/20 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300"
                   >
                     📚 {{ grp }}
                   </span>
@@ -570,14 +570,14 @@
               </div>
 
               <!-- 6-digit PIN, Pattern & Contact bar -->
-              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono pt-0.5">
-                <span class="flex items-center gap-1.5 bg-black/50 px-2.5 py-0.5 rounded-lg border border-amber-500/30 text-amber-300">
-                  <span class="text-slate-400 font-sans text-[11px]">🔢 PIN:</span>
+              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-mono pt-0.5">
+                <span class="flex items-center gap-1.5 bg-slate-200/60 dark:bg-black/50 px-2.5 py-0.5 rounded-xl border border-amber-500/40 text-amber-700 dark:text-amber-300 backdrop-blur-md">
+                  <span class="text-slate-500 dark:text-slate-400 font-sans text-[11px]">🔢 PIN:</span>
                   <b class="font-extrabold text-sm tracking-wider">{{ st.pin || st.password || '123456' }}</b>
                   <button
                     type="button"
                     @click.stop="copyPin(st.pin || st.password || '123456')"
-                    class="hover:text-white transition p-0.5"
+                    class="hover:text-amber-900 dark:hover:text-white transition p-0.5"
                     title="PIN kodni nusxalash"
                   >
                     📋
@@ -6034,8 +6034,13 @@ watch(
 );
 
 onMounted(() => {
-  // Proactively run recovery from local storage if contacts exist in backup
-  teacherStore.deepRecoverAllDataFromLocalStorage();
+  // Run deep recovery from local storage once if never performed before (manual scan available in modal)
+  if (typeof window !== "undefined" && !localStorage.getItem("ha_deep_recovered_v7")) {
+    teacherStore.deepRecoverAllDataFromLocalStorage();
+    try {
+      localStorage.setItem("ha_deep_recovered_v7", "true");
+    } catch (_) {}
+  }
   refreshStudentStats();
 
   if (teacherStore.selectedDoskaStudent?.value) {
@@ -6240,9 +6245,7 @@ async function syncFromDb(force = true) {
         members.forEach((name) => {
           const trimmed = name.trim();
           if (!trimmed) return;
-          const exists = teacherStore.allStudentsRegistry.value.find(
-            (s) => s.name.toLowerCase() === trimmed.toLowerCase()
-          );
+          const exists = teacherStore.findStudentInRegistry(trimmed);
           if (!exists) {
             const pin = teacherStore.generateUnique6DigitPin(trimmed);
             teacherStore.saveStudent({
@@ -6287,7 +6290,7 @@ async function syncFromDb(force = true) {
         });
       }
       teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
-      localStorage.setItem("ha_all_students", JSON.stringify(teacherStore.allStudentsRegistry.value));
+      teacherStore.scheduleSaveMasterStudents(100);
       await refreshStudentStats(true);
       alert(`Baza bilan muvaffaqiyatli sinxronlandi! ${countAdded > 0 ? countAdded + " ta yangi o'quvchi qo'shildi." : "Barcha o'quvchilar va natijalar yangilandi."}`);
     } else {
@@ -7426,7 +7429,7 @@ async function submitManualTestResults() {
       );
 
       // Update in master registry and sync to master_students in Firebase
-      const reg = teacherStore.allStudentsRegistry.value.find((item) => item.name === s.name);
+      const reg = teacherStore.findStudentInRegistry(s.id || s.name);
       if (reg && isPresent) {
         reg.totalTests = (reg.totalTests || 0) + 1;
         reg.coins = (reg.coins || 0) + coinsEarned;
@@ -7439,7 +7442,7 @@ async function submitManualTestResults() {
 
     // Commit registry to Vue reactivity and LocalStorage
     teacherStore.allStudentsRegistry.value = [...teacherStore.allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(teacherStore.allStudentsRegistry.value));
+    teacherStore.scheduleSaveMasterStudents(100);
 
     const sessionRecord: LessonSessionRecord = {
       id: "sess-test-" + Date.now(),

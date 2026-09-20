@@ -20,16 +20,25 @@ export function isProtectedGroup(groupName: string): boolean {
   return PROTECTED_GROUPS.includes(groupName.toLowerCase().trim());
 }
 
+export function normalizeStudentName(name: string): string {
+  if (!name) return "";
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u02BB\u02BC`´ʻ]/g, "'")
+    .replace(/\s+/g, " ");
+}
+
 export function sanitizeFbKey(name: string): string {
-  return encodeURIComponent(name.toLowerCase().trim()).replace(/\./g, "%2E");
+  return encodeURIComponent(normalizeStudentName(name)).replace(/\./g, "%2E");
 }
 
 export function getStudentFbKey(student: Partial<Student>): string {
   if (student.id && student.id.trim()) {
-    return sanitizeFbKey(student.id.trim());
+    return encodeURIComponent(student.id.trim().toLowerCase()).replace(/\./g, "%2E");
   }
   if (student.name && student.name.trim()) {
-    return sanitizeFbKey(student.name.trim());
+    return sanitizeFbKey(student.name);
   }
   return "unknown_" + Date.now();
 }
@@ -130,6 +139,12 @@ export function syncStudentToCloud(student: Student) {
       avgAccuracy: student.avgAccuracy || 0,
       updatedAt: now,
     }).catch((e: any) => console.warn("Firebase master_students sync error:", e));
+
+    // Clean up legacy key if different from canonical key
+    const legacyKey = sanitizeFbKey(student.name);
+    if (legacyKey !== key) {
+      fbRemove(fbRef(db, `master_students/${legacyKey}`)).catch(() => {});
+    }
 
     // Also sync to legacy student_groups path
     fbSet(fbRef(db, `student_groups/${sanitizeFbKey(student.name)}`), {
@@ -448,7 +463,14 @@ function loadInitialStudents(): Student[] {
   try {
     const list: Student[] = JSON.parse(saved);
     const sampleNames = new Set(["Ali Valiyev", "Madina Karimova", "Jasur Rahimov", "Zuhra Yusupova", "Bekzod Rustamov"]);
-    return list.filter((s) => !sampleNames.has(s.name));
+    const filtered = list.filter((s) => s && s.name && !sampleNames.has(s.name.trim()));
+    const seen = new Set<string>();
+    return filtered.filter((s) => {
+      const clean = s.name.toLowerCase().trim();
+      if (seen.has(clean)) return false;
+      seen.add(clean);
+      return true;
+    });
   } catch {
     return [];
   }
@@ -462,6 +484,64 @@ export function generateUnique6DigitPin(nameOrList?: string | Student[]): string
     return getStudentDefaultPin(nameOrList);
   }
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+export function deduplicateStudentList(list: Student[]): { list: Student[]; changed: boolean } {
+  const map = new Map<string, Student>();
+  let changed = false;
+
+  for (const s of list) {
+    if (!s || !s.name || !s.name.trim()) continue;
+    const cleanName = normalizeStudentName(s.name);
+    const existing = map.get(cleanName);
+
+    if (!existing) {
+      map.set(cleanName, { ...s, name: s.name.trim() });
+    } else {
+      changed = true;
+      // Merge records
+      // 1. ID: Prefer std- id over temporary ones
+      if (
+        (!existing.id || existing.id.startsWith("sess-") || existing.id.startsWith("st-") || existing.id.startsWith("restored-") || existing.id.startsWith("db-")) &&
+        s.id &&
+        s.id.startsWith("std-")
+      ) {
+        existing.id = s.id;
+      }
+      // 2. Contacts
+      if (s.phone && s.phone.trim() && !existing.phone) existing.phone = s.phone.trim();
+      if (s.parentPhone && s.parentPhone.trim() && !existing.parentPhone) existing.parentPhone = s.parentPhone.trim();
+      if (s.parentName && s.parentName.trim() && !existing.parentName) existing.parentName = s.parentName.trim();
+      if (s.parentTg && s.parentTg.trim() && !existing.parentTg) existing.parentTg = s.parentTg.trim();
+      if (s.notes && s.notes.trim() && !existing.notes) existing.notes = s.notes.trim();
+      // 3. Security (PIN & Pattern)
+      if (s.pin && /^\d{6}$/.test(s.pin) && (!existing.pin || !/^\d{6}$/.test(existing.pin))) {
+        existing.pin = s.pin;
+        existing.password = s.pin;
+      }
+      if (s.pattern && !existing.pattern) existing.pattern = s.pattern;
+      // 4. Status
+      if (s.status === "frozen" || existing.status === "frozen") {
+        existing.status = "frozen";
+      }
+      // 5. Stats & metrics (take maximums)
+      if ((s.coins || 0) > (existing.coins || 0)) existing.coins = s.coins;
+      if ((s.totalTests || 0) > (existing.totalTests || 0)) existing.totalTests = s.totalTests;
+      if ((s.avgAccuracy || 0) > (existing.avgAccuracy || 0)) existing.avgAccuracy = s.avgAccuracy;
+      if (s.updatedAt && (!existing.updatedAt || s.updatedAt > existing.updatedAt)) existing.updatedAt = s.updatedAt;
+      // 6. Groups
+      const sGroups = Array.isArray(s.groups) && s.groups.length > 0 ? s.groups : (s.group ? [s.group] : []);
+      const exGroups = Array.isArray(existing.groups) && existing.groups.length > 0 ? existing.groups : (existing.group ? [existing.group] : []);
+      const merged = Array.from(new Set([...exGroups, ...sGroups])).map((g) => g.trim()).filter(Boolean);
+      if (merged.length > 0) {
+        existing.groups = merged;
+        if (!existing.group || existing.group === "Umumiy") {
+          existing.group = merged.find((g) => g !== "Umumiy") || merged[0];
+        }
+      }
+    }
+  }
+  return { list: Array.from(map.values()), changed };
 }
 
 function loadInitialMasterStudents(): Student[] {
@@ -481,6 +561,9 @@ function loadInitialMasterStudents(): Student[] {
           !sampleNames.has(s.name.trim()) &&
           !sampleIds.has(s.id || "")
       );
+      const dedup = deduplicateStudentList(list);
+      list = dedup.list;
+      if (dedup.changed) needsSave = true;
     } catch {
       list = [];
     }
@@ -495,12 +578,13 @@ function loadInitialMasterStudents(): Student[] {
         stList.forEach((s) => {
           if (s && s.name && !sampleNames.has(s.name.trim()) && !sampleIds.has(s.id || "")) {
             const cleanName = s.name.trim();
-            const existing = list.find((x) => x.name.toLowerCase().trim() === cleanName.toLowerCase());
+            const norm = normalizeStudentName(cleanName);
+            const existing = list.find((x) => normalizeStudentName(x.name) === norm);
             if (!existing) {
               const pin = s.pin || getStudentDefaultPin(cleanName);
               const grp = s.group || "Umumiy";
               list.push({
-                id: s.id || "st-" + Math.random().toString(36).substring(2, 9),
+                id: s.id && s.id.startsWith("std-") ? s.id : "std-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
                 name: cleanName,
                 group: grp,
                 groups: Array.isArray(s.groups) && s.groups.length > 0 ? s.groups : [grp],
@@ -554,11 +638,12 @@ function loadInitialMasterStudents(): Student[] {
             res.forEach((r: any) => {
               if (r && r.name && !sampleNames.has(r.name.trim())) {
                 const clean = r.name.trim();
-                const existing = list.find((x) => x.name.toLowerCase().trim() === clean.toLowerCase());
+                const norm = normalizeStudentName(clean);
+                const existing = list.find((x) => normalizeStudentName(x.name) === norm);
                 if (!existing) {
                   const pin = getStudentDefaultPin(clean);
                   list.push({
-                    id: "sess-" + Math.random().toString(36).substring(2, 9),
+                    id: "std-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
                     name: clean,
                     group: sessGroup,
                     groups: [sessGroup],
@@ -633,6 +718,10 @@ function loadInitialMasterStudents(): Student[] {
     }
   });
 
+  const finalDedup = deduplicateStudentList(list);
+  list = finalDedup.list;
+  if (finalDedup.changed) needsSave = true;
+
   if (needsSave && list.length > 0) {
     localStorage.setItem("ha_all_students", JSON.stringify(list));
   }
@@ -642,11 +731,23 @@ function loadInitialMasterStudents(): Student[] {
 // All Registered Students Database Registry (Master CRM list)
 const allStudentsRegistry = ref<Student[]>(loadInitialMasterStudents());
 
-// Persist master registry
+let saveMasterTimeout: any = null;
+export function scheduleSaveMasterStudents(delay = 400) {
+  if (saveMasterTimeout) clearTimeout(saveMasterTimeout);
+  saveMasterTimeout = setTimeout(() => {
+    try {
+      localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    } catch (e) {
+      console.warn("Error saving ha_all_students:", e);
+    }
+  }, delay);
+}
+
+// Persist master registry debounced
 watch(
   allStudentsRegistry,
-  (newVal) => {
-    localStorage.setItem("ha_all_students", JSON.stringify(newVal));
+  () => {
+    scheduleSaveMasterStudents(400);
   },
   { deep: true }
 );
@@ -659,16 +760,16 @@ export function findStudentInRegistry(studentOrIdOrName: Partial<Student> | stri
       if (found) return found;
     }
     if (studentOrIdOrName.name) {
-      const cleanName = studentOrIdOrName.name.toLowerCase().trim();
-      return allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === cleanName);
+      const cleanName = normalizeStudentName(studentOrIdOrName.name);
+      return allStudentsRegistry.value.find((s) => normalizeStudentName(s.name) === cleanName);
     }
     return undefined;
   }
   const query = studentOrIdOrName.trim();
   const byId = allStudentsRegistry.value.find((s) => s.id === query);
   if (byId) return byId;
-  const cleanName = query.toLowerCase();
-  return allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === cleanName);
+  const cleanName = normalizeStudentName(query);
+  return allStudentsRegistry.value.find((s) => normalizeStudentName(s.name) === cleanName);
 }
 
 let teacherStoreSyncActive = false;
@@ -705,8 +806,8 @@ export function initTeacherStoreSync() {
         localStorage.setItem("ha_v6_clean_sync", "true");
       }
 
-      const cleanName = data.name.toLowerCase().trim();
-      const existing = findStudentInRegistry(data.id ? data.id : cleanName);
+      const cleanName = normalizeStudentName(data.name);
+      const existing = findStudentInRegistry({ id: data.id, name: data.name });
 
       // Prevent local echo reverting more recent local writes
       if (existing && existing.updatedAt && data.updatedAt && data.updatedAt < existing.updatedAt) {
@@ -752,8 +853,7 @@ export function initTeacherStoreSync() {
           updatedAt: data.updatedAt || Date.now(),
         };
         allStudentsRegistry.value.push(newStudent);
-        allStudentsRegistry.value = [...allStudentsRegistry.value];
-        localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+        scheduleSaveMasterStudents(300);
 
         if (!data.id) {
           scheduleBatchIdSync(newStudent);
@@ -765,15 +865,38 @@ export function initTeacherStoreSync() {
           existing.id = assignedId;
           changed = true;
           if (!data.id) scheduleBatchIdSync(existing);
+        } else if (
+          assignedId &&
+          existing.id &&
+          (existing.id.startsWith("sess-") || existing.id.startsWith("st-") || existing.id.startsWith("restored-") || existing.id.startsWith("db-")) &&
+          assignedId.startsWith("std-")
+        ) {
+          existing.id = assignedId;
+          changed = true;
         }
+
+        // Clean up redundant Firebase key if incoming snap key was a legacy or sess- key
+        const canonicalKey = getStudentFbKey(existing);
+        if (
+          snap.key &&
+          snap.key !== canonicalKey &&
+          (snap.key.startsWith("sess-") || snap.key.startsWith("st-") || snap.key.startsWith("restored-") || snap.key === sanitizeFbKey(data.name))
+        ) {
+          fbRemove(fbRef(db, `master_students/${snap.key}`)).catch(() => {});
+          fbRemove(fbRef(db, `student_groups/${snap.key}`)).catch(() => {});
+        }
+
         if (data.phone && data.phone.trim() && !existing.phone) { existing.phone = data.phone.trim(); changed = true; }
         if (data.parentName && data.parentName.trim() && !existing.parentName) { existing.parentName = data.parentName.trim(); changed = true; }
         if (data.parentPhone && data.parentPhone.trim() && !existing.parentPhone) { existing.parentPhone = data.parentPhone.trim(); changed = true; }
         if (data.parentTg && data.parentTg.trim() && !existing.parentTg) { existing.parentTg = data.parentTg.trim(); changed = true; }
         if (data.notes && data.notes.trim() && !existing.notes) { existing.notes = data.notes.trim(); changed = true; }
         if (Array.isArray(data.groups) && data.groups.length > 0) {
-          existing.groups = data.groups;
-          changed = true;
+          const merged = Array.from(new Set([...(existing.groups || []), ...data.groups])).map((g) => g.trim()).filter(Boolean);
+          if (merged.length !== (existing.groups || []).length) {
+            existing.groups = merged;
+            changed = true;
+          }
         }
         if (data.group && data.group !== existing.group) {
           existing.group = data.group;
@@ -784,9 +907,7 @@ export function initTeacherStoreSync() {
           changed = true;
         }
         if (changed) {
-          allStudentsRegistry.value = [...allStudentsRegistry.value];
-          localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
-          updateProtectedContactsBackup();
+          scheduleSaveMasterStudents(300);
         }
       }
     });
@@ -794,9 +915,9 @@ export function initTeacherStoreSync() {
     onChildChanged(msRef, (snap: any) => {
       const data = snap.val();
       if (!data || !data.name) return;
-      const cleanName = data.name.toLowerCase().trim();
+      const cleanName = normalizeStudentName(data.name);
       const existingIdx = allStudentsRegistry.value.findIndex(
-        (s) => (data.id && s.id === data.id) || s.name.toLowerCase().trim() === cleanName
+        (s) => (data.id && s.id === data.id) || normalizeStudentName(s.name) === cleanName
       );
       if (existingIdx !== -1) {
         const existing = allStudentsRegistry.value[existingIdx];
@@ -828,21 +949,32 @@ export function initTeacherStoreSync() {
           totalTests: data.totalTests !== undefined ? data.totalTests : existing.totalTests,
           updatedAt: data.updatedAt || Date.now(),
         };
-        allStudentsRegistry.value = [...allStudentsRegistry.value];
-        localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
-        updateProtectedContactsBackup();
+        scheduleSaveMasterStudents(300);
       }
     });
 
     onChildRemoved(msRef, (snap: any) => {
       const data = snap.val();
       if (!data || !data.name) return;
-      const cleanName = data.name.toLowerCase().trim();
+      const cleanName = normalizeStudentName(data.name);
       const targetId = data.id;
-      allStudentsRegistry.value = allStudentsRegistry.value.filter(
-        (s) => (targetId ? s.id !== targetId : true) && s.name.toLowerCase().trim() !== cleanName
+      const removedKey = snap.key;
+
+      // If this was a legacy name-based key being cleaned up, but the student exists with a canonical ID key, do NOT remove
+      const existing = allStudentsRegistry.value.find(
+        (s) => (targetId && s.id === targetId) || normalizeStudentName(s.name) === cleanName
       );
-      localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+      if (existing) {
+        const canonicalKey = getStudentFbKey(existing);
+        if (removedKey !== canonicalKey) {
+          return;
+        }
+      }
+
+      allStudentsRegistry.value = allStudentsRegistry.value.filter(
+        (s) => (targetId ? s.id !== targetId : true) && normalizeStudentName(s.name) !== cleanName
+      );
+      scheduleSaveMasterStudents(300);
     });
 
     // 2. Synchronize frozen_groups
@@ -1033,7 +1165,7 @@ export function deepRecoverAllDataFromLocalStorage(): {
     visited.add(obj);
 
     if (obj.name && typeof obj.name === "string" && obj.name.trim().length >= 2) {
-      const cleanName = obj.name.trim().toLowerCase();
+      const cleanName = normalizeStudentName(obj.name);
       if (!sampleNames.has(cleanName)) {
         if (!contactsMap[cleanName]) {
           contactsMap[cleanName] = {};
@@ -1087,7 +1219,7 @@ export function deepRecoverAllDataFromLocalStorage(): {
         const regex = /"name"\s*:\s*"([^"]+)"[\s\S]{1,300}?"(?:phone|parentPhone)"\s*:\s*"([^"]+)"/g;
         let match;
         while ((match = regex.exec(raw)) !== null) {
-          const n = match[1]?.trim().toLowerCase();
+          const n = normalizeStudentName(match[1] || "");
           const p = match[2]?.trim();
           if (n && p && p.length >= 7) {
             if (!contactsMap[n]) contactsMap[n] = {};
@@ -1103,7 +1235,7 @@ export function deepRecoverAllDataFromLocalStorage(): {
   // 2. Merge recovered contacts into allStudentsRegistry
   let recoveredContactsCount = 0;
   allStudentsRegistry.value.forEach((st) => {
-    const cleanName = st.name.trim().toLowerCase();
+    const cleanName = normalizeStudentName(st.name);
     const found = contactsMap[cleanName];
     if (found) {
       let changed = false;
@@ -1137,7 +1269,7 @@ export function deepRecoverAllDataFromLocalStorage(): {
 
   // Also sync to active session students
   students.value.forEach((st) => {
-    const cleanName = st.name.trim().toLowerCase();
+    const cleanName = normalizeStudentName(st.name);
     const found = contactsMap[cleanName];
     if (found) {
       if (found.phone && !st.phone) st.phone = found.phone;
@@ -1147,8 +1279,10 @@ export function deepRecoverAllDataFromLocalStorage(): {
 
   if (recoveredContactsCount > 0) {
     allStudentsRegistry.value = [...allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
-    localStorage.setItem("st", JSON.stringify(students.value));
+    scheduleSaveMasterStudents(100);
+    try {
+      localStorage.setItem("st", JSON.stringify(students.value));
+    } catch (_) {}
   }
 
   updateProtectedContactsBackup();
@@ -1166,16 +1300,34 @@ export function deepRecoverAllDataFromLocalStorage(): {
 export function bulkImportContacts(entries: Array<{ name: string; phone?: string; parentPhone?: string; parentName?: string; parentTg?: string; notes?: string }>): number {
   let updatedCount = 0;
   entries.forEach((entry) => {
-    if (!entry.name || !entry.name.trim()) return;
-    const clean = entry.name.trim().toLowerCase();
-    const target = allStudentsRegistry.value.find((s) => s.name.trim().toLowerCase() === clean);
+    if (!entry.name) return;
+    const cleanName = normalizeStudentName(entry.name);
+    const target = allStudentsRegistry.value.find(
+      (s) => normalizeStudentName(s.name) === cleanName
+    );
     if (target) {
       let changed = false;
-      if (entry.phone && entry.phone.trim()) { target.phone = entry.phone.trim(); changed = true; }
-      if (entry.parentPhone && entry.parentPhone.trim()) { target.parentPhone = entry.parentPhone.trim(); changed = true; }
-      if (entry.parentName && entry.parentName.trim()) { target.parentName = entry.parentName.trim(); changed = true; }
-      if (entry.parentTg && entry.parentTg.trim()) { target.parentTg = entry.parentTg.trim(); changed = true; }
-      if (entry.notes && entry.notes.trim()) { target.notes = entry.notes.trim(); changed = true; }
+      if (entry.phone && entry.phone.trim()) {
+        target.phone = entry.phone.trim();
+        changed = true;
+      }
+      if (entry.parentPhone && entry.parentPhone.trim()) {
+        target.parentPhone = entry.parentPhone.trim();
+        changed = true;
+      }
+      if (entry.parentName && entry.parentName.trim()) {
+        target.parentName = entry.parentName.trim();
+        changed = true;
+      }
+      if (entry.parentTg && entry.parentTg.trim()) {
+        target.parentTg = entry.parentTg.trim();
+        changed = true;
+      }
+      if (entry.notes && entry.notes.trim()) {
+        target.notes = entry.notes.trim();
+        changed = true;
+      }
+
       if (changed) {
         updatedCount++;
         syncStudentToCloud(target);
@@ -1185,16 +1337,21 @@ export function bulkImportContacts(entries: Array<{ name: string; phone?: string
 
   if (updatedCount > 0) {
     allStudentsRegistry.value = [...allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    scheduleSaveMasterStudents(100);
     updateProtectedContactsBackup();
   }
   return updatedCount;
 }
 
-// Auto-run deep recovery on store load to restore any orphaned localStorage contacts
+// Auto-run deep recovery once on store load to restore any orphaned localStorage contacts
 setTimeout(() => {
-  deepRecoverAllDataFromLocalStorage();
-}, 100);
+  if (typeof window !== "undefined" && !localStorage.getItem("ha_deep_recovered_v7")) {
+    deepRecoverAllDataFromLocalStorage();
+    try {
+      localStorage.setItem("ha_deep_recovered_v7", "true");
+    } catch (_) {}
+  }
+}, 1000);
 
 export async function restoreAndFindAllStudents(): Promise<{
   total: number;
@@ -1554,12 +1711,6 @@ export function syncAllExistingGroupsMetaToCloud() {
   }
 }
 
-if (typeof window !== "undefined") {
-  if (Object.keys(groupsMeta.value).length > 0) {
-    syncAllExistingGroupsMetaToCloud();
-  }
-}
-
 function loadInitialLessonSessions(): LessonSessionRecord[] {
   const saved = localStorage.getItem("ha_lesson_sessions");
   if (!saved) return [];
@@ -1573,10 +1724,20 @@ function loadInitialLessonSessions(): LessonSessionRecord[] {
 // Lesson & Test History Database
 const lessonSessions = ref<LessonSessionRecord[]>(loadInitialLessonSessions());
 
+let saveLessonSessionsTimeout: any = null;
+function scheduleSaveLessonSessions(delay = 500) {
+  if (saveLessonSessionsTimeout) clearTimeout(saveLessonSessionsTimeout);
+  saveLessonSessionsTimeout = setTimeout(() => {
+    try {
+      localStorage.setItem("ha_lesson_sessions", JSON.stringify(lessonSessions.value));
+    } catch (e) {}
+  }, delay);
+}
+
 watch(
   lessonSessions,
-  (newVal) => {
-    localStorage.setItem("ha_lesson_sessions", JSON.stringify(newVal));
+  () => {
+    scheduleSaveLessonSessions(400);
   },
   { deep: true }
 );
@@ -1605,12 +1766,7 @@ export function syncAllExistingLessonSessionsToCloud() {
   }
 }
 
-// Auto-sync all existing local sessions to cloud on load
 if (typeof window !== "undefined") {
-  if (lessonSessions.value.length > 0) {
-    syncAllExistingLessonSessionsToCloud();
-  }
-
   // Listen for real-time lesson / test sessions in Firebase
   const sessionsFbRef = fbRef(db, "lesson_sessions");
   onChildAdded(sessionsFbRef, (snap: any) => {
@@ -1622,6 +1778,7 @@ if (typeof window !== "undefined") {
       } else {
         lessonSessions.value[idx] = s;
       }
+      scheduleSaveLessonSessions(600);
     }
   });
 }
@@ -1659,25 +1816,57 @@ const localAttendanceLogs = ref<AttendanceLog[]>(
   savedAttendanceLogs ? JSON.parse(savedAttendanceLogs) : []
 );
 
-// Watch & persist session students
+// Watch & persist session students (debounced)
+let saveStudentsDebounceTimer: any = null;
 watch(
   students,
   (newVal) => {
-    localStorage.setItem("st", JSON.stringify(newVal));
+    if (saveStudentsDebounceTimer) clearTimeout(saveStudentsDebounceTimer);
+    saveStudentsDebounceTimer = setTimeout(() => {
+      try {
+        localStorage.setItem("st", JSON.stringify(newVal));
+      } catch (_) {}
+    }, 150);
   },
   { deep: true }
 );
 
+let saveAttLogsDebounceTimer: any = null;
 watch(
   localAttendanceLogs,
   (newVal) => {
-    localStorage.setItem("ha_attendance_logs", JSON.stringify(newVal));
+    if (saveAttLogsDebounceTimer) clearTimeout(saveAttLogsDebounceTimer);
+    saveAttLogsDebounceTimer = setTimeout(() => {
+      try {
+        localStorage.setItem("ha_attendance_logs", JSON.stringify(newVal));
+      } catch (_) {}
+    }, 200);
   },
   { deep: true }
 );
 
 export function useTeacherStore() {
   const isTeacherLoggedIn = computed(() => !!teacherName.value);
+
+  const groups = computed<string[]>(() => {
+    const set = new Set<string>();
+    if (groupsMeta.value) {
+      Object.keys(groupsMeta.value).forEach((g) => {
+        if (g && g.trim()) set.add(g.trim());
+      });
+    }
+    if (allStudentsRegistry.value) {
+      allStudentsRegistry.value.forEach((s) => {
+        if (s.group && s.group.trim()) set.add(s.group.trim());
+        if (Array.isArray(s.groups)) {
+          s.groups.forEach((g) => {
+            if (g && g.trim()) set.add(g.trim());
+          });
+        }
+      });
+    }
+    return Array.from(set).sort();
+  });
 
   const isStudentFrozen = (studentOrIdOrName: Student | string, contextGroup?: string): boolean => {
     if (!studentOrIdOrName) return false;
@@ -1833,14 +2022,26 @@ export function useTeacherStore() {
   function addStudent(name: string, team: string = "standard") {
     const trimmed = name.trim();
     if (!trimmed) return;
+    const normName = normalizeStudentName(trimmed);
 
     // Check if in master registry to inherit group/status
-    const reg = allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === trimmed.toLowerCase());
+    const reg = findStudentInRegistry(trimmed);
     if (reg?.status === "frozen" || isStudentFrozen(trimmed)) {
       return;
     }
     const status = reg?.status || "active";
     const group = reg?.group || "";
+
+    const existingSessionStudent = students.value.find(
+      (s) => normalizeStudentName(s.name) === normName
+    );
+
+    if (existingSessionStudent) {
+      existingSessionStudent.team = team;
+      existingSessionStudent.status = status;
+      if (group) existingSessionStudent.group = group;
+      return;
+    }
 
     students.value.push({
       name: trimmed,
@@ -1862,9 +2063,10 @@ export function useTeacherStore() {
     if (!reg) {
       const pin = generateUnique6DigitPin(trimmed);
       allStudentsRegistry.value.push({
-        id: "std-" + Date.now(),
+        id: "std-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7),
         name: trimmed,
         group: "Umumiy",
+        groups: ["Umumiy"],
         status: "active",
         login: trimmed.toLowerCase().replace(/\s+/g, "_"),
         pin,
@@ -1881,13 +2083,15 @@ export function useTeacherStore() {
         avgAccuracy: 0,
         joinedDate: new Date().toISOString().split("T")[0],
       });
+      scheduleSaveMasterStudents(300);
     }
   }
 
   function removeStudent(target: number | string) {
     if (typeof target === "string") {
+      const normTarget = normalizeStudentName(target);
       students.value = students.value.filter(
-        (s) => s.name.toLowerCase().trim() !== target.toLowerCase().trim()
+        (s) => normalizeStudentName(s.name) !== normTarget
       );
     } else {
       students.value.splice(target, 1);
@@ -1898,23 +2102,22 @@ export function useTeacherStore() {
     names.forEach((name) => {
       const trimmed = name.trim();
       if (!trimmed || isStudentFrozen(trimmed)) return;
+      const normName = normalizeStudentName(trimmed);
 
-      const reg = allStudentsRegistry.value.find((s) => s.name.toLowerCase().trim() === trimmed.toLowerCase());
+      const reg = findStudentInRegistry(trimmed);
       const status = reg?.status || "active";
       if (status === "frozen") return;
 
       const group = reg?.group || "";
-      const existing = students.value.find((s) => s.name === name);
+      const existing = students.value.find((s) => normalizeStudentName(s.name) === normName);
 
       if (existing) {
         existing.team = targetTeam;
-        existing.correct = 0;
-        existing.total = 0;
-        existing.sess = 0;
         existing.status = status;
+        if (group) existing.group = group;
       } else {
         students.value.push({
-          name,
+          name: trimmed,
           correct: 0,
           total: 0,
           sess: 0,
@@ -1936,11 +2139,12 @@ export function useTeacherStore() {
   function saveStudent(studentData: Partial<Student> & { name: string }) {
     const trimmedName = studentData.name.trim();
     if (!trimmedName) return;
+    const normTarget = normalizeStudentName(trimmedName);
 
     const existingIdx = allStudentsRegistry.value.findIndex(
       (s) =>
-        s.id === studentData.id ||
-        s.name.toLowerCase() === trimmedName.toLowerCase()
+        (studentData.id && s.id === studentData.id) ||
+        normalizeStudentName(s.name) === normTarget
     );
 
     const primaryGroup = (studentData.group && studentData.group.trim())
@@ -2024,7 +2228,7 @@ export function useTeacherStore() {
 
     // Force Vue reactivity update & persist to localStorage
     allStudentsRegistry.value = [...allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    scheduleSaveMasterStudents(100);
     updateProtectedContactsBackup();
 
     // Realtime Cloud synchronization for student master record
@@ -2038,7 +2242,7 @@ export function useTeacherStore() {
 
     // Sync status with session students
     const activeSessionStudent = students.value.find(
-      (s) => s.name === fullData.name
+      (s) => normalizeStudentName(s.name) === normalizeStudentName(fullData.name)
     );
     if (activeSessionStudent) {
       activeSessionStudent.status = fullData.status;
@@ -2263,9 +2467,9 @@ export function useTeacherStore() {
     }
 
     // In-session update
-    const cleanName = target.name.toLowerCase().trim();
+    const cleanName = normalizeStudentName(target.name);
     const inSession = students.value.find(
-      (s) => (target.id && s.id === target.id) || s.name.toLowerCase().trim() === cleanName
+      (s) => (target.id && s.id === target.id) || normalizeStudentName(s.name) === cleanName
     );
     if (inSession) {
       inSession.group = target.group;
@@ -2273,7 +2477,7 @@ export function useTeacherStore() {
     }
 
     allStudentsRegistry.value = [...allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    scheduleSaveMasterStudents(100);
 
     try {
       const sKey = getStudentFbKey(target);
@@ -2320,9 +2524,9 @@ export function useTeacherStore() {
         target.groups = [trimmedGroup];
       }
 
-      const cleanName = target.name.toLowerCase().trim();
+      const cleanName = normalizeStudentName(target.name);
       const inSession = students.value.find(
-        (s) => (target.id && s.id === target.id) || s.name.toLowerCase().trim() === cleanName
+        (s) => (target.id && s.id === target.id) || normalizeStudentName(s.name) === cleanName
       );
       if (inSession) {
         inSession.group = target.group;
@@ -2342,7 +2546,7 @@ export function useTeacherStore() {
     });
 
     allStudentsRegistry.value = [...allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    scheduleSaveMasterStudents(100);
 
     try {
       await fbUpdate(fbRef(db), updates);
@@ -2355,20 +2559,21 @@ export function useTeacherStore() {
     const target = typeof studentOrIdOrName === "object"
       ? studentOrIdOrName
       : findStudentInRegistry(studentOrIdOrName);
-    const cleanName = (typeof studentOrIdOrName === "string" ? studentOrIdOrName : target?.name || "").toLowerCase().trim();
+    const cleanName = normalizeStudentName(typeof studentOrIdOrName === "string" ? studentOrIdOrName : target?.name || "");
     const targetId = target?.id;
 
     allStudentsRegistry.value = allStudentsRegistry.value.filter(
-      (s) => (targetId ? s.id !== targetId : true) && s.name.toLowerCase().trim() !== cleanName
+      (s) => (targetId ? s.id !== targetId : true) && normalizeStudentName(s.name) !== cleanName
     );
+    scheduleSaveMasterStudents(100);
     students.value = students.value.filter(
-      (s) => (targetId ? s.id !== targetId : true) && s.name.toLowerCase().trim() !== cleanName
+      (s) => (targetId ? s.id !== targetId : true) && normalizeStudentName(s.name) !== cleanName
     );
     reminders.value = reminders.value.filter(
-      (r) => (r.studentName || "").toLowerCase().trim() !== cleanName
+      (r) => normalizeStudentName(r.studentName || "") !== cleanName
     );
     allStudentsRegistry.value = [...allStudentsRegistry.value];
-    localStorage.setItem("ha_all_students", JSON.stringify(allStudentsRegistry.value));
+    scheduleSaveMasterStudents(100);
     deleteStudentFromCloud(target || cleanName);
   }
 
@@ -3050,6 +3255,7 @@ export function useTeacherStore() {
     teacherName,
     students,
     allStudentsRegistry,
+    groups,
     localAttendanceLogs,
     reminders,
     groupsMeta,
@@ -3088,6 +3294,9 @@ export function useTeacherStore() {
     isProtectedGroup,
     PROTECTED_GROUPS,
     findStudentInRegistry,
+    normalizeStudentName,
+    scheduleSaveMasterStudents,
+    deduplicateStudentList,
     getStudentFbKey,
     initTeacherStoreSync,
     addGroupReminder,

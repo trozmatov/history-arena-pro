@@ -1,10 +1,10 @@
 <template>
-  <div class="mx-auto w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-2xl text-center">
-    <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-xl shadow-blue-500/25 text-3xl">
+  <div class="mx-auto w-full max-w-md rounded-3xl liquid-glass-panel p-8 text-center shadow-2xl">
+    <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 shadow-xl shadow-blue-500/25 text-3xl">
       👨‍🏫
     </div>
-    <h2 class="text-2xl font-black tracking-tight text-white mb-1">O'qituvchi Portali</h2>
-    <p class="text-xs text-slate-400 mb-6">Tizimga kirish uchun login va parolingizni kiriting</p>
+    <h2 class="text-2xl font-black tracking-tight text-slate-900 dark:text-white mb-1">O'qituvchi Portali</h2>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-6">Tizimga kirish uchun login va parolingizni kiriting</p>
 
     <form @submit.prevent="submitLogin" class="space-y-4">
       <div>
@@ -13,7 +13,7 @@
           type="text"
           placeholder="Login"
           required
-          class="w-full rounded-2xl border border-white/15 bg-black/40 px-4 py-3.5 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+          class="w-full rounded-2xl liquid-glass-inset px-4 py-3.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
         />
       </div>
       <div>
@@ -22,18 +22,18 @@
           type="password"
           placeholder="Parol"
           required
-          class="w-full rounded-2xl border border-white/15 bg-black/40 px-4 py-3.5 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+          class="w-full rounded-2xl liquid-glass-inset px-4 py-3.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
         />
       </div>
 
-      <div v-if="errorMsg" class="rounded-xl bg-red-500/10 border border-red-500/30 p-2.5 text-xs font-bold text-red-400">
+      <div v-if="errorMsg" class="rounded-xl bg-red-500/10 border border-red-500/30 p-2.5 text-xs font-bold text-red-500">
         {{ errorMsg }}
       </div>
 
       <button
         type="submit"
         :disabled="loading"
-        class="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3.5 font-bold text-sm text-white shadow-lg shadow-blue-600/30 hover:from-blue-500 hover:to-indigo-500 active:scale-95 disabled:opacity-50 transition-all"
+        class="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 py-3.5 font-bold text-sm text-white shadow-lg shadow-blue-600/30 hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all"
       >
         <span v-if="loading">Tekshirilmoqda... ⏳</span>
         <span v-else>Kirish 🚀</span>

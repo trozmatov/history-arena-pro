@@ -116,7 +116,7 @@
 import { ref, computed, watch } from "vue";
 import BaseModal from "../common/BaseModal.vue";
 import { callApi } from "../../services/api";
-import { useTeacherStore } from "../../composables/useTeacherStore";
+import { useTeacherStore, normalizeStudentName } from "../../composables/useTeacherStore";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -143,38 +143,42 @@ const normalGroups = computed(() => {
   // Build a lookup map of student -> current group & status from allStudentsRegistry
   const studentMasterMap = new Map<string, { group: string; isFrozen: boolean }>();
   teacherStore.allStudentsRegistry.value.forEach((s) => {
-    const normName = s.name.toLowerCase().trim();
+    const normName = normalizeStudentName(s.name);
     studentMasterMap.set(normName, {
       group: s.group ? s.group.trim() : "",
       isFrozen: s.status === "frozen" || teacherStore.isStudentFrozen(s.name),
     });
   });
 
-  // Group buckets: Map groupName -> Set of student display names
-  const groupBuckets = new Map<string, Set<string>>();
+  // Group buckets: Map groupName -> Map<normalizedName, displayName>
+  const groupBuckets = new Map<string, Map<string, string>>();
 
   // 1. Process Google Sheets groupsData
   for (const g in groupsData.value) {
     const gTrim = g.trim();
     if (!gTrim) continue;
     if (!groupBuckets.has(gTrim)) {
-      groupBuckets.set(gTrim, new Set());
+      groupBuckets.set(gTrim, new Map());
     }
     const members = groupsData.value[g] || [];
     for (const name of members) {
-      const normName = name.toLowerCase().trim();
+      const normName = normalizeStudentName(name);
       const master = studentMasterMap.get(normName);
       if (master) {
         if (master.isFrozen) continue; // skip frozen
         // Place in transferred group if specified
         const effectiveGroup = master.group || gTrim;
         if (!groupBuckets.has(effectiveGroup)) {
-          groupBuckets.set(effectiveGroup, new Set());
+          groupBuckets.set(effectiveGroup, new Map());
         }
-        groupBuckets.get(effectiveGroup)!.add(name);
+        if (!groupBuckets.get(effectiveGroup)!.has(normName)) {
+          groupBuckets.get(effectiveGroup)!.set(normName, name.trim());
+        }
       } else {
         if (teacherStore.isStudentFrozen(name)) continue;
-        groupBuckets.get(gTrim)!.add(name);
+        if (!groupBuckets.get(gTrim)!.has(normName)) {
+          groupBuckets.get(gTrim)!.set(normName, name.trim());
+        }
       }
     }
   }
@@ -185,18 +189,21 @@ const normalGroups = computed(() => {
     const gTrim = (s.group || "").trim();
     if (!gTrim) return;
     if (!groupBuckets.has(gTrim)) {
-      groupBuckets.set(gTrim, new Set());
+      groupBuckets.set(gTrim, new Map());
     }
-    groupBuckets.get(gTrim)!.add(s.name);
+    const normName = normalizeStudentName(s.name);
+    if (!groupBuckets.get(gTrim)!.has(normName)) {
+      groupBuckets.get(gTrim)!.set(normName, s.name.trim());
+    }
   });
 
   // 3. Assemble result filtering out archive and empty groups
-  for (const [groupName, studentSet] of groupBuckets.entries()) {
+  for (const [groupName, studentMap] of groupBuckets.entries()) {
     const gLower = groupName.toLowerCase();
     if (gLower === "arxiv" || gLower === "archive" || gLower.includes("arxiv")) {
       continue;
     }
-    const list = Array.from(studentSet).sort((a, b) => a.localeCompare(b));
+    const list = Array.from(studentMap.values()).sort((a, b) => a.localeCompare(b));
     if (list.length > 0) {
       result[groupName] = list;
     }

@@ -1,8 +1,11 @@
 <template>
-  <div class="min-h-screen bg-slate-950 text-slate-100 selection:bg-blue-600 selection:text-white flex flex-col font-sans">
-    <!-- Top Global Navbar (Hidden on public /results showcase page) -->
+  <div
+    class="min-h-screen selection:bg-blue-600 selection:text-white flex flex-col font-sans transition-colors duration-300"
+    :class="isDark ? 'liquid-canvas-dark text-slate-100' : 'liquid-canvas-light text-slate-900'"
+  >
+    <!-- Top Global Navbar (Hidden on public /results showcase page and Teacher portal which has its own status bar) -->
     <Navbar
-      v-if="!isResultsActive"
+      v-if="!isResultsActive && activeRole !== 'teacher'"
       :active-role="activeRole"
       :unread-count="teacherUnreadCount"
       :is-results-active="isResultsActive"
@@ -12,89 +15,33 @@
       @go-home="navigateTo('/')"
     />
 
-    <!-- Main Container: Dynamically scales to max-w-7xl on desktop for CRM tables and analytics -->
-    <main
-      class="flex-1 w-full mx-auto flex flex-col transition-all duration-300 overflow-x-hidden"
-      :class="[
-        isResultsActive
-          ? 'w-full p-0 max-w-none'
-          : (isWideView ? 'max-w-7xl px-2.5 py-3 sm:p-6' : 'max-w-xl justify-center px-2.5 py-3 sm:p-6')
-      ]"
-    >
-      <!-- 🏆 PUBLIC RESULTS SHOWCASE (/results) -->
-      <template v-if="isResultsActive">
+    <!-- 🏆 PUBLIC RESULTS SHOWCASE (/results) -->
+    <template v-if="isResultsActive">
+      <main class="flex-1 w-full mx-auto flex flex-col transition-all duration-300 overflow-x-hidden w-full p-0 max-w-none">
         <PublicResultsView @go-home="navigateTo('/')" />
-      </template>
+      </main>
+    </template>
 
-      <!-- 👨‍🏫 TEACHER PORTAL -->
-      <template v-else-if="activeRole === 'teacher'">
-        <Transition name="fade" mode="out-in">
-          <!-- 1. Teacher Login -->
-          <TeacherLogin v-if="!teacherStore.isTeacherLoggedIn.value" key="teacher-login" />
+    <!-- 👨‍🏫 TEACHER PORTAL (3-Tier Liquid Glass Layout) -->
+    <template v-else-if="activeRole === 'teacher'">
+      <TeacherView
+        :unread-count="teacherUnreadCount"
+        :initial-subview="teacherSubview"
+        @change-role="handleRoleChange"
+        @toggle-notifs="showNotifModal = true"
+        @view-results="navigateTo('/results')"
+      />
+    </template>
 
-          <!-- 2. Teacher Subviews -->
-          <div v-else :key="teacherSubview" class="w-full">
-            <TeacherSetup
-              v-if="teacherSubview === 'setup'"
-              @start-game="teacherSubview = 'game'"
-              @nav="teacherSubview = $event"
-            />
-            <GameArena
-              v-else-if="teacherSubview === 'game'"
-              @go-home="teacherSubview = 'setup'"
-              @game-finished="teacherSubview = 'results'"
-            />
-            <ResultsView
-              v-else-if="teacherSubview === 'results'"
-              @back-to-game="teacherSubview = 'game'"
-              @new-lesson="teacherSubview = 'setup'"
-            />
-            <AttendanceMatrix
-              v-else-if="teacherSubview === 'attendance'"
-              @back="teacherSubview = 'setup'"
-            />
-            <LeaderboardView
-              v-else-if="teacherSubview === 'leaderboard'"
-              @back="teacherSubview = 'setup'"
-            />
-            <StatsAnalytics
-              v-else-if="teacherSubview === 'stats'"
-              @back="teacherSubview = 'setup'"
-            />
-            <MarketManager
-              v-else-if="teacherSubview === 'market'"
-              @back="teacherSubview = 'setup'"
-            />
-            <LiveChat
-              v-else-if="teacherSubview === 'chat'"
-              @back="teacherSubview = 'setup'"
-            />
-            <StudentManager
-              v-else-if="teacherSubview === 'students'"
-              @back="teacherSubview = 'setup'"
-              @nav="teacherSubview = $event"
-            />
-            <AIChallengeManager
-              v-else-if="teacherSubview === 'challenge' || teacherSubview === 'ai-exam'"
-              @back="teacherSubview = 'setup'"
-            />
-            <CertificatesManager
-              v-else-if="teacherSubview === 'certificates'"
-              @back="teacherSubview = 'setup'"
-              @open-public-results="navigateTo('/results')"
-            />
-          </div>
-        </Transition>
-      </template>
-
-      <!-- 🎓 STUDENT PORTAL -->
-      <template v-else>
+    <!-- 🎓 STUDENT PORTAL -->
+    <template v-else>
+      <main class="flex-1 w-full mx-auto flex flex-col transition-all duration-300 overflow-x-hidden max-w-xl justify-center px-2.5 py-3 sm:p-6">
         <Transition name="fade" mode="out-in">
           <StudentLogin v-if="!studentStore.isStudentLoggedIn.value" key="student-login" />
           <StudentProfile v-else key="student-profile" @nav-to-results="navigateTo('/results')" />
         </Transition>
-      </template>
-    </main>
+      </main>
+    </template>
 
     <!-- Teacher Notifications Modal -->
     <BaseModal
@@ -239,6 +186,7 @@ import Navbar from "./components/common/Navbar.vue";
 import BaseModal from "./components/common/BaseModal.vue";
 
 // Teacher components
+import TeacherView from "./components/teacher/TeacherView.vue";
 import TeacherLogin from "./components/teacher/TeacherLogin.vue";
 import TeacherSetup from "./components/teacher/TeacherSetup.vue";
 import GameArena from "./components/teacher/GameArena.vue";
@@ -257,15 +205,16 @@ import PublicResultsView from "./components/public/PublicResultsView.vue";
 import StudentLogin from "./components/student/StudentLogin.vue";
 import StudentProfile from "./components/student/StudentProfile.vue";
 
-// Stores
 import { useTeacherStore, UnifiedReminder } from "./composables/useTeacherStore";
 import { useStudentStore } from "./composables/useStudentStore";
+import { useTheme } from "./composables/useTheme";
 import { db, ref as fbRef, onChildAdded, onChildChanged, onChildRemoved } from "./services/firebase";
 
 import { prefetchCommonData } from "./services/api";
 
 const teacherStore = useTeacherStore();
 const studentStore = useStudentStore();
+const { isDark } = useTheme();
 
 // URL Routing for /results
 function getNormalizedPath(): string {
@@ -295,14 +244,48 @@ function navigateTo(path: string) {
   }
 }
 
+function detectInitialRole(): "teacher" | "student" {
+  if (typeof window === "undefined") return "teacher";
+  const path = window.location.pathname.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  const search = window.location.search.toLowerCase();
+  if (
+    path.includes("student") ||
+    hash.includes("student") ||
+    search.includes("student")
+  ) {
+    return "student";
+  }
+  const stored = localStorage.getItem("ha_active_role");
+  if (stored === "student" || stored === "teacher") {
+    return stored;
+  }
+  return "teacher";
+}
+
+const activeRole = ref<"teacher" | "student">(detectInitialRole());
+
 function handleRoleChange(role: "teacher" | "student") {
   activeRole.value = role;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("ha_active_role", role);
+      if (role === "student") {
+        if (!window.location.hash.includes("student")) {
+          window.location.hash = "#/student";
+        }
+      } else {
+        if (window.location.hash.includes("student")) {
+          window.history.replaceState({}, "", "/");
+        }
+      }
+    } catch (_) {}
+  }
   if (isResultsActive.value) {
     navigateTo("/");
   }
 }
 
-const activeRole = ref<"teacher" | "student">("teacher");
 const teacherSubview = ref<
   "setup" | "game" | "results" | "attendance" | "leaderboard" | "stats" | "market" | "chat" | "students" | "challenge" | "ai-exam" | "certificates"
 >("setup");
@@ -401,13 +384,25 @@ const teacherUnreadCount = computed(() => {
 });
 
 onMounted(() => {
+  const syncRoleFromLocation = () => {
+    const hash = window.location.hash.toLowerCase();
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    if (hash.includes("student") || path.includes("student") || search.includes("student")) {
+      activeRole.value = "student";
+    }
+  };
+
   // Listen for browser URL history navigation (back/forward and hash)
   window.addEventListener("popstate", () => {
     currentRoute.value = getNormalizedPath();
+    syncRoleFromLocation();
   });
   window.addEventListener("hashchange", () => {
     currentRoute.value = getNormalizedPath();
+    syncRoleFromLocation();
   });
+  syncRoleFromLocation();
 
   // Pre-fetch common data in background
   prefetchCommonData();

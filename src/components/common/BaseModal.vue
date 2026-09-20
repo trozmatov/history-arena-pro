@@ -7,20 +7,20 @@
         @click.self="closeOnBackdrop && $emit('update:modelValue', false)"
       >
         <div
-          class="relative w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-2xl backdrop-blur-2xl transition-all duration-300 transform scale-100"
+          class="relative w-full overflow-hidden rounded-[2.25rem] border border-white/70 dark:border-white/15 bg-white/90 dark:bg-[#0b1528]/85 p-5 sm:p-6 text-slate-900 dark:text-white shadow-2xl backdrop-blur-3xl transition-all duration-300 transform scale-100"
           :class="customClass ? customClass : 'max-w-lg'"
         >
           <!-- Header -->
           <div v-if="title || $slots.header" class="mb-4 flex items-center justify-between">
             <slot name="header">
-              <h3 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+              <h3 class="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                 {{ title }}
               </h3>
             </slot>
             <button
               v-if="showClose"
               @click="$emit('update:modelValue', false)"
-              class="rounded-full p-2 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+              class="rounded-full h-8 w-8 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               ✕
             </button>
@@ -32,7 +32,7 @@
           </div>
 
           <!-- Footer -->
-          <div v-if="$slots.footer" class="mt-6 flex justify-end gap-3 pt-3 border-t border-white/10">
+          <div v-if="$slots.footer" class="mt-6 flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-white/10">
             <slot name="footer" />
           </div>
         </div>
