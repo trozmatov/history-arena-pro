@@ -12,7 +12,7 @@
       @change-role="handleRoleChange"
       @toggle-notifs="showNotifModal = true"
       @view-results="navigateTo('/results')"
-      @go-home="navigateTo('/')"
+      @go-home="handleGoHome"
     />
 
     <!-- 🏆 PUBLIC RESULTS SHOWCASE (/results) -->
@@ -155,7 +155,17 @@
                 {{ n.completed ? '✅ Bajarilgan deb belgilangan' : '⏳ Kutilmoqda' }}
               </span>
 
-              <div class="flex items-center gap-1.5">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button
+                  v-if="n.rawReminder?.type === 'attendance'"
+                  type="button"
+                  @click="goToAttendanceView"
+                  class="rounded-xl bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 px-2.5 py-1 text-[11px] font-bold hover:bg-cyan-600/50 transition shadow flex items-center gap-1"
+                  title="Davomat jurnaliga o'tish"
+                >
+                  <span>📊</span>
+                  <span>Davomatga o'tish</span>
+                </button>
                 <button
                   type="button"
                   @click="teacherStore.toggleCompleteUnifiedReminder(n.rawReminder)"
@@ -216,18 +226,61 @@ const teacherStore = useTeacherStore();
 const studentStore = useStudentStore();
 const { isDark } = useTheme();
 
-// URL Routing for /results
+// ==========================================
+// URL ROUTING SYSTEM
+// 1. "/" (https://history-pro.uz) -> Student portal
+// 2. "/student" -> Student portal
+// 3. "/teacher" -> Teacher portal
+// 4. "/results" -> Public Results Showcase
+// ==========================================
+
+function isTeacherUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  const search = window.location.search.toLowerCase();
+  return (
+    path === "/teacher" ||
+    path.startsWith("/teacher/") ||
+    hash === "#/teacher" ||
+    hash.startsWith("#/teacher/") ||
+    hash === "#teacher" ||
+    search.includes("teacher")
+  );
+}
+
+function isResultsUrl(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  return (
+    path === "/results" ||
+    path.startsWith("/results/") ||
+    hash === "#/results" ||
+    hash.startsWith("#/results/") ||
+    hash === "#results"
+  );
+}
+
 function getNormalizedPath(): string {
   if (typeof window === "undefined") return "/";
+  if (isResultsUrl()) {
+    return "/results";
+  }
+  if (isTeacherUrl()) {
+    return "/teacher";
+  }
   const path = window.location.pathname.toLowerCase();
   const hash = window.location.hash.toLowerCase();
   if (
-    path === "/results" ||
-    path.startsWith("/results") ||
-    hash === "#/results" ||
-    hash === "#results"
+    path === "/student" ||
+    path.startsWith("/student/") ||
+    hash === "#/student" ||
+    hash.startsWith("#/student/") ||
+    path.includes("history-pro/student") ||
+    hash.includes("history-pro/student")
   ) {
-    return "/results";
+    return "/student";
   }
   return "/";
 }
@@ -238,29 +291,47 @@ const isResultsActive = computed(() => currentRoute.value === "/results");
 function navigateTo(path: string) {
   currentRoute.value = path;
   if (typeof window !== "undefined") {
-    if (window.location.pathname !== path) {
+    if (path === "/teacher") {
+      activeRole.value = "teacher";
+      try {
+        localStorage.setItem("ha_active_role", "teacher");
+        if (window.location.pathname !== "/teacher") {
+          window.history.pushState({}, "", "/teacher");
+        }
+      } catch (_) {
+        window.location.hash = "#/teacher";
+      }
+    } else if (path === "/student" || path === "/") {
+      activeRole.value = "student";
+      try {
+        localStorage.setItem("ha_active_role", "student");
+        if (window.location.pathname !== path) {
+          window.history.pushState({}, "", path);
+        }
+      } catch (_) {
+        window.location.hash = path === "/student" ? "#/student" : "";
+      }
+    } else if (path === "/results") {
+      try {
+        if (window.location.pathname !== "/results") {
+          window.history.pushState({}, "", "/results");
+        }
+      } catch (_) {
+        window.location.hash = "#/results";
+      }
+    } else if (window.location.pathname !== path) {
       window.history.pushState({}, "", path);
     }
   }
 }
 
 function detectInitialRole(): "teacher" | "student" {
-  if (typeof window === "undefined") return "teacher";
-  const path = window.location.pathname.toLowerCase();
-  const hash = window.location.hash.toLowerCase();
-  const search = window.location.search.toLowerCase();
-  if (
-    path.includes("student") ||
-    hash.includes("student") ||
-    search.includes("student")
-  ) {
-    return "student";
+  if (typeof window === "undefined") return "student";
+  if (isTeacherUrl()) {
+    return "teacher";
   }
-  const stored = localStorage.getItem("ha_active_role");
-  if (stored === "student" || stored === "teacher") {
-    return stored;
-  }
-  return "teacher";
+  // Standart holatda (https://history-pro.uz va /student): Har doim Student!
+  return "student";
 }
 
 const activeRole = ref<"teacher" | "student">(detectInitialRole());
@@ -270,18 +341,41 @@ function handleRoleChange(role: "teacher" | "student") {
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem("ha_active_role", role);
-      if (role === "student") {
-        if (!window.location.hash.includes("student")) {
-          window.location.hash = "#/student";
+      if (role === "teacher") {
+        if (!window.location.pathname.includes("/teacher") && !window.location.hash.includes("teacher")) {
+          try {
+            window.history.pushState({}, "", "/teacher");
+          } catch (_) {
+            window.location.hash = "#/teacher";
+          }
         }
+        currentRoute.value = "/teacher";
       } else {
-        if (window.location.hash.includes("student")) {
-          window.history.replaceState({}, "", "/");
+        // Switch to student
+        if (window.location.pathname.includes("/teacher") || window.location.hash.includes("teacher")) {
+          try {
+            window.history.pushState({}, "", "/student");
+          } catch (_) {
+            window.location.hash = "#/student";
+          }
         }
+        currentRoute.value = window.location.pathname === "/" ? "/" : "/student";
       }
     } catch (_) {}
   }
   if (isResultsActive.value) {
+    if (role === "teacher") {
+      navigateTo("/teacher");
+    } else {
+      navigateTo("/");
+    }
+  }
+}
+
+function handleGoHome() {
+  if (activeRole.value === "teacher") {
+    navigateTo("/teacher");
+  } else {
     navigateTo("/");
   }
 }
@@ -312,11 +406,20 @@ watch(
   (newSub) => {
     if (newSub) {
       activeRole.value = "teacher";
+      navigateTo("/teacher");
       teacherSubview.value = newSub as any;
       teacherStore.requestedTeacherSubview.value = null;
     }
   }
 );
+
+function goToAttendanceView() {
+  activeRole.value = "teacher";
+  navigateTo("/teacher");
+  teacherSubview.value = "attendance";
+  teacherStore.requestedTeacherSubview.value = "attendance";
+  showNotifModal.value = false;
+}
 
 const showNotifModal = ref(false);
 const notifTab = ref<"all" | "reminders" | "system">("all");
@@ -385,23 +488,27 @@ const teacherUnreadCount = computed(() => {
 
 onMounted(() => {
   const syncRoleFromLocation = () => {
-    const hash = window.location.hash.toLowerCase();
-    const path = window.location.pathname.toLowerCase();
-    const search = window.location.search.toLowerCase();
-    if (hash.includes("student") || path.includes("student") || search.includes("student")) {
+    if (isResultsUrl()) {
+      currentRoute.value = "/results";
+    } else if (isTeacherUrl()) {
+      activeRole.value = "teacher";
+      currentRoute.value = "/teacher";
+      try {
+        localStorage.setItem("ha_active_role", "teacher");
+      } catch (_) {}
+    } else {
+      // Standart holatda (https://history-pro.uz va /student): Har doim Student!
       activeRole.value = "student";
+      currentRoute.value = window.location.pathname.includes("student") ? "/student" : "/";
+      try {
+        localStorage.setItem("ha_active_role", "student");
+      } catch (_) {}
     }
   };
 
   // Listen for browser URL history navigation (back/forward and hash)
-  window.addEventListener("popstate", () => {
-    currentRoute.value = getNormalizedPath();
-    syncRoleFromLocation();
-  });
-  window.addEventListener("hashchange", () => {
-    currentRoute.value = getNormalizedPath();
-    syncRoleFromLocation();
-  });
+  window.addEventListener("popstate", syncRoleFromLocation);
+  window.addEventListener("hashchange", syncRoleFromLocation);
   syncRoleFromLocation();
 
   // Pre-fetch common data in background
@@ -440,6 +547,12 @@ onMounted(() => {
 
   // Centralized Firebase realtime synchronization managed by useTeacherStore
   teacherStore.initTeacherStoreSync();
+  teacherStore.checkAndApplyAutoAttendance();
+
+  // Periodically check auto-attendance every 60s so it triggers when the configured time arrives
+  setInterval(() => {
+    teacherStore.checkAndApplyAutoAttendance();
+  }, 60000);
 });
 </script>
 

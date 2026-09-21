@@ -20,6 +20,17 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
+        <!-- Auto Attendance Settings Button -->
+        <button
+          type="button"
+          @click="openAutoAttSettings"
+          class="flex items-center gap-1.5 rounded-2xl border border-cyan-500/30 bg-cyan-600/15 px-3 py-2 text-xs font-bold text-cyan-200 hover:border-cyan-500/60 hover:bg-cyan-600/25 active:scale-95 transition shadow-sm"
+          :title="`Avtomatik davomat sozlamalari: ${teacherStore.autoAttendanceConfig.value.enabled ? 'Yoqilgan (' + teacherStore.autoAttendanceConfig.value.triggerTime + ')' : 'O\'chirilgan'}`"
+        >
+          <span>⚙️</span>
+          <span>Avto-davomat ({{ teacherStore.autoAttendanceConfig.value.enabled ? teacherStore.autoAttendanceConfig.value.triggerTime : 'O\'chirilgan' }})</span>
+        </button>
+
         <!-- Manual Offline Attendance Button -->
         <button
           type="button"
@@ -136,15 +147,32 @@
 
     <!-- CRM Attendance Matrix Table Card -->
     <div class="rounded-3xl border border-white/10 bg-slate-900/90 p-5 shadow-2xl backdrop-blur-2xl space-y-3">
-      <div class="flex items-center justify-between px-1">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
         <div class="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
           <span>📊 Davomat jadvali:</span>
           <span class="text-cyan-400">{{ formatMonthLabel(selectedMonth) }}</span>
           <span v-if="selectedGroup !== 'all'" class="text-amber-400 font-bold">({{ selectedGroup }})</span>
         </div>
-        <span class="text-[11px] text-slate-400 hidden sm:inline">
-          🔒 Xavfsiz rejim: Tahrirlash uchun katakchaga bosing
-        </span>
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <!-- Toggle Frozen Students Visibility -->
+          <button
+            type="button"
+            @click="showFrozenStudents = !showFrozenStudents"
+            class="rounded-xl border px-3 py-1.5 text-xs font-bold transition active:scale-95 flex items-center gap-1.5"
+            :class="
+              showFrozenStudents
+                ? 'border-cyan-500/50 bg-cyan-500/20 text-cyan-300'
+                : 'border-white/10 bg-white/5 text-slate-400 hover:text-white'
+            "
+            title="Muzlatilgan o'quvchilar davomat tarixini ko'rsatish yoki yashirish"
+          >
+            <span>❄️ Muzlatilganlar:</span>
+            <span>{{ showFrozenStudents ? "Ko'rinmoqda" : "Yashiringan" }}</span>
+          </button>
+          <span class="text-[11px] text-slate-400 hidden sm:inline">
+            🔒 Xavfsiz rejim: Tahrirlash uchun katakchaga bosing
+          </span>
+        </div>
       </div>
 
       <!-- Loading State -->
@@ -217,11 +245,18 @@
               <td class="sticky left-0 bg-slate-950/95 px-3 py-2.5 text-left font-bold text-white z-10 whitespace-nowrap border-r border-white/10 flex items-center justify-between gap-2">
                 <span
                   @click="teacherStore.openStudentDoskaGlobal(row.name)"
-                  class="truncate cursor-pointer hover:text-indigo-400 hover:underline transition"
+                  class="truncate cursor-pointer hover:text-indigo-400 hover:underline transition flex items-center gap-1.5"
                   title="O'quvchining shaxsiy doskasini ochish"
                 >
-                  <span class="text-slate-400 font-normal mr-1.5">{{ idx + 1 }}.</span>
-                  {{ row.name }}
+                  <span class="text-slate-400 font-normal mr-1">{{ idx + 1 }}.</span>
+                  <span>{{ row.name }}</span>
+                  <span
+                    v-if="row.isFrozen"
+                    class="rounded-md bg-cyan-500/20 border border-cyan-500/40 px-1.5 py-0.2 text-[9px] font-black text-cyan-300 ml-1"
+                    title="Muzlatilgan o'quvchi (dars to'xtatilgan)"
+                  >
+                    ❄️ Muzlatilgan
+                  </span>
                 </span>
                 <span v-if="row.group" class="rounded-md bg-white/5 px-1.5 py-0.5 text-[9px] font-normal text-slate-400">
                   {{ row.group }}
@@ -253,6 +288,13 @@
                   class="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/25 text-amber-300 text-xs font-black shadow-sm group-hover:scale-110 transition"
                 >
                   ●
+                </span>
+                <span
+                  v-else-if="row.isFrozen"
+                  class="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-300 text-[10px] font-bold"
+                  title="Muzlatilgan davr (dars hisoblanmagan)"
+                >
+                  ❄️
                 </span>
                 <span v-else class="text-slate-600 text-xs group-hover:text-slate-400">-</span>
 
@@ -553,6 +595,98 @@
         </button>
       </template>
     </BaseModal>
+
+    <!-- Auto Attendance Settings Modal -->
+    <BaseModal
+      v-model="showAutoAttSettingsModal"
+      title="⚙️ Avtomatik Davomat Sozlamalari"
+      custom-class="max-w-md"
+    >
+      <div class="space-y-4 text-xs text-slate-300">
+        <!-- Explanatory note -->
+        <div class="rounded-2xl bg-cyan-950/40 border border-cyan-500/30 p-3.5 space-y-1.5 text-cyan-200/90">
+          <div class="font-bold flex items-center gap-1.5 text-cyan-300 text-sm">
+            <span>💡</span> <span>Avtomatik Davomat Qanday Ishlaydi?</span>
+          </div>
+          <p class="text-[11px] leading-relaxed">
+            Guruhlarning dars jadvalidagi kunlarida (masalan: Du, Chor, Juma) kun yakunlangach ko'rsatilgan vaqtdan so'ng barcha faol o'quvchilarga avtomatik ravishda <b>"Keldi"</b> belgilanadi.
+          </p>
+          <p class="text-[11px] leading-relaxed">
+            Ustozga bildirishnoma keladi va ustoz kirib faqat darsda qatnashmagan o'quvchilarni <b>"Sababsiz"</b> yoki <b>"Sababli"</b> qilib belgilab qo'yadi.
+          </p>
+        </div>
+
+        <!-- Toggle Enable/Disable -->
+        <div class="flex items-center justify-between rounded-2xl bg-black/40 border border-white/10 p-3.5">
+          <div>
+            <div class="font-bold text-white text-sm">Avtomatik Davomat Holati</div>
+            <div class="text-[11px] text-slate-400">
+              {{ tempAutoConfig.enabled ? "🟢 Yoqilgan (Dars kunlari ishlaydi)" : "🔴 O'chirilgan" }}
+            </div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="tempAutoConfig.enabled"
+              class="sr-only peer"
+            />
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+          </label>
+        </div>
+
+        <!-- Trigger Time Selector -->
+        <div class="rounded-2xl bg-black/40 border border-white/10 p-3.5 space-y-2">
+          <label class="block font-bold text-white text-sm">
+            ⏰ Davomat o'tkazish vaqti:
+          </label>
+          <p class="text-[11px] text-slate-400">
+            Darslar tugagandan keyingi vaqtni tanlang. <i>Standart holatda: <b>20:00</b></i> (yangi kun boshlanganda ertalab avtomatik belgilanmaydi).
+          </p>
+          <div class="flex items-center gap-3 pt-1">
+            <input
+              type="time"
+              v-model="tempAutoConfig.triggerTime"
+              class="rounded-xl border border-white/15 bg-slate-900 px-3 py-2 text-base font-bold text-white outline-none focus:border-cyan-500 cursor-pointer"
+            />
+            <span class="text-xs text-slate-400">dan so'ng avtomatik belgilanadi</span>
+          </div>
+        </div>
+
+        <!-- Quick Manual Trigger Right Now -->
+        <div class="rounded-2xl bg-black/20 border border-white/10 p-3 space-y-2">
+          <div class="text-[11px] text-slate-400">
+            Vaqtni kutmasdan bugungi darslar davomatini sinash yoki darhol kiritish:
+          </div>
+          <button
+            type="button"
+            @click="triggerAutoAttendanceNow"
+            class="w-full rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 py-2.5 px-4 text-xs font-black text-white hover:from-amber-500 hover:to-orange-500 active:scale-95 transition shadow flex items-center justify-center gap-2"
+          >
+            <span>⚡</span>
+            <span>Bugun uchun hoziroq avtomatik davomat qilish</span>
+          </button>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex items-center justify-end gap-2 w-full">
+          <button
+            type="button"
+            @click="showAutoAttSettingsModal = false"
+            class="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-white/10 transition"
+          >
+            Bekor qilish
+          </button>
+          <button
+            type="button"
+            @click="saveAutoAttSettings"
+            class="rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 px-5 py-2 text-xs font-black text-white hover:from-cyan-500 hover:to-blue-500 active:scale-95 transition shadow-lg shadow-cyan-600/25"
+          >
+            Saqlash
+          </button>
+        </div>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -583,6 +717,7 @@ const rawLogs = ref<AttendanceLog[]>([]);
 const selectedGroup = ref("all");
 const searchQuery = ref("");
 const selectedMonth = ref("09"); // Default to September ("09") or latest available
+const showFrozenStudents = ref(false);
 
 // Edit Modal State
 const showEditModal = ref(false);
@@ -597,6 +732,38 @@ const manualStudentsList = ref<string[]>([]);
 const manualStatuses = ref<Record<string, "Keldi" | "Sababsiz" | "Sababli">>({});
 const savingManual = ref(false);
 const allGroupsDict = ref<Record<string, string[]>>({});
+
+// Auto Attendance Settings State
+const showAutoAttSettingsModal = ref(false);
+const tempAutoConfig = ref({
+  enabled: true,
+  triggerTime: "20:00",
+});
+
+function openAutoAttSettings() {
+  tempAutoConfig.value = {
+    enabled: teacherStore.autoAttendanceConfig.value.enabled,
+    triggerTime: teacherStore.autoAttendanceConfig.value.triggerTime || "20:00",
+  };
+  showAutoAttSettingsModal.value = true;
+}
+
+function saveAutoAttSettings() {
+  teacherStore.saveAutoAttendanceConfig(tempAutoConfig.value);
+  showAutoAttSettingsModal.value = false;
+  alert(`✅ Avtomatik davomat sozlamalari saqlandi!\n⏰ Vaqti: ${tempAutoConfig.value.triggerTime}\nHolati: ${tempAutoConfig.value.enabled ? "Yoqilgan" : "O'chirilgan"}`);
+}
+
+function triggerAutoAttendanceNow() {
+  const res = teacherStore.checkAndApplyAutoAttendance(true);
+  if (res.appliedCount > 0) {
+    fetchAttendance(true);
+    alert(`✅ ${res.groupsProcessed.join(", ")} guruhlarida jami ${res.appliedCount} ta o'quvchiga avtomatik "Keldi" belgilandi!`);
+    showAutoAttSettingsModal.value = false;
+  } else {
+    alert("Bugun dars jadvali bo'yicha belgilangan guruhlar yo'q yoki barcha guruhlar bugun allaqachon davomat qilingan.");
+  }
+}
 
 onMounted(() => {
   fetchAttendance();
@@ -675,9 +842,10 @@ function navMonth(dir: number) {
 
 const uniqueGroups = computed(() => {
   const set = new Set<string>();
-  // 1. From allStudentsRegistry (only active, non-frozen students)
+  // 1. From allStudentsRegistry
   teacherStore.allStudentsRegistry.value.forEach((s) => {
-    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
+    if (teacherStore.isStudentDeleted(s.name, s.id)) return;
+    if (!showFrozenStudents.value && (s.status === "frozen" || teacherStore.isStudentFrozen(s.name))) return;
     const g = (s.group || "").trim();
     if (g && g !== "Arxiv" && !g.toLowerCase().includes("arxiv")) {
       set.add(g);
@@ -685,7 +853,8 @@ const uniqueGroups = computed(() => {
   });
   // 2. From rawLogs
   rawLogs.value.forEach((l) => {
-    if (teacherStore.isStudentFrozen(l.name)) return;
+    if (teacherStore.isStudentDeleted(l.name)) return;
+    if (!showFrozenStudents.value && teacherStore.isStudentFrozen(l.name)) return;
     const g = (l.group || "").trim();
     if (g && g !== "Arxiv" && !g.toLowerCase().includes("arxiv")) {
       set.add(g);
@@ -737,6 +906,7 @@ const monthDates = computed(() => {
 interface StudentRow {
   name: string;
   group: string;
+  isFrozen?: boolean;
   records: Record<string, "Keldi" | "Sababsiz" | "Sababli">;
   reasons: Record<string, string>;
   present: number;
@@ -748,32 +918,41 @@ interface StudentRow {
 
 const allStudentRows = computed<StudentRow[]>(() => {
   const targetM = selectedMonth.value;
-  const studentsMap: Record<string, { group: string; records: Record<string, any>; reasons: Record<string, any> }> = {};
+  const studentsMap: Record<string, { group: string; isFrozen: boolean; records: Record<string, any>; reasons: Record<string, any> }> = {};
 
   // Build lookup of master student info from registry
-  const masterMap = new Map<string, { group: string; isFrozen: boolean }>();
+  const masterMap = new Map<string, { group: string; isFrozen: boolean; isDeleted: boolean }>();
   teacherStore.allStudentsRegistry.value.forEach((s) => {
     masterMap.set(s.name.toLowerCase().trim(), {
       group: (s.group || "").trim(),
       isFrozen: s.status === "frozen" || teacherStore.isStudentFrozen(s.name),
+      isDeleted: teacherStore.isStudentDeleted(s.name, s.id),
     });
   });
 
-  // 1. Seed all active students belonging to selectedGroup (or all active students if selectedGroup === 'all')
+  // 1. Seed students
   teacherStore.allStudentsRegistry.value.forEach((s) => {
-    if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
+    if (teacherStore.isStudentDeleted(s.name, s.id)) return;
+    const isFrozen = s.status === "frozen" || teacherStore.isStudentFrozen(s.name);
+    if (!showFrozenStudents.value && isFrozen) return;
+
     const g = (s.group || "Boshqa").trim();
     if (g === "Arxiv" || g.toLowerCase().includes("arxiv")) return;
     if (selectedGroup.value !== "all" && !teacherStore.isStudentInGroup(s, selectedGroup.value)) return;
 
-    studentsMap[s.name] = { group: selectedGroup.value !== "all" ? selectedGroup.value : g, records: {}, reasons: {} };
+    studentsMap[s.name] = { group: selectedGroup.value !== "all" ? selectedGroup.value : g, isFrozen, records: {}, reasons: {} };
   });
 
   // 2. Populate logs and discover any additional students in rawLogs
   rawLogs.value.forEach((l) => {
+    if (teacherStore.isStudentDeleted(l.name)) return;
     const norm = l.name.toLowerCase().trim();
     const master = masterMap.get(norm);
-    if (master?.isFrozen || teacherStore.isStudentFrozen(l.name)) return;
+    if (master?.isDeleted) return;
+
+    const isFrozen = master ? master.isFrozen : teacherStore.isStudentFrozen(l.name);
+    if (!showFrozenStudents.value && isFrozen) return;
+
     const normDate = normalizeDateToDDMM(l.date);
     if (getMonthFromDate(normDate) !== targetM) return;
 
@@ -782,7 +961,7 @@ const allStudentRows = computed<StudentRow[]>(() => {
 
     const g = selectedGroup.value !== "all" ? selectedGroup.value : (master?.group || l.group || "Boshqa");
     if (!studentsMap[l.name]) {
-      studentsMap[l.name] = { group: g, records: {}, reasons: {} };
+      studentsMap[l.name] = { group: g, isFrozen, records: {}, reasons: {} };
     }
     studentsMap[l.name].records[normDate] = l.status;
     if (l.reason) {
@@ -798,16 +977,20 @@ const allStudentRows = computed<StudentRow[]>(() => {
     if (sess.studentResults && Array.isArray(sess.studentResults)) {
       sess.studentResults.forEach((sr: any) => {
         if (!sr.name) return;
+        if (teacherStore.isStudentDeleted(sr.name)) return;
         const norm = sr.name.toLowerCase().trim();
         const master = masterMap.get(norm);
-        if (master?.isFrozen || teacherStore.isStudentFrozen(sr.name)) return;
+        if (master?.isDeleted) return;
+
+        const isFrozen = master ? master.isFrozen : teacherStore.isStudentFrozen(sr.name);
+        if (!showFrozenStudents.value && isFrozen) return;
 
         const inSelectedGroup = selectedGroup.value === "all" || (master ? teacherStore.isStudentInGroup(master, selectedGroup.value) : sess.group === selectedGroup.value);
         if (!inSelectedGroup) return;
 
         const g = selectedGroup.value !== "all" ? selectedGroup.value : (master?.group || sess.group || "Boshqa");
         if (!studentsMap[sr.name]) {
-          studentsMap[sr.name] = { group: g, records: {}, reasons: {} };
+          studentsMap[sr.name] = { group: g, isFrozen, records: {}, reasons: {} };
         }
         if (!studentsMap[sr.name].records[normDate] && sr.attStatus) {
           studentsMap[sr.name].records[normDate] = sr.attStatus;
@@ -820,7 +1003,7 @@ const allStudentRows = computed<StudentRow[]>(() => {
   const dates = monthDates.value;
 
   for (const name in studentsMap) {
-    const { group, records, reasons } = studentsMap[name];
+    const { group, isFrozen, records, reasons } = studentsMap[name];
     let present = 0;
     let absent = 0;
     let excused = 0;
@@ -838,6 +1021,7 @@ const allStudentRows = computed<StudentRow[]>(() => {
     rows.push({
       name,
       group,
+      isFrozen,
       records,
       reasons,
       present,
@@ -1006,10 +1190,12 @@ function onManualGroupChange() {
   // 1. Google Sheets members (checking if transferred in CRM)
   const list = allGroupsDict.value[g] || [];
   list.forEach((name) => {
+    if (teacherStore.isStudentDeleted(name)) return;
     const master = teacherStore.allStudentsRegistry.value.find(
       (s) => s.name.toLowerCase().trim() === name.toLowerCase().trim()
     );
     if (master) {
+      if (teacherStore.isStudentDeleted(master.name, master.id)) return;
       if (master.status === "frozen" || teacherStore.isStudentFrozen(name)) return;
       if (master.group && master.group.toLowerCase().trim() !== g.toLowerCase()) return; // transferred away
       set.add(master.name);
@@ -1022,6 +1208,7 @@ function onManualGroupChange() {
 
   // 2. Students in allStudentsRegistry whose current group is g
   teacherStore.allStudentsRegistry.value.forEach((s) => {
+    if (teacherStore.isStudentDeleted(s.name, s.id)) return;
     if (s.status === "frozen" || teacherStore.isStudentFrozen(s.name)) return;
     if ((s.group || "").toLowerCase().trim() === g.toLowerCase()) {
       set.add(s.name);

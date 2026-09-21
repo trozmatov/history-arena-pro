@@ -352,27 +352,35 @@
     </button>
 
     <!-- Shortcut Actions Grid (Liquid Glass) -->
-    <div class="grid grid-cols-2 gap-2.5 pt-1">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
       <button
         type="button"
-        @click="$emit('nav', 'certificates')"
-        class="liquid-glass-card flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-extrabold text-amber-600 dark:text-amber-300 border-amber-500/30 hover:border-amber-400 shadow-sm cursor-pointer"
+        @click="$emit('nav', 'attendance')"
+        class="liquid-glass-card flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-black text-cyan-600 dark:text-cyan-300 border-cyan-500/30 hover:border-cyan-400 shadow-sm cursor-pointer active:scale-95 transition"
+        title="Davomat jurnali va avtomatik davomat tizimi"
       >
-        <span class="text-lg">📜</span> <span>Sertifikatlar</span>
+        <span class="text-lg">📅</span> <span>Davomat & Avto-davomat</span>
       </button>
       <button
         type="button"
         @click="$emit('nav', 'students')"
-        class="liquid-glass-card flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-extrabold text-indigo-600 dark:text-indigo-300 border-indigo-500/30 hover:border-indigo-400 shadow-sm cursor-pointer"
+        class="liquid-glass-card flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-extrabold text-indigo-600 dark:text-indigo-300 border-indigo-500/30 hover:border-indigo-400 shadow-sm cursor-pointer active:scale-95 transition"
       >
         <span class="text-lg">👨‍🎓</span> <span>CRM & O'quvchilar</span>
+      </button>
+      <button
+        type="button"
+        @click="$emit('nav', 'certificates')"
+        class="liquid-glass-card flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-extrabold text-amber-600 dark:text-amber-300 border-amber-500/30 hover:border-amber-400 shadow-sm cursor-pointer active:scale-95 transition"
+      >
+        <span class="text-lg">📜</span> <span>Sertifikatlar</span>
       </button>
 
       <!-- Direct Student Portal Switcher -->
       <button
         type="button"
         @click="switchToStudent"
-        class="liquid-glass-card col-span-2 flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-black text-indigo-700 dark:text-indigo-300 border-indigo-500/30 hover:border-indigo-400 shadow-sm cursor-pointer active:scale-95 transition"
+        class="liquid-glass-card col-span-1 sm:col-span-3 flex items-center justify-center gap-2 rounded-2xl py-3 text-xs font-black text-indigo-700 dark:text-indigo-300 border-indigo-500/30 hover:border-indigo-400 shadow-sm cursor-pointer active:scale-95 transition"
       >
         <span class="text-base">🎓</span> <span>O'quvchi Kabinetiga O'tish (Login & Profil)</span>
       </button>
@@ -440,9 +448,14 @@ function switchToStudent() {
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem("ha_active_role", "student");
-    } catch (_) {}
-    window.location.hash = "#/student";
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
+      if (window.location.pathname !== "/student") {
+        window.history.pushState({}, "", "/student");
+      }
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    } catch (_) {
+      window.location.hash = "#/student";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
   }
 }
 

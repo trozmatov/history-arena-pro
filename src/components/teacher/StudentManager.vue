@@ -25,8 +25,19 @@
 
         <!-- Quick Action Buttons: Organized 2-Row Control Panel -->
         <div class="flex flex-col gap-2.5 w-full xl:w-auto">
-          <!-- Row 1: Muloqot, Do'kon & Hisobotlar (4 buttons) -->
+          <!-- Row 1: Muloqot, Do'kon & Hisobotlar (5 buttons) -->
           <div class="flex flex-wrap items-center gap-2 xl:justify-end">
+            <!-- Attendance Button -->
+            <button
+              type="button"
+              @click="$emit('nav', 'attendance')"
+              class="group flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-600/15 px-3.5 py-2 text-xs font-black text-cyan-300 hover:border-cyan-500/50 hover:bg-cyan-600/25 active:scale-95 transition-all shadow-sm backdrop-blur-md"
+              title="Davomat jurnali va avtomatik davomat sozlamalari"
+            >
+              <span class="text-sm group-hover:scale-110 transition-transform">📅</span>
+              <span>Davomat Jurnali</span>
+            </button>
+
             <!-- Live Class Chat Button -->
             <button
               type="button"
@@ -418,6 +429,21 @@
           >
             ❄️ Muzlagan
           </button>
+          <button
+            type="button"
+            @click="statusFilter = 'trash'"
+            class="rounded-xl px-3 py-1 text-xs font-bold transition flex items-center gap-1.5"
+            :class="statusFilter === 'trash' ? 'bg-rose-600 text-white shadow' : 'text-slate-400 hover:text-rose-300'"
+            title="O'chirilgan o'quvchilar savatchasi"
+          >
+            <span>🗑️ Savatcha</span>
+            <span
+              v-if="teacherStore.deletedStudentsRegistry.value.length > 0"
+              class="rounded-full bg-white/20 px-1.5 py-0.2 text-[10px] font-black"
+            >
+              {{ teacherStore.deletedStudentsRegistry.value.length }}
+            </span>
+          </button>
         </div>
       </div>
     </div>
@@ -441,6 +467,18 @@
 
         <!-- Export Buttons in List Header -->
         <div class="flex items-center gap-2 flex-wrap">
+          <!-- Clear Trash Button -->
+          <button
+            v-if="statusFilter === 'trash' && teacherStore.deletedStudentsRegistry.value.length > 0"
+            type="button"
+            @click="clearTrashConfirm"
+            class="flex items-center gap-1.5 rounded-xl border border-rose-500/50 bg-rose-600/30 px-3 py-1.5 text-xs font-black text-rose-300 hover:bg-rose-600/50 active:scale-95 transition shadow-md"
+            title="Savatchadagi barcha o'quvchilarni butunlay tozalash"
+          >
+            <span>🗑️</span>
+            <span>Savatchani tozalash</span>
+          </button>
+
           <!-- Download Selected -->
           <button
             v-if="selectedStudentNames.length > 0"
@@ -481,25 +519,32 @@
         v-if="filteredStudents.length === 0"
         class="py-12 text-center rounded-2xl border border-white/5 bg-black/20 space-y-3"
       >
-        <div class="text-4xl">🔍</div>
-        <div class="text-sm font-bold text-slate-300">O'quvchi topilmadi</div>
-        <p class="text-xs text-slate-500">Qidiruv so'zini o'zgartiring yoki bazadan guruhlarni sinxronlang</p>
-        <div class="flex justify-center gap-2">
-          <button
-            type="button"
-            @click="syncFromDb(true)"
-            class="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-500 transition shadow"
-          >
-            🔄 Bazadan yuklash
-          </button>
-          <button
-            type="button"
-            @click="openAddModal"
-            class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500 transition shadow"
-          >
-            + Qo'lda Qo'shish
-          </button>
-        </div>
+        <template v-if="statusFilter === 'trash'">
+          <div class="text-4xl">🗑️</div>
+          <div class="text-sm font-bold text-slate-300">Savatcha bo'sh</div>
+          <p class="text-xs text-slate-500">Hozirda savatchada o'chirilgan o'quvchilar mavjud emas</p>
+        </template>
+        <template v-else>
+          <div class="text-4xl">🔍</div>
+          <div class="text-sm font-bold text-slate-300">O'quvchi topilmadi</div>
+          <p class="text-xs text-slate-500">Qidiruv so'zini o'zgartiring yoki bazadan guruhlarni sinxronlang</p>
+          <div class="flex justify-center gap-2">
+            <button
+              type="button"
+              @click="syncFromDb(true)"
+              class="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-500 transition shadow"
+            >
+              🔄 Bazadan yuklash
+            </button>
+            <button
+              type="button"
+              @click="openAddModal"
+              class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500 transition shadow"
+            >
+              + Qo'lda Qo'shish
+            </button>
+          </div>
+        </template>
       </div>
 
       <!-- Students List -->
@@ -509,7 +554,9 @@
           :key="st.id || st.name"
           class="rounded-3xl border p-3 sm:p-4 transition-all duration-200 shadow-md flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4 overflow-hidden backdrop-blur-xl"
           :class="
-            st.status === 'frozen'
+            statusFilter === 'trash'
+              ? 'border-rose-500/40 bg-rose-500/10 dark:bg-rose-950/25 opacity-90 hover:opacity-100'
+              : st.status === 'frozen'
               ? 'border-cyan-500/40 bg-cyan-500/10 dark:bg-cyan-950/25 opacity-85 hover:opacity-100'
               : 'liquid-glass-card hover:border-blue-400/40 dark:hover:border-cyan-400/30'
           "
@@ -529,13 +576,15 @@
               @click="openStudentDetail(st)"
               class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-black text-sm shadow-md cursor-pointer hover:scale-105 transition"
               :class="
-                st.status === 'frozen'
+                statusFilter === 'trash'
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                  : st.status === 'frozen'
                   ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30'
                   : 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-blue-500/25'
               "
               title="Shaxsiy doskani ochish"
             >
-              {{ st.status === 'frozen' ? '❄️' : st.name.charAt(0).toUpperCase() }}
+              {{ statusFilter === 'trash' ? '🗑️' : st.status === 'frozen' ? '❄️' : st.name.charAt(0).toUpperCase() }}
             </div>
 
             <!-- Info text -->
@@ -549,6 +598,13 @@
                   {{ st.name }}
                 </span>
                 <span
+                  v-if="statusFilter === 'trash'"
+                  class="rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-rose-500/20 border border-rose-500/40 text-rose-300"
+                >
+                  🗑️ Savatchada
+                </span>
+                <span
+                  v-else
                   class="rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-wider"
                   :class="
                     st.status === 'frozen'
@@ -652,8 +708,30 @@
               </div>
             </div>
 
-            <!-- Quick Action Buttons -->
-            <div class="flex items-center gap-1 shrink-0 flex-nowrap">
+            <!-- When in Trash Mode: Restore and Permanently Destroy buttons -->
+            <div v-if="statusFilter === 'trash'" class="flex items-center gap-2 self-end xl:self-auto shrink-0">
+              <button
+                type="button"
+                @click="restoreStudent(st)"
+                class="flex items-center gap-1.5 rounded-xl bg-emerald-600/20 border border-emerald-500/40 px-3 py-2 text-xs font-black text-emerald-300 hover:bg-emerald-600/30 active:scale-95 transition shrink-0 shadow-sm"
+                title="O'quvchini savatchadan qayta tiklash"
+              >
+                <span>♻️</span>
+                <span>Tiklash</span>
+              </button>
+              <button
+                type="button"
+                @click="permanentlyDeleteStudent(st)"
+                class="flex items-center gap-1.5 rounded-xl bg-rose-600/20 border border-rose-500/40 px-3 py-2 text-xs font-black text-rose-300 hover:bg-rose-600/30 active:scale-95 transition shrink-0 shadow-sm"
+                title="Bazadan butunlay o'chirish"
+              >
+                <span>❌</span>
+                <span>Butunlay o'chirish</span>
+              </button>
+            </div>
+
+            <!-- Normal Mode: Full Quick Actions -->
+            <div v-else class="flex items-center gap-1.5 sm:gap-2 self-end xl:self-auto shrink-0 flex-wrap">
               <!-- 1. Deep Stats / Doskasi -->
               <button
                 type="button"
@@ -4775,7 +4853,7 @@ function closeStudentDoska() {
 // Search & Filter & Selection
 const searchQuery = ref("");
 const selectedGroupFilter = ref("");
-const statusFilter = ref<"all" | "active" | "frozen">("all");
+const statusFilter = ref<"all" | "active" | "frozen" | "trash">("all");
 const groupFilterTab = ref<"all" | "active" | "frozen">("all");
 const syncingDb = ref(false);
 const selectedStudentNames = ref<string[]>([]);
@@ -5325,6 +5403,30 @@ const isCurrentGroupAllFrozen = computed(() => {
 
 // Filtered Students list
 const filteredStudents = computed(() => {
+  if (statusFilter.value === "trash") {
+    let list = teacherStore.deletedStudentsRegistry.value.map((d) => d.student);
+
+    if (selectedGroupFilter.value) {
+      list = list.filter((s) => isStudentInGroup(s, selectedGroupFilter.value));
+    }
+
+    const query = searchQuery.value.trim().toLowerCase();
+    if (query) {
+      list = list.filter(
+        (s) =>
+          s.name.toLowerCase().includes(query) ||
+          (s.group && s.group.toLowerCase().includes(query)) ||
+          (Array.isArray(s.groups) && s.groups.some((g) => g.toLowerCase().includes(query))) ||
+          (s.phone && s.phone.toLowerCase().includes(query)) ||
+          (s.login && s.login.toLowerCase().includes(query)) ||
+          (s.parentName && s.parentName.toLowerCase().includes(query)) ||
+          (s.parentPhone && s.parentPhone.toLowerCase().includes(query))
+      );
+    }
+
+    return list;
+  }
+
   let list = teacherStore.allStudentsRegistry.value;
 
   if (selectedGroupFilter.value) {
@@ -6527,8 +6629,38 @@ function toggleFreeze(student: Student) {
 }
 
 function confirmDelete(student: Student) {
-  if (confirm(`Haqiqatan ham "${student.name}"ni ro'yxatdan o'chirmoqchimisiz?`)) {
-    teacherStore.deleteStudentPermanently(student);
+  if (
+    confirm(
+      `"${student.name}"ni savatchaga yubormoqchimisiz?\n\nℹ️ O'quvchi barcha guruhlar, darslar va davomatdan yashiriladi. Zarur bo'lsa uni "Savatcha" bo'limidan qayta tiklashingiz mumkin.`
+    )
+  ) {
+    teacherStore.moveToTrash(student.id || student.name, "O'qituvchi tomonidan o'chirildi");
+  }
+}
+
+function restoreStudent(student: Student) {
+  if (confirm(`"${student.name}"ni ro'yxatga qayta tiklamoqchimisiz?`)) {
+    teacherStore.restoreFromTrash(student.id || student.name);
+  }
+}
+
+function permanentlyDeleteStudent(student: Student) {
+  if (
+    confirm(
+      `⚠️ DIQQAT!\n"${student.name}" bazadan BUTUNLAY yo'q qilinadi va uni qayta tiklab bo'lmaydi.\n\nRostdan ham butunlay o'chirmoqchimisiz?`
+    )
+  ) {
+    teacherStore.permanentlyDestroy(student.id || student.name);
+  }
+}
+
+function clearTrashConfirm() {
+  if (
+    confirm(
+      "⚠️ DIQQAT!\nSavatchadagi BARCHA o'quvchilarni butunlay o'chirmoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi!"
+    )
+  ) {
+    teacherStore.clearTrash();
   }
 }
 

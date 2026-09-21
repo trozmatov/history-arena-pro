@@ -14,6 +14,11 @@ import {
 } from "../services/firebase";
 import { getStudentDefaultPin } from "./useStudentStore";
 
+export interface AutoAttendanceConfig {
+  enabled: boolean;
+  triggerTime: string; // e.g. "20:00"
+}
+
 export const PROTECTED_GROUPS = ["umumiy", "arxiv"];
 export function isProtectedGroup(groupName: string): boolean {
   if (!groupName) return false;
@@ -544,6 +549,62 @@ export function deduplicateStudentList(list: Student[]): { list: Student[]; chan
   return { list: Array.from(map.values()), changed };
 }
 
+export interface DeletedStudentItem {
+  student: Student;
+  deletedAt: number;
+  deletedBy?: string;
+  reason?: string;
+}
+
+function loadInitialDeletedStudents(): DeletedStudentItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("ha_deleted_students");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export const deletedStudentsRegistry = ref<DeletedStudentItem[]>(loadInitialDeletedStudents());
+
+export function saveDeletedStudents() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("ha_deleted_students", JSON.stringify(deletedStudentsRegistry.value));
+  } catch (e) {
+    console.warn("saveDeletedStudents error:", e);
+  }
+}
+
+export function isStudentDeleted(studentOrIdOrName: Partial<Student> | string, idArg?: string): boolean {
+  if (!studentOrIdOrName && !idArg) return false;
+  const list = deletedStudentsRegistry.value;
+  let targetId = idArg || "";
+  let targetName = "";
+
+  if (typeof studentOrIdOrName === "object") {
+    targetId = studentOrIdOrName.id || targetId;
+    targetName = studentOrIdOrName.name ? normalizeStudentName(studentOrIdOrName.name) : "";
+  } else if (typeof studentOrIdOrName === "string") {
+    const query = studentOrIdOrName.trim();
+    if (query.startsWith("std-") || query.startsWith("sess-") || query.startsWith("restored-")) {
+      targetId = query;
+    }
+    targetName = normalizeStudentName(query);
+  }
+
+  return list.some((d) => {
+    const dId = d.student?.id;
+    const dName = normalizeStudentName(d.student?.name || "");
+    if (targetId && dId && dId === targetId) return true;
+    if (targetName && dName && dName === targetName) return true;
+    return false;
+  });
+}
+
 function loadInitialMasterStudents(): Student[] {
   const sampleNames = new Set(["Ali Valiyev", "Madina Karimova", "Jasur Rahimov", "Zuhra Yusupova", "Bekzod Rustamov"]);
   const sampleIds = new Set(["std-1", "std-2", "std-3", "std-4", "std-5"]);
@@ -559,7 +620,8 @@ function loadInitialMasterStudents(): Student[] {
           s &&
           s.name &&
           !sampleNames.has(s.name.trim()) &&
-          !sampleIds.has(s.id || "")
+          !sampleIds.has(s.id || "") &&
+          !isStudentDeleted(s.name, s.id)
       );
       const dedup = deduplicateStudentList(list);
       list = dedup.list;
@@ -576,7 +638,7 @@ function loadInitialMasterStudents(): Student[] {
       const stList: Student[] = JSON.parse(savedSt);
       if (Array.isArray(stList)) {
         stList.forEach((s) => {
-          if (s && s.name && !sampleNames.has(s.name.trim()) && !sampleIds.has(s.id || "")) {
+          if (s && s.name && !sampleNames.has(s.name.trim()) && !sampleIds.has(s.id || "") && !isStudentDeleted(s.name, s.id)) {
             const cleanName = s.name.trim();
             const norm = normalizeStudentName(cleanName);
             const existing = list.find((x) => normalizeStudentName(x.name) === norm);
@@ -636,7 +698,7 @@ function loadInitialMasterStudents(): Student[] {
           const res = sess.studentResults || sess.results || [];
           if (Array.isArray(res)) {
             res.forEach((r: any) => {
-              if (r && r.name && !sampleNames.has(r.name.trim())) {
+              if (r && r.name && !sampleNames.has(r.name.trim()) && !isStudentDeleted(r.name, r.id)) {
                 const clean = r.name.trim();
                 const norm = normalizeStudentName(clean);
                 const existing = list.find((x) => normalizeStudentName(x.name) === norm);
@@ -801,6 +863,12 @@ export function initTeacherStoreSync() {
       const data = snap.val();
       if (!data || !data.name) return;
 
+      // Zombie protection: Ignore deleted students from Firebase and purge them
+      if (isStudentDeleted(data.name, data.id)) {
+        deleteStudentFromCloud(data);
+        return;
+      }
+
       if (!firstSnapshotReceived) {
         firstSnapshotReceived = true;
         localStorage.setItem("ha_v6_clean_sync", "true");
@@ -915,6 +983,12 @@ export function initTeacherStoreSync() {
     onChildChanged(msRef, (snap: any) => {
       const data = snap.val();
       if (!data || !data.name) return;
+
+      // Zombie protection: Ignore deleted students from Firebase
+      if (isStudentDeleted(data.name, data.id)) {
+        deleteStudentFromCloud(data);
+        return;
+      }
       const cleanName = normalizeStudentName(data.name);
       const existingIdx = allStudentsRegistry.value.findIndex(
         (s) => (data.id && s.id === data.id) || normalizeStudentName(s.name) === cleanName
@@ -1809,6 +1883,7 @@ export interface AttendanceLog {
   status: "Keldi" | "Sababsiz" | "Sababli";
   group?: string;
   reason?: string;
+  auto?: boolean; // True if automatically marked by Auto-Attendance
 }
 
 const savedAttendanceLogs = localStorage.getItem("ha_attendance_logs");
@@ -2555,26 +2630,151 @@ export function useTeacherStore() {
     }
   }
 
-  function deleteStudentPermanently(studentOrIdOrName: Student | string) {
+  // --- Trash & Deleted Students Management (Soft Delete) ---
+  function moveToTrash(studentOrIdOrName: Student | string, reason?: string) {
     const target = typeof studentOrIdOrName === "object"
       ? studentOrIdOrName
       : findStudentInRegistry(studentOrIdOrName);
     const cleanName = normalizeStudentName(typeof studentOrIdOrName === "string" ? studentOrIdOrName : target?.name || "");
     const targetId = target?.id;
 
+    if (!target && !cleanName) return;
+
+    const studentObj: Student = target || {
+      id: targetId || "del-" + Date.now(),
+      name: typeof studentOrIdOrName === "string" ? studentOrIdOrName : "Noma'lum",
+      group: "Umumiy",
+      groups: ["Umumiy"],
+      status: "active",
+      phone: "",
+      parentName: "",
+      parentPhone: "",
+      parentTg: "",
+      login: cleanName.replace(/\s+/g, "_"),
+      pin: "123456",
+      password: "123456",
+      pattern: "",
+      notes: "",
+      joinedDate: new Date().toISOString().split("T")[0],
+      correct: 0,
+      total: 0,
+      sess: 0,
+      strikes: 0,
+      penalties: 0,
+      bonus: 0,
+      coins: 0,
+      totalTests: 0,
+      avgAccuracy: 0,
+      attendanceStats: { present: 0, excused: 0, unexcused: 0 },
+    };
+
+    // 1. Add to deletedStudentsRegistry (tombstone) if not already there
+    const existingTrashIdx = deletedStudentsRegistry.value.findIndex(
+      (d) => normalizeStudentName(d.student.name) === cleanName || (targetId && d.student.id === targetId)
+    );
+    if (existingTrashIdx === -1) {
+      deletedStudentsRegistry.value.unshift({
+        student: JSON.parse(JSON.stringify(studentObj)),
+        deletedAt: Date.now(),
+        deletedBy: teacherName.value || "Ustoz",
+        reason: reason || "O'qituvchi tomonidan savatchaga yuborildi",
+      });
+      saveDeletedStudents();
+    }
+
+    // 2. Remove from active CRM registry
     allStudentsRegistry.value = allStudentsRegistry.value.filter(
       (s) => (targetId ? s.id !== targetId : true) && normalizeStudentName(s.name) !== cleanName
     );
     scheduleSaveMasterStudents(100);
+
+    // 3. Remove from active session / current lesson students and localStorage["st"]
     students.value = students.value.filter(
       (s) => (targetId ? s.id !== targetId : true) && normalizeStudentName(s.name) !== cleanName
     );
+    try {
+      localStorage.setItem("st", JSON.stringify(students.value));
+    } catch (_) {}
+
+    // 4. Remove from reminders
     reminders.value = reminders.value.filter(
       (r) => normalizeStudentName(r.studentName || "") !== cleanName
     );
+
+    // 5. Clean from protected contacts backup
+    try {
+      const rawBackup = localStorage.getItem("ha_protected_contacts_backup");
+      if (rawBackup) {
+        const backupMap = JSON.parse(rawBackup);
+        if (backupMap && backupMap[cleanName]) {
+          delete backupMap[cleanName];
+          localStorage.setItem("ha_protected_contacts_backup", JSON.stringify(backupMap));
+        }
+      }
+    } catch (_) {}
+
+    // 6. Purge from Firebase Cloud
+    deleteStudentFromCloud(target || cleanName);
+  }
+
+  function restoreFromTrash(studentOrIdOrName: Student | string) {
+    const norm = normalizeStudentName(typeof studentOrIdOrName === "object" ? studentOrIdOrName.name : studentOrIdOrName);
+    const targetId = typeof studentOrIdOrName === "object" ? studentOrIdOrName.id : (studentOrIdOrName.startsWith("std-") ? studentOrIdOrName : "");
+
+    const idx = deletedStudentsRegistry.value.findIndex(
+      (d) => normalizeStudentName(d.student.name) === norm || (targetId && d.student.id === targetId)
+    );
+    if (idx === -1) return;
+
+    const item = deletedStudentsRegistry.value[idx];
+    deletedStudentsRegistry.value.splice(idx, 1);
+    saveDeletedStudents();
+
+    // Re-insert into allStudentsRegistry
+    const restoredStudent: Student = {
+      ...item.student,
+      status: item.student.status === "frozen" ? "frozen" : "active",
+      updatedAt: Date.now(),
+    };
+
+    const existingIdx = allStudentsRegistry.value.findIndex(
+      (s) => normalizeStudentName(s.name) === norm
+    );
+    if (existingIdx === -1) {
+      allStudentsRegistry.value.push(restoredStudent);
+    } else {
+      allStudentsRegistry.value[existingIdx] = restoredStudent;
+    }
     allStudentsRegistry.value = [...allStudentsRegistry.value];
     scheduleSaveMasterStudents(100);
-    deleteStudentFromCloud(target || cleanName);
+
+    // Sync back to Firebase
+    syncStudentToCloud(restoredStudent);
+  }
+
+  function permanentlyDestroy(studentOrIdOrName: Student | string) {
+    const norm = normalizeStudentName(typeof studentOrIdOrName === "object" ? studentOrIdOrName.name : studentOrIdOrName);
+    const targetId = typeof studentOrIdOrName === "object" ? studentOrIdOrName.id : "";
+
+    deletedStudentsRegistry.value = deletedStudentsRegistry.value.filter(
+      (d) => normalizeStudentName(d.student.name) !== norm && (targetId ? d.student.id !== targetId : true)
+    );
+    saveDeletedStudents();
+
+    deleteStudentFromCloud(typeof studentOrIdOrName === "object" ? studentOrIdOrName : norm);
+  }
+
+  function clearTrash() {
+    deletedStudentsRegistry.value.forEach((d) => {
+      deleteStudentFromCloud(d.student);
+    });
+    deletedStudentsRegistry.value = [];
+    saveDeletedStudents();
+  }
+
+  // Alias deleteStudentPermanently to moveToTrash so all calls are safe
+  function deleteStudentPermanently(studentOrIdOrName: Student | string, reason?: string) {
+    moveToTrash(studentOrIdOrName, reason);
   }
 
   // --- Teacher Reminders Management ---
@@ -2965,6 +3165,190 @@ export function useTeacherStore() {
     syncGroupMetaToCloud(updatedMeta);
   }
 
+  // --- Auto-Attendance on Scheduled Class Days ---
+  const autoAttendanceConfig = ref<AutoAttendanceConfig>({
+    enabled: true,
+    triggerTime: "20:00",
+  });
+
+  function loadAutoAttendanceConfig() {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("ha_auto_attendance_config");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.enabled === "boolean") autoAttendanceConfig.value.enabled = parsed.enabled;
+        if (parsed.triggerTime) autoAttendanceConfig.value.triggerTime = parsed.triggerTime;
+      }
+    } catch (_) {}
+  }
+  loadAutoAttendanceConfig();
+
+  function saveAutoAttendanceConfig(cfg: Partial<AutoAttendanceConfig>) {
+    autoAttendanceConfig.value = {
+      ...autoAttendanceConfig.value,
+      ...cfg,
+    };
+    try {
+      localStorage.setItem("ha_auto_attendance_config", JSON.stringify(autoAttendanceConfig.value));
+    } catch (_) {}
+  }
+
+  function checkAndApplyAutoAttendance(forceNow: boolean = false): {
+    appliedCount: number;
+    groupsProcessed: string[];
+    status?: "not_time_yet" | "disabled" | "already_done" | "no_classes_today" | "success";
+  } {
+    if (typeof window === "undefined") return { appliedCount: 0, groupsProcessed: [], status: "disabled" };
+
+    if (!forceNow && !autoAttendanceConfig.value.enabled) {
+      return { appliedCount: 0, groupsProcessed: [], status: "disabled" };
+    }
+
+    const now = new Date();
+
+    // Check trigger time if not forceNow (Default: 20:00)
+    if (!forceNow) {
+      const [targetHours, targetMinutes] = (autoAttendanceConfig.value.triggerTime || "20:00")
+        .split(":")
+        .map((x) => parseInt(x, 10) || 0);
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+
+      const isTimeReached =
+        currentHours > targetHours ||
+        (currentHours === targetHours && currentMinutes >= targetMinutes);
+
+      if (!isTimeReached) {
+        return { appliedCount: 0, groupsProcessed: [], status: "not_time_yet" };
+      }
+    }
+
+    const dayMap: Record<number, string> = {
+      0: "Yak",
+      1: "Du",
+      2: "Se",
+      3: "Chor",
+      4: "Pay",
+      5: "Juma",
+      6: "Shan",
+    };
+    const todayDay = dayMap[now.getDay()]; // e.g. "Du"
+    const todayDateStr = now.toISOString().split("T")[0]; // e.g. "2026-09-21"
+    const dayStr = String(now.getDate()).padStart(2, "0");
+    const monthStr = String(now.getMonth() + 1).padStart(2, "0");
+    const todayDDMM = `${dayStr}.${monthStr}`; // e.g. "21.09"
+
+    let autoHistory: Record<string, boolean> = {};
+    try {
+      const raw = localStorage.getItem("ha_auto_attendance_history");
+      if (raw) autoHistory = JSON.parse(raw);
+    } catch (_) {}
+
+    const groupsProcessed: string[] = [];
+    let totalApplied = 0;
+
+    // Get all groups
+    const allGroupNames = new Set<string>();
+    Object.keys(groupsMeta.value).forEach((g) => {
+      if (g && g !== "Arxiv" && !groupsMeta.value[g]?.deleted) allGroupNames.add(g.trim());
+    });
+    allStudentsRegistry.value.forEach((s) => {
+      if (s.group && s.group !== "Arxiv" && s.status !== "frozen" && !isStudentDeleted(s.name, s.id)) {
+        allGroupNames.add(s.group.trim());
+      }
+    });
+
+    for (const groupName of allGroupNames) {
+      if (!groupName || groupName === "Arxiv" || isProtectedGroup(groupName)) continue;
+      const meta = getGroupMeta(groupName);
+
+      // Check if group has days and today is one of its class days
+      const classDays = Array.isArray(meta.days) && meta.days.length > 0 ? meta.days : ["Du", "Chor", "Juma"];
+      const isTodayClassDay = classDays.some(
+        (d) => d.toLowerCase().trim() === todayDay.toLowerCase().trim()
+      );
+
+      if (!isTodayClassDay) continue;
+
+      const historyKey = `${todayDateStr}_${groupName.toLowerCase().trim()}`;
+      if (!forceNow && autoHistory[historyKey]) {
+        continue;
+      }
+
+      // Check if there is already ANY attendance log for this group on today's date
+      const existingLogForGroup = localAttendanceLogs.value.some((log) => {
+        const gMatch = (log.group || "").toLowerCase().trim() === groupName.toLowerCase().trim();
+        const dMatch = log.date === todayDateStr || log.date === todayDDMM;
+        return gMatch && dMatch;
+      });
+
+      if (!forceNow && existingLogForGroup) {
+        continue;
+      }
+
+      // Find all active (non-frozen, non-deleted) students belonging to this group
+      const activeGroupStudents = allStudentsRegistry.value.filter((s) => {
+        if (s.status === "frozen" || isStudentFrozen(s.name, groupName)) return false;
+        if (isStudentDeleted(s.name, s.id)) return false;
+        return isStudentInGroup(s, groupName);
+      });
+
+      if (activeGroupStudents.length === 0) continue;
+
+      // Apply "Keldi" attendance log for each student
+      const newLogs: AttendanceLog[] = activeGroupStudents.map((s) => ({
+        name: s.name.trim(),
+        group: groupName,
+        date: todayDDMM,
+        status: "Keldi",
+        reason: "Avtomatik belgilandi (Dars kuni)",
+        auto: true,
+      }));
+
+      localAttendanceLogs.value.push(...newLogs);
+      totalApplied += newLogs.length;
+      groupsProcessed.push(groupName);
+
+      // Sync each to cloud
+      newLogs.forEach((l) => {
+        syncAttendanceLogToCloud(l.date, l.name, l.status, l.group || groupName, l.reason);
+      });
+
+      // Mark in history so it won't repeat today
+      autoHistory[historyKey] = true;
+
+      // Create teacher reminder / notification
+      const reminderItem: TeacherReminder = {
+        id: "auto-att-" + Date.now() + "-" + Math.random().toString(36).substring(2, 5),
+        title: `📋 Avtomatik Davomat: ${groupName}`,
+        message: `Bugun ${groupName} guruhi dars kuni. Barcha (${activeGroupStudents.length} ta) faol o'quvchiga "Keldi" belgilandi. Agar kelmaganlar bo'lsa, tuzatish uchun bosing.`,
+        date: todayDateStr,
+        time: meta.time || autoAttendanceConfig.value.triggerTime || "20:00",
+        completed: false,
+        createdAt: Date.now(),
+        source: "group",
+        groupName: groupName,
+      };
+      reminders.value.unshift(reminderItem);
+    }
+
+    if (groupsProcessed.length > 0) {
+      try {
+        localStorage.setItem("ha_auto_attendance_history", JSON.stringify(autoHistory));
+        localStorage.setItem("ha_attendance_logs", JSON.stringify(localAttendanceLogs.value));
+        localStorage.setItem("ha_reminders", JSON.stringify(reminders.value));
+      } catch (_) {}
+      localAttendanceLogs.value = [...localAttendanceLogs.value];
+    }
+
+    return {
+      appliedCount: totalApplied,
+      groupsProcessed,
+      status: groupsProcessed.length > 0 ? "success" : "already_done",
+    };
+  }
+
   async function renameGroup(oldName: string, newName: string): Promise<{ success: boolean; error?: string }> {
     const cleanOld = oldName.trim();
     const cleanNew = newName.trim();
@@ -3323,6 +3707,15 @@ export function useTeacherStore() {
     getStudentGroups,
     isStudentInGroup,
     deleteStudentPermanently,
+    deletedStudentsRegistry,
+    moveToTrash,
+    restoreFromTrash,
+    permanentlyDestroy,
+    clearTrash,
+    isStudentDeleted,
+    checkAndApplyAutoAttendance,
+    autoAttendanceConfig,
+    saveAutoAttendanceConfig,
     addReminder,
     toggleCompleteReminder,
     deleteReminder,
