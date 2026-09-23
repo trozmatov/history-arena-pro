@@ -35,12 +35,10 @@
 
     <!-- 🎓 STUDENT PORTAL -->
     <template v-else>
-      <main class="flex-1 w-full mx-auto flex flex-col transition-all duration-300 overflow-x-hidden max-w-xl justify-center px-2.5 py-3 sm:p-6">
-        <Transition name="fade" mode="out-in">
-          <StudentLogin v-if="!studentStore.isStudentLoggedIn.value" key="student-login" />
-          <StudentProfile v-else key="student-profile" @nav-to-results="navigateTo('/results')" />
-        </Transition>
-      </main>
+      <div v-if="!studentStore.isStudentLoggedIn.value" class="flex-1 w-full mx-auto flex flex-col justify-center max-w-xl px-2.5 py-3 sm:p-6">
+        <StudentLogin />
+      </div>
+      <StudentView v-else @nav-to-results="navigateTo('/results')" />
     </template>
 
     <!-- Teacher Notifications Modal -->
@@ -214,6 +212,7 @@ import CertificatesManager from "./components/teacher/CertificatesManager.vue";
 import PublicResultsView from "./components/public/PublicResultsView.vue";
 import StudentLogin from "./components/student/StudentLogin.vue";
 import StudentProfile from "./components/student/StudentProfile.vue";
+import StudentView from "./components/student/StudentView.vue";
 
 import { useTeacherStore, UnifiedReminder } from "./composables/useTeacherStore";
 import { useStudentStore } from "./composables/useStudentStore";

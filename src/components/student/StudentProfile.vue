@@ -96,7 +96,7 @@
         </div>
       </div>
 
-      <!-- Quick Actions Grid: Duel + AI Oral Exam -->
+      <!-- Quick Actions Grid: Duel + AI Oral Exam + Anti-Cheat Tests -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
         <button
           type="button"
@@ -112,6 +112,14 @@
           class="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 py-3 px-3 text-xs font-black uppercase text-white shadow-xl shadow-amber-500/25 hover:from-amber-400 hover:to-orange-400 active:scale-95 transition text-center leading-snug cursor-pointer select-none"
         >
           <span class="text-base animate-pulse">🏆</span> <span>Chellenjlar (Sovrinlar!)</span>
+        </button>
+
+        <button
+          type="button"
+          @click="$emit('navToTests')"
+          class="col-span-1 sm:col-span-2 w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 py-3 px-3 text-xs font-black uppercase text-white shadow-xl shadow-blue-600/25 hover:brightness-110 active:scale-95 transition text-center leading-snug cursor-pointer select-none"
+        >
+          <span class="text-base">📝</span> <span>Imtihonlar & Testlar (Anti-Cheat Himoyasi)</span>
         </button>
       </div>
     </div>
@@ -567,6 +575,7 @@ import { soundManager, fireConfetti } from "../../composables/useAudio";
 
 const emit = defineEmits<{
   (e: "navToResults"): void;
+  (e: "navToTests"): void;
 }>();
 
 const studentStore = useStudentStore();
