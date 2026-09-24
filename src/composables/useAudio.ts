@@ -44,6 +44,10 @@ class SoundManager {
     }
   }
 
+  playLevelUp() {
+    this.playSuccess();
+  }
+
   playError() {
     if (!this.enabled) return;
     try {
