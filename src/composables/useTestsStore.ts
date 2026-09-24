@@ -6,6 +6,15 @@
 import { ref, computed } from "vue";
 import type { TestExam, ExamResult, Question, TestFolder } from "../types/test";
 import { SAMPLE_GOOGLE_FORM_TESTS } from "../services/googlePickerService";
+import {
+  db,
+  ref as fbRef,
+  set,
+  get as fbGet,
+  update,
+  remove as fbRemove,
+  onValue,
+} from "../services/firebase";
 
 const STORAGE_KEY_TESTS = "ha_tests_v2";
 const STORAGE_KEY_RESULTS = "ha_exam_results_v2";
@@ -22,10 +31,119 @@ export const DEFAULT_TEST_FOLDERS: TestFolder[] = [
   { id: "folder_11_sinf", name: "11-sinf", icon: "📕", color: "purple", isSystem: true },
 ];
 
+function cleanForFirebase<T>(data: T): T {
+  try {
+    return JSON.parse(
+      JSON.stringify(data, (_, value) => (value === undefined ? null : value))
+    );
+  } catch (e) {
+    return data;
+  }
+}
+
 // Global reactive singletons
 const tests = ref<TestExam[]>(loadTestsFromStorage());
 const examResults = ref<ExamResult[]>(loadResultsFromStorage());
 const folders = ref<TestFolder[]>(loadFoldersFromStorage());
+
+let hasInitFirebase = false;
+
+function initFirebaseSync() {
+  if (typeof window === "undefined" || hasInitFirebase) return;
+  hasInitFirebase = true;
+
+  try {
+    // 1. Tests Realtime Listener
+    const testsRef = fbRef(db, "ha_tests_v2");
+    onValue(
+      testsRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const val = snapshot.val();
+          const cloudList: TestExam[] = Object.keys(val).map((k) => ({
+            ...val[k],
+            id: val[k].id || k,
+            folderId: val[k].folderId || "folder_umumiy",
+            targetGrade: val[k].targetGrade || "Umumiy",
+          }));
+
+          const cloudIds = new Set(cloudList.map((t) => t.id));
+          const unseededLocal = tests.value.filter((t) => !cloudIds.has(t.id));
+
+          tests.value = [...cloudList, ...unseededLocal];
+          persistTests();
+
+          // Sync unseeded local tests if any
+          if (unseededLocal.length > 0) {
+            unseededLocal.forEach((t) => {
+              set(fbRef(db, `ha_tests_v2/${t.id}`), cleanForFirebase(t)).catch(() => {});
+            });
+          }
+        } else {
+          // If cloud has no tests yet, seed it with current tests
+          if (tests.value.length > 0) {
+            const initialMap: Record<string, any> = {};
+            tests.value.forEach((t) => {
+              initialMap[t.id] = cleanForFirebase(t);
+            });
+            set(testsRef, initialMap).catch((err) =>
+              console.warn("Failed seeding tests to Firebase:", err)
+            );
+          }
+        }
+      },
+      (err) => {
+        console.warn("Firebase tests subscription error:", err);
+      }
+    );
+
+    // 2. Folders Realtime Listener
+    const foldersRef = fbRef(db, "ha_test_folders_v2");
+    onValue(
+      foldersRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const val = snapshot.val();
+          const cloudFolders: TestFolder[] = Array.isArray(val) ? val : Object.values(val);
+          if (cloudFolders.length > 0) {
+            folders.value = cloudFolders;
+            persistFolders();
+          }
+        } else {
+          if (folders.value.length > 0) {
+            set(foldersRef, cleanForFirebase(folders.value)).catch(() => {});
+          }
+        }
+      },
+      (err) => {
+        console.warn("Firebase folders subscription error:", err);
+      }
+    );
+
+    // 3. Exam Results Realtime Listener
+    const resultsRef = fbRef(db, "ha_exam_results_v2");
+    onValue(
+      resultsRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const val = snapshot.val();
+          const cloudResults: ExamResult[] = Object.keys(val).map((k) => ({
+            ...val[k],
+            id: val[k].id || k,
+          }));
+          cloudResults.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+          examResults.value = cloudResults;
+          persistResults();
+        }
+      },
+      (err) => {
+        console.warn("Firebase results subscription error:", err);
+      }
+    );
+  } catch (err) {
+    console.warn("initFirebaseSync error:", err);
+  }
+}
 
 function loadFoldersFromStorage(): TestFolder[] {
   try {
@@ -110,12 +228,43 @@ function persistResults() {
 }
 
 export function useTestsStore() {
+  initFirebaseSync();
+
   const publishedTests = computed(() =>
     tests.value.filter((t) => t.published)
   );
 
   function getTestById(id: string): TestExam | undefined {
     return tests.value.find((t) => t.id === id);
+  }
+
+  async function fetchTestById(id: string): Promise<TestExam | undefined> {
+    const local = tests.value.find((t) => t.id === id);
+    if (local) return local;
+
+    try {
+      const snap = await fbGet(fbRef(db, `ha_tests_v2/${id}`));
+      if (snap.exists()) {
+        const val = snap.val();
+        const test: TestExam = {
+          ...val,
+          id: val.id || id,
+          folderId: val.folderId || "folder_umumiy",
+          targetGrade: val.targetGrade || "Umumiy",
+        };
+        const idx = tests.value.findIndex((t) => t.id === test.id);
+        if (idx >= 0) {
+          tests.value[idx] = test;
+        } else {
+          tests.value.unshift(test);
+        }
+        persistTests();
+        return test;
+      }
+    } catch (e) {
+      console.warn("fetchTestById error:", e);
+    }
+    return undefined;
   }
 
   function saveTest(test: TestExam): void {
@@ -127,11 +276,27 @@ export function useTestsStore() {
       tests.value.unshift({ ...test });
     }
     persistTests();
+
+    try {
+      set(fbRef(db, `ha_tests_v2/${test.id}`), cleanForFirebase(test)).catch((err) =>
+        console.warn("Failed to sync test to Firebase:", err)
+      );
+    } catch (e) {
+      console.warn("saveTest firebase error:", e);
+    }
   }
 
   function deleteTest(id: string): void {
     tests.value = tests.value.filter((t) => t.id !== id);
     persistTests();
+
+    try {
+      fbRemove(fbRef(db, `ha_tests_v2/${id}`)).catch((err) =>
+        console.warn("Failed to delete test from Firebase:", err)
+      );
+    } catch (e) {
+      console.warn("deleteTest firebase error:", e);
+    }
   }
 
   function togglePublish(id: string): void {
@@ -140,6 +305,15 @@ export function useTestsStore() {
       test.published = !test.published;
       test.updatedAt = Date.now();
       persistTests();
+
+      try {
+        update(fbRef(db, `ha_tests_v2/${id}`), {
+          published: test.published,
+          updatedAt: test.updatedAt,
+        }).catch((err) => console.warn("Failed to toggle publish in Firebase:", err));
+      } catch (e) {
+        console.warn("togglePublish firebase error:", e);
+      }
     }
   }
 
@@ -153,6 +327,14 @@ export function useTestsStore() {
     test.updatedAt = Date.now();
     tests.value.unshift(test);
     persistTests();
+
+    try {
+      set(fbRef(db, `ha_tests_v2/${test.id}`), cleanForFirebase(test)).catch((err) =>
+        console.warn("Failed to sync imported test to Firebase:", err)
+      );
+    } catch (e) {
+      console.warn("importTest firebase error:", e);
+    }
   }
 
   /**
@@ -234,6 +416,14 @@ export function useTestsStore() {
     examResults.value.unshift(result);
     persistResults();
 
+    try {
+      set(fbRef(db, `ha_exam_results_v2/${result.id}`), cleanForFirebase(result)).catch((err) =>
+        console.warn("Failed to sync exam result to Firebase:", err)
+      );
+    } catch (e) {
+      console.warn("submitExamResult firebase error:", e);
+    }
+
     return result;
   }
 
@@ -252,6 +442,11 @@ export function useTestsStore() {
     };
     folders.value.push(newFolder);
     persistFolders();
+
+    try {
+      set(fbRef(db, "ha_test_folders_v2"), cleanForFirebase(folders.value)).catch(() => {});
+    } catch (_) {}
+
     return newFolder;
   }
 
@@ -268,6 +463,10 @@ export function useTestsStore() {
       }
     });
     persistTests();
+
+    try {
+      set(fbRef(db, "ha_test_folders_v2"), cleanForFirebase(folders.value)).catch(() => {});
+    } catch (_) {}
   }
 
   function resetSampleTests() {
@@ -277,6 +476,15 @@ export function useTestsStore() {
       targetGrade: t.targetGrade || "Umumiy",
     }));
     persistTests();
+
+    // Push reset samples to Firebase so students also receive them
+    try {
+      const initialMap: Record<string, any> = {};
+      tests.value.forEach((t) => {
+        initialMap[t.id] = cleanForFirebase(t);
+      });
+      set(fbRef(db, "ha_tests_v2"), initialMap).catch(() => {});
+    } catch (_) {}
   }
 
   function getStudentResults(identifier: string): ExamResult[] {
@@ -310,6 +518,7 @@ export function useTestsStore() {
     publishedTests,
     examResults,
     getTestById,
+    fetchTestById,
     saveTest,
     deleteTest,
     togglePublish,

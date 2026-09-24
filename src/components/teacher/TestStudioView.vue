@@ -77,6 +77,32 @@
           <span class="text-emerald-500 dark:text-emerald-400 font-black">🎯 {{ totalPoints }} ball</span>
         </div>
 
+        <!-- Publish Toggle in Studio Header -->
+        <button
+          type="button"
+          @click="testData.published = !testData.published"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-2xl border text-xs font-black transition active:scale-95 cursor-pointer shadow-md"
+          :class="
+            testData.published
+              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/25'
+              : 'border-slate-300 dark:border-white/15 bg-white/5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
+          "
+          :title="testData.published ? 'Test faol va o\'quvchilarga ko\'rinadi' : 'Test qoralama holatida (yopiq)'"
+        >
+          <span>{{ testData.published ? '🟢 Faol' : '⚪ Qoralama' }}</span>
+        </button>
+
+        <!-- Share Link Button in Studio Header -->
+        <button
+          type="button"
+          @click="showShareModal = true"
+          class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-2xl border border-indigo-500/30 bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/25 text-xs font-black transition active:scale-95 cursor-pointer shadow-md"
+          title="Test havolasini olish va ulashish"
+        >
+          <span>🔗</span>
+          <span>Ulashish</span>
+        </button>
+
         <!-- Anti-Cheat Settings Drawer Button -->
         <button
           type="button"
@@ -785,6 +811,12 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Share Test Modal in Studio -->
+    <ShareTestModal
+      v-model="showShareModal"
+      :test="testData"
+    />
   </div>
 </template>
 
@@ -792,6 +824,7 @@
 import { ref, computed } from "vue";
 import type { TestExam, Question, QuestionType, TestFolder } from "../../types/test";
 import { useTheme } from "../../composables/useTheme";
+import ShareTestModal from "../common/ShareTestModal.vue";
 
 const props = defineProps<{
   initialTest: TestExam;
@@ -817,6 +850,7 @@ const activeQuestionIdx = ref(0);
 const showAddMenu = ref(false);
 const showAntiCheatDrawer = ref(false);
 const showExitConfirmModal = ref(false);
+const showShareModal = ref(false);
 
 // Image uploading state
 const fileInputRef = ref<HTMLInputElement | null>(null);

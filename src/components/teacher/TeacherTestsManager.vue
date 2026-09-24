@@ -291,6 +291,15 @@
               <div class="flex items-center gap-1.5">
                 <button
                   type="button"
+                  @click="openShareModal(test)"
+                  class="px-2.5 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 text-xs font-black transition cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
+                  title="Havolani olish va o'quvchilarga ulashish"
+                >
+                  <span>🔗</span>
+                  <span>Ulashish</span>
+                </button>
+                <button
+                  type="button"
                   @click="openEditTest(test)"
                   class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-black hover:brightness-110 transition cursor-pointer shadow-md flex items-center gap-1"
                 >
@@ -379,6 +388,12 @@
         v-model="showImportModal"
         @imported="handleTestImported"
       />
+
+      <!-- Share Test Modal -->
+      <ShareTestModal
+        v-model="showShareModal"
+        :test="selectedTestForShare"
+      />
     </div>
   </div>
 </template>
@@ -389,6 +404,7 @@ import { useTestsStore } from "../../composables/useTestsStore";
 import type { TestExam } from "../../types/test";
 import GoogleFormsImportModal from "./GoogleFormsImportModal.vue";
 import TestStudioView from "./TestStudioView.vue";
+import ShareTestModal from "../common/ShareTestModal.vue";
 
 const testsStore = useTestsStore();
 const { tests, folders, examResults } = testsStore;
@@ -399,7 +415,14 @@ const viewTab = ref<"tests" | "results">("tests");
 const selectedFolderId = ref<string>("all");
 
 const showImportModal = ref(false);
+const showShareModal = ref(false);
+const selectedTestForShare = ref<TestExam | null>(null);
 const selectedTestForStudio = ref<TestExam | null>(null);
+
+function openShareModal(test: TestExam) {
+  selectedTestForShare.value = test;
+  showShareModal.value = true;
+}
 
 const filteredTests = computed(() => {
   if (selectedFolderId.value === "all") return tests.value;

@@ -41,6 +41,24 @@
       <StudentView v-else @nav-to-results="navigateTo('/results')" />
     </template>
 
+    <!-- 🚀 SHARED EXAM LINK ENTRY LAUNCHPAD (When accessed via ?exam=... or ?test=...) -->
+    <ExamLinkLaunchpad
+      v-if="activeExamLinkId && !runningExamFromLink"
+      :test-id="activeExamLinkId"
+      @start-exam="handleStartExamFromLink"
+      @cancel="handleCancelExamLink"
+    />
+
+    <!-- 🛡️ EXAM RUNNER WHEN STARTED FROM SHARED LINK -->
+    <AntiCheatExamRunner
+      v-if="runningExamFromLink"
+      :test="runningExamFromLink"
+      :student-name="studentDisplayName"
+      :student-id="studentDisplayId"
+      @cancel="runningExamFromLink = null"
+      @finished="handleFinishedExamFromLink"
+    />
+
     <!-- Teacher Notifications Modal -->
     <BaseModal
       v-model="showNotifModal"
@@ -213,6 +231,9 @@ import PublicResultsView from "./components/public/PublicResultsView.vue";
 import StudentLogin from "./components/student/StudentLogin.vue";
 import StudentProfile from "./components/student/StudentProfile.vue";
 import StudentView from "./components/student/StudentView.vue";
+import ExamLinkLaunchpad from "./components/student/ExamLinkLaunchpad.vue";
+import AntiCheatExamRunner from "./components/student/AntiCheatExamRunner.vue";
+import type { TestExam, ExamResult } from "./types/test";
 
 import { useTeacherStore, UnifiedReminder } from "./composables/useTeacherStore";
 import { useStudentStore } from "./composables/useStudentStore";
@@ -224,6 +245,65 @@ import { prefetchCommonData } from "./services/api";
 const teacherStore = useTeacherStore();
 const studentStore = useStudentStore();
 const { isDark } = useTheme();
+
+// ==========================================
+// SHARED EXAM LINK SYSTEM (?exam=... or ?test=...)
+// ==========================================
+function getExamIdFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const searchParams = new URLSearchParams(window.location.search);
+  const exam = searchParams.get("exam") || searchParams.get("test") || searchParams.get("testId");
+  if (exam) return exam;
+
+  const hash = window.location.hash;
+  if (hash.includes("exam=")) {
+    const qIdx = hash.indexOf("?");
+    if (qIdx !== -1) {
+      const hashParams = new URLSearchParams(hash.substring(qIdx + 1));
+      return hashParams.get("exam");
+    }
+  }
+  const match = hash.match(/#\/exam\/([^/?]+)/);
+  if (match) return match[1];
+
+  return null;
+}
+
+const activeExamLinkId = ref<string | null>(getExamIdFromUrl());
+const runningExamFromLink = ref<TestExam | null>(null);
+
+const studentDisplayName = computed(() => {
+  const name =
+    studentStore.studentName?.value ||
+    (typeof studentStore.studentName === "string" ? studentStore.studentName : "");
+  return name || "O'quvchi";
+});
+
+const studentDisplayId = computed(() => {
+  return studentDisplayName.value.toLowerCase().replace(/\s+/g, "_") || "std_guest";
+});
+
+function handleStartExamFromLink(test: TestExam) {
+  runningExamFromLink.value = test;
+  activeExamLinkId.value = null;
+  if (typeof window !== "undefined") {
+    const cleanUrl = window.location.pathname.replace(/\/exam.*$/, "");
+    window.history.replaceState({}, "", cleanUrl);
+  }
+}
+
+function handleCancelExamLink() {
+  activeExamLinkId.value = null;
+  if (typeof window !== "undefined") {
+    const cleanUrl = window.location.pathname.replace(/\/exam.*$/, "");
+    window.history.replaceState({}, "", cleanUrl);
+  }
+}
+
+function handleFinishedExamFromLink(_res: ExamResult | null) {
+  runningExamFromLink.value = null;
+  navigateTo("/student");
+}
 
 // ==========================================
 // URL ROUTING SYSTEM
@@ -502,6 +582,11 @@ onMounted(() => {
       try {
         localStorage.setItem("ha_active_role", "student");
       } catch (_) {}
+    }
+
+    const examParam = getExamIdFromUrl();
+    if (examParam) {
+      activeExamLinkId.value = examParam;
     }
   };
 
