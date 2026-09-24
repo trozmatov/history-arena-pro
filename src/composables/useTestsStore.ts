@@ -353,10 +353,12 @@ export function useTestsStore() {
     const test = getTestById(payload.testId);
     let earnedScore = 0;
     let totalPoints = 0;
+    const reviewItems: QuestionReviewItem[] = [];
 
     if (test) {
       for (const q of test.questions) {
-        totalPoints += q.points || 1;
+        const qPoints = q.points || 1;
+        totalPoints += qPoints;
         const studentAns = payload.answers[q.id];
         let isCorrect = false;
 
@@ -384,9 +386,24 @@ export function useTestsStore() {
           }
         }
 
+        const earned = isCorrect ? qPoints : 0;
         if (isCorrect) {
-          earnedScore += q.points || 1;
+          earnedScore += earned;
         }
+
+        reviewItems.push({
+          questionId: q.id,
+          questionText: q.text,
+          type: q.type,
+          imageUrl: q.imageUrl,
+          points: qPoints,
+          earnedPoints: earned,
+          isCorrect,
+          studentAnswer: studentAns !== undefined ? studentAns : "",
+          options: q.options ? JSON.parse(JSON.stringify(q.options)) : [],
+          correctAnswerText: q.correctAnswerText,
+          explanation: q.explanation,
+        });
       }
     }
 
@@ -411,6 +428,7 @@ export function useTestsStore() {
       disqualificationReason: payload.disqualificationReason,
       violations: payload.violations || [],
       answers: payload.answers,
+      review: reviewItems,
     };
 
     examResults.value.unshift(result);
@@ -512,6 +530,60 @@ export function useTestsStore() {
     return examResults.value.filter((r) => r.testId === testId);
   }
 
+  function getOrBuildReview(result: ExamResult): QuestionReviewItem[] {
+    if (result.review && Array.isArray(result.review) && result.review.length > 0) {
+      return result.review;
+    }
+    const test = getTestById(result.testId);
+    if (!test) return [];
+
+    const items: QuestionReviewItem[] = [];
+    for (const q of test.questions) {
+      const qPoints = q.points || 1;
+      const studentAns = result.answers ? result.answers[q.id] : undefined;
+      let isCorrect = false;
+
+      if (q.type === "mcq") {
+        const correctOpt = q.options?.find((o) => o.isCorrect);
+        if (correctOpt && correctOpt.id === studentAns) {
+          isCorrect = true;
+        }
+      } else if (q.type === "checkbox") {
+        const correctOptIds = (q.options || [])
+          .filter((o) => o.isCorrect)
+          .map((o) => o.id);
+        const studentAnsList = Array.isArray(studentAns) ? studentAns : [];
+        if (
+          correctOptIds.length === studentAnsList.length &&
+          correctOptIds.every((id) => studentAnsList.includes(id))
+        ) {
+          isCorrect = true;
+        }
+      } else if (q.type === "short_answer") {
+        const expected = (q.correctAnswerText || "").trim().toLowerCase();
+        const given = typeof studentAns === "string" ? studentAns.trim().toLowerCase() : "";
+        if (expected.length > 0 && expected === given) {
+          isCorrect = true;
+        }
+      }
+
+      items.push({
+        questionId: q.id,
+        questionText: q.text,
+        type: q.type,
+        imageUrl: q.imageUrl,
+        points: qPoints,
+        earnedPoints: isCorrect ? qPoints : 0,
+        isCorrect,
+        studentAnswer: studentAns !== undefined ? studentAns : "",
+        options: q.options ? JSON.parse(JSON.stringify(q.options)) : [],
+        correctAnswerText: q.correctAnswerText,
+        explanation: q.explanation,
+      });
+    }
+    return items;
+  }
+
   return {
     tests,
     folders,
@@ -530,5 +602,6 @@ export function useTestsStore() {
     resetSampleTests,
     getStudentResults,
     getTestResults,
+    getOrBuildReview,
   };
 }

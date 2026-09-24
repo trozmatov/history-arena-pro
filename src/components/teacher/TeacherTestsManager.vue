@@ -288,7 +288,30 @@
               </div>
 
               <!-- Action buttons -->
-              <div class="flex items-center gap-1.5">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <!-- Leaderboard & Results button -->
+                <button
+                  type="button"
+                  @click="openLeaderboardModal(test)"
+                  class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-600 dark:text-amber-300 text-xs font-black transition cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
+                  title="Reyting va Natijalar tahlili"
+                >
+                  <span>🏆</span>
+                  <span>Reyting</span>
+                </button>
+
+                <!-- Challenge button -->
+                <button
+                  type="button"
+                  @click="openChallengeModal(test)"
+                  class="px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs font-black transition cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
+                  title="Ushbu testni Chellenj musobaqasi qilib e'lon qilish"
+                >
+                  <span>⚔️</span>
+                  <span>Chellenj</span>
+                </button>
+
+                <!-- Share button -->
                 <button
                   type="button"
                   @click="openShareModal(test)"
@@ -298,6 +321,8 @@
                   <span>🔗</span>
                   <span>Ulashish</span>
                 </button>
+
+                <!-- Edit button -->
                 <button
                   type="button"
                   @click="openEditTest(test)"
@@ -306,6 +331,8 @@
                   <span>✏️</span>
                   <span>Tahrirlash</span>
                 </button>
+
+                <!-- Delete button -->
                 <button
                   type="button"
                   @click="confirmDelete(test.id)"
@@ -322,7 +349,26 @@
 
       <!-- TAB 2: EXAM RESULTS LIST -->
       <div v-else-if="viewTab === 'results'" class="space-y-3">
-        <div v-if="examResults.length === 0" class="py-16 text-center rounded-3xl border border-dashed border-slate-300 dark:border-white/10 space-y-2 bg-white/30 dark:bg-black/20">
+        <!-- Results Filter by Test -->
+        <div class="flex items-center justify-between gap-2 flex-wrap pb-1">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400 font-bold">Test bo'yicha:</span>
+            <select
+              v-model="selectedTestFilterId"
+              class="rounded-xl bg-black/40 border border-white/15 px-3 py-1.5 text-xs font-bold text-white outline-none cursor-pointer"
+            >
+              <option value="all">Barcha testlar natijalari ({{ examResults.length }})</option>
+              <option v-for="t in tests" :key="t.id" :value="t.id">
+                {{ t.title }} ({{ getTestResultsCount(t.id) }})
+              </option>
+            </select>
+          </div>
+          <div class="text-xs text-slate-400">
+            Jami: <b class="text-white">{{ filteredExamResults.length }} ta natija</b>
+          </div>
+        </div>
+
+        <div v-if="filteredExamResults.length === 0" class="py-16 text-center rounded-3xl border border-dashed border-slate-300 dark:border-white/10 space-y-2 bg-white/30 dark:bg-black/20">
           <div class="text-4xl">🏆</div>
           <div class="text-sm font-bold text-slate-400">Hozircha topshirilgan testlar yo'q</div>
           <p class="text-xs text-slate-500">O'quvchilar testlarni topshirgach, ularning ballari va xavfsizlik jurnali bu yerda paydo bo'ladi.</p>
@@ -330,7 +376,7 @@
 
         <div v-else class="space-y-2.5">
           <div
-            v-for="res in examResults"
+            v-for="res in filteredExamResults"
             :key="res.id"
             class="liquid-glass-card rounded-2xl p-4 border border-white/60 dark:border-white/10 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
           >
@@ -361,13 +407,13 @@
                 <span>Sarflangan vaqt: {{ res.durationSeconds }}s</span>
               </div>
 
-              <div v-if="res.disqualifiedReason" class="text-[11px] text-rose-500 font-bold">
-                Sabab: {{ res.disqualifiedReason }}
+              <div v-if="res.disqualificationReason" class="text-[11px] text-rose-500 font-bold">
+                Sabab: {{ res.disqualificationReason }}
               </div>
             </div>
 
-            <!-- Violations badge -->
-            <div class="flex items-center gap-2 shrink-0">
+            <!-- Actions & Violations badge -->
+            <div class="flex items-center gap-2 shrink-0 flex-wrap">
               <span
                 class="rounded-xl px-2.5 py-1 text-xs font-bold"
                 :class="
@@ -378,6 +424,16 @@
               >
                 🛡️ {{ res.violations.length }} ta qoidabuzarlik
               </span>
+
+              <button
+                type="button"
+                @click="openDetailModal(res)"
+                class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-md transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                title="O'quvchining savollarga bergan to'liq javoblarini ko'rish"
+              >
+                <span>🔍</span>
+                <span>Javoblar Tahlili</span>
+              </button>
             </div>
           </div>
         </div>
@@ -394,6 +450,25 @@
         v-model="showShareModal"
         :test="selectedTestForShare"
       />
+
+      <!-- Test Leaderboard Modal -->
+      <TestLeaderboardModal
+        v-model="showLeaderboardModal"
+        :test="selectedTestForLeaderboard"
+      />
+
+      <!-- Publish As Challenge Modal -->
+      <PublishAsChallengeModal
+        v-model="showChallengeModal"
+        :test="selectedTestForChallenge"
+        @published="handleChallengePublished"
+      />
+
+      <!-- Exam Result Detail Modal -->
+      <ExamResultDetailModal
+        v-model="showDetailModal"
+        :result="selectedResultForDetail"
+      />
     </div>
   </div>
 </template>
@@ -401,10 +476,13 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useTestsStore } from "../../composables/useTestsStore";
-import type { TestExam } from "../../types/test";
+import type { TestExam, ExamResult } from "../../types/test";
 import GoogleFormsImportModal from "./GoogleFormsImportModal.vue";
 import TestStudioView from "./TestStudioView.vue";
 import ShareTestModal from "../common/ShareTestModal.vue";
+import TestLeaderboardModal from "./TestLeaderboardModal.vue";
+import PublishAsChallengeModal from "./PublishAsChallengeModal.vue";
+import ExamResultDetailModal from "../common/ExamResultDetailModal.vue";
 
 const testsStore = useTestsStore();
 const { tests, folders, examResults } = testsStore;
@@ -413,15 +491,51 @@ type ViewMode = "list" | "studio";
 const currentMode = ref<ViewMode>("list");
 const viewTab = ref<"tests" | "results">("tests");
 const selectedFolderId = ref<string>("all");
+const selectedTestFilterId = ref<string>("all");
 
 const showImportModal = ref(false);
 const showShareModal = ref(false);
+const showLeaderboardModal = ref(false);
+const showChallengeModal = ref(false);
+const showDetailModal = ref(false);
+
 const selectedTestForShare = ref<TestExam | null>(null);
+const selectedTestForLeaderboard = ref<TestExam | null>(null);
+const selectedTestForChallenge = ref<TestExam | null>(null);
 const selectedTestForStudio = ref<TestExam | null>(null);
+const selectedResultForDetail = ref<ExamResult | null>(null);
 
 function openShareModal(test: TestExam) {
   selectedTestForShare.value = test;
   showShareModal.value = true;
+}
+
+function openLeaderboardModal(test: TestExam) {
+  selectedTestForLeaderboard.value = test;
+  showLeaderboardModal.value = true;
+}
+
+function openChallengeModal(test: TestExam) {
+  selectedTestForChallenge.value = test;
+  showChallengeModal.value = true;
+}
+
+function openDetailModal(res: ExamResult) {
+  selectedResultForDetail.value = res;
+  showDetailModal.value = true;
+}
+
+function handleChallengePublished() {
+  // Switch to results or stay with notification
+}
+
+const filteredExamResults = computed(() => {
+  if (selectedTestFilterId.value === "all") return examResults.value;
+  return examResults.value.filter((r) => r.testId === selectedTestFilterId.value);
+});
+
+function getTestResultsCount(testId: string): number {
+  return examResults.value.filter((r) => r.testId === testId).length;
 }
 
 const filteredTests = computed(() => {

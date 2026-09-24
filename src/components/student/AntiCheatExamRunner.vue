@@ -416,15 +416,33 @@
           </div>
         </div>
 
-        <button
-          type="button"
-          @click="$emit('finished', finalResult)"
-          class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-black text-xs hover:brightness-110 active:scale-95 transition cursor-pointer shadow-xl shadow-blue-500/25"
-        >
-          Testlar Bo'limiga Qaytish ↵
-        </button>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button
+            type="button"
+            @click="showReviewModal = true"
+            class="py-3.5 rounded-2xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 font-black text-xs transition active:scale-95 cursor-pointer shadow-lg flex items-center justify-center gap-1.5"
+          >
+            <span>🔍</span>
+            <span>Javoblar Tahlili</span>
+          </button>
+
+          <button
+            type="button"
+            @click="$emit('finished', finalResult)"
+            class="py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white font-black text-xs hover:brightness-110 active:scale-95 transition cursor-pointer shadow-xl shadow-blue-500/25 flex items-center justify-center gap-1.5"
+          >
+            <span>Tugatish</span>
+            <span>↵</span>
+          </button>
+        </div>
       </div>
     </div>
+
+    <!-- Exam Answer Review Modal -->
+    <ExamResultDetailModal
+      v-model="showReviewModal"
+      :result="finalResult"
+    />
 
     <!-- ==========================================
          PHASE 2.5: BEAUTIFUL FINISH CONFIRMATION MODAL (No window.confirm!)
@@ -560,6 +578,7 @@ import type { TestExam, Question, ExamResult } from "../../types/test";
 import { useAntiCheat } from "../../composables/useAntiCheat";
 import { useTestsStore } from "../../composables/useTestsStore";
 import { soundManager } from "../../composables/useAudio";
+import ExamResultDetailModal from "../common/ExamResultDetailModal.vue";
 
 const props = defineProps<{
   test: TestExam;
@@ -583,6 +602,7 @@ const studentAnswers = ref<Record<string, string | string[]>>({});
 const shortAnswerInput = ref("");
 
 const showFinishModal = ref(false);
+const showReviewModal = ref(false);
 const isImageZoomed = ref(false);
 
 const startedAt = ref(0);

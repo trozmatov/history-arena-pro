@@ -72,6 +72,20 @@ export interface ViolationEvent {
   message: string;
 }
 
+export interface QuestionReviewItem {
+  questionId: string;
+  questionText: string;
+  type: QuestionType;
+  imageUrl?: string;
+  points: number;
+  earnedPoints: number;
+  isCorrect: boolean;
+  studentAnswer: string | string[];
+  options?: QuestionOption[];
+  correctAnswerText?: string;
+  explanation?: string;
+}
+
 export interface ExamResult {
   id: string;
   testId: string;
@@ -89,4 +103,5 @@ export interface ExamResult {
   disqualificationReason?: string;
   violations: ViolationEvent[];
   answers: Record<string, string | string[]>;
+  review?: QuestionReviewItem[];
 }

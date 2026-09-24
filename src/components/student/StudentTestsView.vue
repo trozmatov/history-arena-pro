@@ -320,8 +320,8 @@
             </div>
           </div>
 
-          <!-- Violations badge -->
-          <div class="flex items-center gap-2 shrink-0">
+          <!-- Actions & Violations badge -->
+          <div class="flex items-center gap-2 shrink-0 flex-wrap">
             <span
               class="rounded-xl px-2.5 py-1 text-xs font-bold"
               :class="
@@ -332,10 +332,25 @@
             >
               ⚠️ {{ res.violations.length }} ta qoidabuzarlik
             </span>
+
+            <button
+              type="button"
+              @click="openDetailModal(res)"
+              class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:brightness-110 text-white text-xs font-black transition active:scale-95 cursor-pointer shadow-md flex items-center gap-1.5"
+            >
+              <span>🔍</span>
+              <span>Xatolar Tahlili</span>
+            </button>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Exam Result Detail & Mistake Analysis Modal -->
+    <ExamResultDetailModal
+      v-model="showDetailModal"
+      :result="selectedResultForDetail"
+    />
   </div>
 </template>
 
@@ -345,6 +360,7 @@ import type { TestExam, ExamResult } from "../../types/test";
 import { useTestsStore } from "../../composables/useTestsStore";
 import { useStudentStore } from "../../composables/useStudentStore";
 import AntiCheatExamRunner from "./AntiCheatExamRunner.vue";
+import ExamResultDetailModal from "../common/ExamResultDetailModal.vue";
 
 const testsStore = useTestsStore();
 const { publishedTests, folders } = testsStore;
@@ -353,6 +369,14 @@ const studentStore = useStudentStore();
 const activeTab = ref<"available" | "history">("available");
 const selectedFolderId = ref<string>("all");
 const activeTestRunning = ref<TestExam | null>(null);
+
+const showDetailModal = ref(false);
+const selectedResultForDetail = ref<ExamResult | null>(null);
+
+function openDetailModal(res: ExamResult) {
+  selectedResultForDetail.value = res;
+  showDetailModal.value = true;
+}
 
 const myResults = computed(() => {
   const byName = testsStore.getStudentResults(studentDisplayName.value);
