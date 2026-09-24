@@ -14,8 +14,22 @@ export interface AntiCheatOptions {
   onViolation?: (violation: ViolationEvent) => void;
 }
 
+function extractCleanString(val: any, fallback = ""): string {
+  if (!val) return fallback;
+  if (typeof val === "string") return val.trim();
+  if (typeof val === "object") {
+    if (typeof val.value === "string") return val.value.trim();
+    if (typeof val.name === "string") return val.name.trim();
+  }
+  const str = String(val);
+  return str === "[object Object]" ? fallback : str;
+}
+
 export function useAntiCheat(options: AntiCheatOptions) {
   const { config, studentName, studentId, onDisqualified, onViolation } = options;
+
+  const safeName = extractCleanString(studentName, "O'quvchi");
+  const safeId = extractCleanString(studentId, "std");
 
   const isActive = ref(false);
   const isFullscreen = ref(false);
@@ -28,8 +42,8 @@ export function useAntiCheat(options: AntiCheatOptions) {
   const isStabilizing = ref(false);
   let stabilizationTimer: any = null;
 
-  // Watermark text updated in real time
-  const watermarkText = ref(`${studentName} • ${studentId}`);
+  // Watermark text updated in real time (shows Student Name + Timestamp)
+  const watermarkText = ref(`${safeName} • ${formatTime()}`);
   let watermarkInterval: any = null;
 
   function formatTime(d = new Date()) {
@@ -313,7 +327,7 @@ export function useAntiCheat(options: AntiCheatOptions) {
 
     // Update dynamic watermark every 2 seconds
     watermarkInterval = setInterval(() => {
-      watermarkText.value = `${studentName} • ${studentId} • ${formatTime()}`;
+      watermarkText.value = `${safeName} • ${formatTime()}`;
     }, 2000);
 
     return true;

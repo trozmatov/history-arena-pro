@@ -423,14 +423,30 @@ async function handleLaunchPicker() {
 }
 
 // Parse direct URL or Form ID
-function handleParseUrl() {
+async function handleParseUrl() {
   errorMessage.value = "";
   const formId = extractGoogleFormId(formUrlInput.value);
   if (!formId) {
     errorMessage.value = "Iltimos, to'g'ri Google Form havolasi yoki ID kiriting";
     return;
   }
-  createRepresentationFromGoogleForm(formId, "Google Form: " + formId.substring(0, 10));
+
+  isPicking.value = true;
+  try {
+    const token =
+      userOauthToken.value ||
+      (await requestGoogleAccessToken(customClientId.value).catch(() => ""));
+    if (token) {
+      userOauthToken.value = token;
+      parsedPreview.value = await fetchAndParseGoogleForm(formId, token);
+    } else {
+      createRepresentationFromGoogleForm(formId, "Google Form: " + formId.substring(0, 10));
+    }
+  } catch (e: any) {
+    createRepresentationFromGoogleForm(formId, "Google Form: " + formId.substring(0, 10));
+  } finally {
+    isPicking.value = false;
+  }
 }
 
 // Select a demo form

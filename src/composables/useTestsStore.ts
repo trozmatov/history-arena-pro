@@ -279,8 +279,25 @@ export function useTestsStore() {
     persistTests();
   }
 
-  function getStudentResults(studentId: string): ExamResult[] {
-    return examResults.value.filter((r) => r.studentId === studentId);
+  function getStudentResults(identifier: string): ExamResult[] {
+    if (!identifier) return examResults.value;
+    const clean = identifier.trim().toLowerCase();
+    const cleanNoUnder = clean.replace(/_/g, " ");
+    const cleanUnder = clean.replace(/\s+/g, "_");
+
+    return examResults.value.filter((r) => {
+      if (!r) return false;
+      const sId = (r.studentId || "").trim().toLowerCase();
+      const sName = (r.studentName || "").trim().toLowerCase();
+      return (
+        sId === clean ||
+        sId === cleanUnder ||
+        sId === cleanNoUnder ||
+        sName === clean ||
+        sName === cleanNoUnder ||
+        sName === cleanUnder
+      );
+    });
   }
 
   function getTestResults(testId: string): ExamResult[] {

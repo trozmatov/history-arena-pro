@@ -4,8 +4,8 @@
     <AntiCheatExamRunner
       v-if="activeTestRunning"
       :test="activeTestRunning"
-      :student-name="studentStore.studentName || 'O\'quvchi'"
-      :student-id="studentStore.studentName || 'std_guest'"
+      :student-name="studentDisplayName"
+      :student-id="studentDisplayId"
       @cancel="activeTestRunning = null"
       @finished="handleExamFinished"
     />
@@ -88,20 +88,20 @@
          (Sinflar kesimida saqlangan va aralash testlar)
          ========================================== -->
     <div v-if="activeTab === 'available'" class="space-y-1.5">
-      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+      <div class="flex items-center gap-2 overflow-x-auto pb-2 scroll-smooth no-scrollbar select-none -mx-1 px-1 touch-pan-x">
         <!-- All classes filter -->
         <button
           type="button"
           @click="selectedFolderId = 'all'"
-          class="px-3.5 py-1.5 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 cursor-pointer border"
+          class="px-3.5 py-2 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 cursor-pointer border active:scale-95"
           :class="
             selectedFolderId === 'all'
-              ? 'bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-500/25'
-              : 'bg-white/60 dark:bg-white/5 border-white/40 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-white/80'
+              ? 'bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-500/25 ring-2 ring-indigo-500/20'
+              : 'bg-white/60 dark:bg-white/5 border-white/40 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-white/10'
           "
         >
           <span>📂 Barcha Sinflar</span>
-          <span class="rounded-full px-1.5 py-0.2 text-[10px] bg-black/10 dark:bg-white/20">
+          <span class="rounded-full px-1.5 py-0.2 text-[10px] bg-black/10 dark:bg-white/20 font-bold">
             {{ publishedTests.length }}
           </span>
         </button>
@@ -111,16 +111,16 @@
           v-for="folder in folders"
           :key="folder.id"
           @click="selectedFolderId = folder.id"
-          class="px-3.5 py-1.5 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 cursor-pointer border"
+          class="px-3.5 py-2 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 cursor-pointer border active:scale-95"
           :class="
             selectedFolderId === folder.id
-              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-500 shadow-md'
-              : 'bg-white/60 dark:bg-white/5 border-white/40 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-white/80'
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-500 shadow-md shadow-blue-500/25 ring-2 ring-blue-500/20'
+              : 'bg-white/60 dark:bg-white/5 border-white/40 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-white/10'
           "
         >
           <span>{{ folder.icon || '📁' }}</span>
           <span>{{ folder.name }}</span>
-          <span class="rounded-full px-1.5 py-0.2 text-[10px] bg-black/10 dark:bg-white/20">
+          <span class="rounded-full px-1.5 py-0.2 text-[10px] bg-black/10 dark:bg-white/20 font-bold">
             {{ getFolderPublishedCount(folder.id) }}
           </span>
         </button>
@@ -193,6 +193,22 @@
                 "
               >
                 Natija: {{ getLatestResultForTest(test.id)?.score }}/{{ getLatestResultForTest(test.id)?.totalPoints }}
+              </span>
+            </div>
+
+            <!-- Test Cover Image Banner (If questions have image) -->
+            <div
+              v-if="getTestPreviewImage(test)"
+              class="relative h-28 sm:h-32 w-full rounded-2xl overflow-hidden border border-white/15 bg-black/40 shadow-inner group-hover:scale-[1.01] transition-transform duration-300"
+            >
+              <img
+                :src="getTestPreviewImage(test)"
+                :alt="test.title"
+                class="w-full h-full object-cover object-center brightness-90 group-hover:brightness-100 transition duration-300"
+              />
+              <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+              <span class="absolute bottom-2 left-2.5 px-2 py-0.5 rounded-lg bg-black/70 backdrop-blur-md text-[10px] font-black text-amber-300 border border-amber-400/30 flex items-center gap-1">
+                🖼️ Rasmli Savollar Mavjud
               </span>
             </div>
 
@@ -339,8 +355,22 @@ const selectedFolderId = ref<string>("all");
 const activeTestRunning = ref<TestExam | null>(null);
 
 const myResults = computed(() => {
-  const stdId = studentStore.studentName || "std_guest";
-  return testsStore.getStudentResults(stdId);
+  const byName = testsStore.getStudentResults(studentDisplayName.value);
+  const byId = testsStore.getStudentResults(studentDisplayId.value);
+  const map = new Map<string, ExamResult>();
+  [...byName, ...byId].forEach((r) => map.set(r.id, r));
+  return Array.from(map.values()).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+});
+
+const studentDisplayName = computed(() => {
+  const name =
+    studentStore.studentName?.value ||
+    (typeof studentStore.studentName === "string" ? studentStore.studentName : "");
+  return name || "O'quvchi";
+});
+
+const studentDisplayId = computed(() => {
+  return studentDisplayName.value.toLowerCase().replace(/\s+/g, "_") || "std_guest";
 });
 
 const filteredTests = computed(() => {
@@ -359,6 +389,10 @@ function getFolderName(folderId?: string): string {
 
 function hasQuestionImage(test: TestExam): boolean {
   return test.questions.some((q) => !!q.imageUrl);
+}
+
+function getTestPreviewImage(test: TestExam): string | undefined {
+  return test.questions.find((q) => !!q.imageUrl)?.imageUrl;
 }
 
 function calculateTotalPoints(test: TestExam): number {

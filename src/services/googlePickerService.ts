@@ -7,9 +7,14 @@ import type { TestExam, Question } from "../types/test";
 
 // Environment variables or fallback defaults
 export const GOOGLE_CLIENT_ID =
-  import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_GOOGLE_CLIENT_ID) ||
+  (typeof window !== "undefined" && localStorage.getItem("custom_google_client_id")) ||
+  "723052229385-lpic5t7tmg7k4uqg957t1j4qcvqv6ueu.apps.googleusercontent.com";
+
 export const GOOGLE_API_KEY =
-  import.meta.env.VITE_GOOGLE_API_KEY || "";
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_GOOGLE_API_KEY) ||
+  (typeof window !== "undefined" && localStorage.getItem("custom_google_api_key")) ||
+  "AIzaSyBeBSM3-g7mRYUilWufCkeuBDO7W-BH0Lg";
 
 // Required OAuth Scopes for Drive & Forms
 export const OAUTH_SCOPES = [
@@ -294,6 +299,27 @@ export async function fetchAndParseGoogleForm(
 }
 
 /**
+ * Normalizes image URLs, specifically converting Google Drive file links to direct renderable thumbnails
+ */
+export function normalizeImageUrl(url?: string): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+
+  // Google Drive file link -> direct thumbnail
+  const driveFileMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
+  if (driveFileMatch) {
+    return `https://drive.google.com/thumbnail?id=${driveFileMatch[1]}&sz=w1200`;
+  }
+
+  const driveIdMatch = trimmed.match(/drive\.google\.com\/(?:open\?id=|uc\?(?:export=view&)?id=)([a-zA-Z0-9_-]+)/i);
+  if (driveIdMatch) {
+    return `https://drive.google.com/thumbnail?id=${driveIdMatch[1]}&sz=w1200`;
+  }
+
+  return trimmed;
+}
+
+/**
  * Parses Google Forms API v1 JSON into platform TestExam format
  */
 export function parseGoogleFormData(formData: any, formId: string): TestExam {
@@ -301,7 +327,19 @@ export function parseGoogleFormData(formData: any, formId: string): TestExam {
   const items = formData?.items || [];
   const questions: Question[] = [];
 
+  let lastStandaloneImage = "";
+
   for (const item of items) {
+    // 1. If this is a standalone imageItem preceding a question, store it
+    if (item.imageItem?.image) {
+      lastStandaloneImage = normalizeImageUrl(
+        item.imageItem.image.contentUri ||
+        item.imageItem.image.sourceUri ||
+        ""
+      );
+      continue;
+    }
+
     if (!item.questionItem) continue;
 
     const qItem = item.questionItem;
@@ -335,12 +373,52 @@ export function parseGoogleFormData(formData: any, formId: string): TestExam {
 
     const points = typeof grading.pointValue === "number" ? grading.pointValue : 1;
 
-    // Extract image if attached in Google Forms item
-    const imageUrl =
+    // 2. Extract image from questionItem, question, options, or preceding image item
+    let rawImageUrl =
+      qItem.image?.contentUri ||
       qItem.image?.sourceUri ||
-      item.imageItem?.image?.sourceUri ||
+      question.image?.contentUri ||
       question.image?.sourceUri ||
+      item.questionGroupItem?.image?.contentUri ||
+      item.questionGroupItem?.image?.sourceUri ||
       "";
+
+    // Check choice options images
+    if (!rawImageUrl && question.choiceQuestion?.options) {
+      for (const opt of question.choiceQuestion.options) {
+        if (opt.image?.contentUri || opt.image?.sourceUri) {
+          rawImageUrl = opt.image.contentUri || opt.image.sourceUri;
+          break;
+        }
+      }
+    }
+
+    // If question has no direct image, use standalone image that was placed right before it
+    if (!rawImageUrl && lastStandaloneImage) {
+      rawImageUrl = lastStandaloneImage;
+      lastStandaloneImage = ""; // consume image
+    }
+
+    // Check if title or description has an image URL or markdown
+    if (!rawImageUrl) {
+      const textToScan = `${item.title || ""} ${item.description || ""} ${question.text || ""}`;
+      const mdMatch = textToScan.match(/!\[.*?\]\((https?:\/\/[^\s\)]+)\)/i);
+      if (mdMatch) {
+        rawImageUrl = mdMatch[1];
+      } else {
+        const imgMatch = textToScan.match(/https?:\/\/[^\s"'<>]+\.(?:png|jpg|jpeg|webp|gif|svg)(?:\?[^\s"'<>]*)?/i);
+        if (imgMatch) {
+          rawImageUrl = imgMatch[0];
+        } else {
+          const driveMatch = textToScan.match(/https?:\/\/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([a-zA-Z0-9_-]+)/i);
+          if (driveMatch) {
+            rawImageUrl = `https://drive.google.com/thumbnail?id=${driveMatch[1]}&sz=w1200`;
+          }
+        }
+      }
+    }
+
+    const imageUrl = normalizeImageUrl(rawImageUrl);
 
     questions.push({
       id: question.questionId || `q_${Date.now()}_${questions.length + 1}`,

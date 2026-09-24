@@ -132,6 +132,7 @@ formsRouter.get("/:testId/take", (req, res) => {
         text: q.text,
         type: q.type,
         points: q.points,
+        imageUrl: q.imageUrl,
         timeLimitSeconds: q.timeLimitSeconds,
         // Options WITHOUT isCorrect flags!
         options: q.options?.map((opt) => ({
@@ -243,6 +244,23 @@ formsRouter.post("/:testId/submit", (req, res) => {
   }
 });
 
+function normalizeImageUrl(url) {
+  if (!url) return "";
+  const trimmed = String(url).trim();
+
+  const driveFileMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
+  if (driveFileMatch) {
+    return `https://drive.google.com/thumbnail?id=${driveFileMatch[1]}&sz=w1200`;
+  }
+
+  const driveIdMatch = trimmed.match(/drive\.google\.com\/(?:open\?id=|uc\?(?:export=view&)?id=)([a-zA-Z0-9_-]+)/i);
+  if (driveIdMatch) {
+    return `https://drive.google.com/thumbnail?id=${driveIdMatch[1]}&sz=w1200`;
+  }
+
+  return trimmed;
+}
+
 /**
  * Parser: Google Forms v1 Schema -> Clean Platform JSON
  */
@@ -251,8 +269,17 @@ function parseGoogleFormData(formData, formId) {
   const items = formData.items || [];
 
   const questions = [];
+  let lastStandaloneImage = "";
 
   for (const item of items) {
+    // 1. Standalone image preceding a question
+    if (item.imageItem?.image) {
+      lastStandaloneImage = normalizeImageUrl(
+        item.imageItem.image.contentUri || item.imageItem.image.sourceUri || ""
+      );
+      continue;
+    }
+
     // Only process question items
     if (!item.questionItem) continue;
 
@@ -294,6 +321,50 @@ function parseGoogleFormData(formData, formId) {
     // Default points: 1 if grading not specified
     const points = typeof grading.pointValue === "number" ? grading.pointValue : 1;
 
+    // Extract image
+    let rawImageUrl =
+      qItem.image?.contentUri ||
+      qItem.image?.sourceUri ||
+      question.image?.contentUri ||
+      question.image?.sourceUri ||
+      item.questionGroupItem?.image?.contentUri ||
+      item.questionGroupItem?.image?.sourceUri ||
+      "";
+
+    if (!rawImageUrl && question.choiceQuestion?.options) {
+      for (const opt of question.choiceQuestion.options) {
+        if (opt.image?.contentUri || opt.image?.sourceUri) {
+          rawImageUrl = opt.image.contentUri || opt.image.sourceUri;
+          break;
+        }
+      }
+    }
+
+    if (!rawImageUrl && lastStandaloneImage) {
+      rawImageUrl = lastStandaloneImage;
+      lastStandaloneImage = "";
+    }
+
+    if (!rawImageUrl) {
+      const textToScan = `${item.title || ""} ${item.description || ""} ${question.text || ""}`;
+      const mdMatch = textToScan.match(/!\[.*?\]\((https?:\/\/[^\s\)]+)\)/i);
+      if (mdMatch) {
+        rawImageUrl = mdMatch[1];
+      } else {
+        const imgMatch = textToScan.match(/https?:\/\/[^\s"'<>]+\.(?:png|jpg|jpeg|webp|gif|svg)(?:\?[^\s"'<>]*)?/i);
+        if (imgMatch) {
+          rawImageUrl = imgMatch[0];
+        } else {
+          const driveMatch = textToScan.match(/https?:\/\/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([a-zA-Z0-9_-]+)/i);
+          if (driveMatch) {
+            rawImageUrl = `https://drive.google.com/thumbnail?id=${driveMatch[1]}&sz=w1200`;
+          }
+        }
+      }
+    }
+
+    const imageUrl = normalizeImageUrl(rawImageUrl);
+
     questions.push({
       id: question.questionId || `q_${Date.now()}_${questions.length + 1}`,
       text: item.title || "Savol matni",
@@ -303,6 +374,7 @@ function parseGoogleFormData(formData, formId) {
       timeLimitSeconds: 30, // Default 30s per question
       correctAnswerText,
       explanation: item.description || "",
+      imageUrl: imageUrl || undefined,
     });
   }
 

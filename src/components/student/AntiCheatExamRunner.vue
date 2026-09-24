@@ -107,26 +107,26 @@
          ========================================== -->
     <div v-else-if="examPhase === 'running'" class="flex-1 flex flex-col relative z-30">
       <!-- Exam Header -->
-      <header class="flex-shrink-0 w-full border-b border-white/10 bg-[#070d18]/90 backdrop-blur-2xl px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
-        <!-- Left: Question Progress -->
-        <div class="flex items-center gap-3">
-          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400 font-black text-xs border border-indigo-500/30">
+      <header class="flex-shrink-0 w-full border-b border-white/10 bg-[#070d18]/95 backdrop-blur-2xl px-3 sm:px-8 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 relative z-30">
+        <!-- Left: Question Progress & Test Title -->
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div class="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400 font-black text-xs border border-indigo-500/30 shrink-0">
             {{ currentQuestionIdx + 1 }}/{{ preparedQuestions.length }}
           </div>
-          <div>
-            <h1 class="text-xs sm:text-sm font-black text-white truncate max-w-[200px] sm:max-w-md">
+          <div class="min-w-0 truncate">
+            <h1 class="text-xs sm:text-sm font-black text-white truncate max-w-[125px] xs:max-w-[170px] sm:max-w-md">
               {{ test.title }}
             </h1>
-            <p class="text-[10px] text-slate-400">
-              Savol: {{ currentQuestionIdx + 1 }} / {{ preparedQuestions.length }} • Ball: {{ currentQuestion.points }}
+            <p class="text-[9.5px] sm:text-[10px] text-slate-400 truncate">
+              Savol: {{ currentQuestionIdx + 1 }} / {{ preparedQuestions.length }} • <span class="text-indigo-400 font-bold">{{ currentQuestion.points }} ball</span>
             </p>
           </div>
         </div>
 
         <!-- Center: Active Question Countdown Timer -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5 shrink-0">
           <div
-            class="flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-xs font-black border transition-all"
+            class="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full font-mono text-xs font-black border transition-all"
             :class="
               questionSecondsRemaining <= 10
                 ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 animate-pulse'
@@ -139,9 +139,9 @@
         </div>
 
         <!-- Right: Violations Shield Badge & Finish Button -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <span
-            class="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase border"
+            class="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase border"
             :class="
               violations.length === 0
                 ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
@@ -154,10 +154,11 @@
 
           <button
             type="button"
-            @click="confirmFinish"
-            class="px-3 py-1.5 rounded-xl bg-rose-600/30 border border-rose-500/40 hover:bg-rose-600/50 text-rose-300 text-xs font-bold transition active:scale-95 cursor-pointer"
+            @click="openFinishConfirmModal"
+            class="px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-rose-600/20 border border-rose-500/40 hover:bg-rose-600/30 text-rose-300 text-[11px] sm:text-xs font-bold transition active:scale-95 cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap shadow-sm"
           >
-            Testni Tugatish
+            <span>🏁</span>
+            <span class="hidden xs:inline">Tugatish</span>
           </button>
         </div>
       </header>
@@ -193,16 +194,22 @@
             </h2>
           </div>
 
-          <!-- Question Image (If attached) -->
+          <!-- Question Image (If attached with zoom support) -->
           <div
             v-if="currentQuestion.imageUrl"
-            class="rounded-2xl overflow-hidden border border-white/15 bg-black/50 max-h-60 sm:max-h-80 flex items-center justify-center p-1 shadow-lg"
+            class="rounded-2xl overflow-hidden border border-white/15 bg-black/50 max-h-64 sm:max-h-80 flex flex-col items-center justify-center p-1.5 shadow-lg relative group cursor-pointer"
+            @click="isImageZoomed = true"
+            title="Rasmni kattalashtirib ko'rish uchun bosing"
           >
             <img
               :src="currentQuestion.imageUrl"
               :alt="currentQuestion.text"
-              class="max-h-56 sm:max-h-72 w-auto object-contain rounded-xl"
+              class="max-h-60 sm:max-h-72 w-auto object-contain rounded-xl group-hover:scale-[1.02] transition-transform duration-200"
             />
+            <div class="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[10px] text-white font-bold flex items-center gap-1 opacity-80 group-hover:opacity-100 transition shadow-md">
+              <span>🔍</span>
+              <span>Kattalashtirish</span>
+            </div>
           </div>
 
           <!-- Question Options: Radio / Checkbox / Text input -->
@@ -210,10 +217,10 @@
             <!-- 1. Multiple Choice Options (Radio) -->
             <template v-if="currentQuestion.type === 'mcq'">
               <div
-                v-for="opt in currentQuestion.options"
+                v-for="(opt, optIdx) in currentQuestion.options"
                 :key="opt.id"
                 @click="selectMcqOption(currentQuestion.id, opt.id)"
-                class="rounded-2xl p-4 border transition-all cursor-pointer flex items-center gap-3 active:scale-[0.99]"
+                class="rounded-2xl p-3.5 sm:p-4 border transition-all cursor-pointer flex items-center gap-3 active:scale-[0.99]"
                 :class="
                   studentAnswers[currentQuestion.id] === opt.id
                     ? 'border-indigo-500 bg-gradient-to-r from-indigo-600/30 to-blue-600/20 ring-2 ring-indigo-500/40 font-black text-white shadow-lg shadow-indigo-500/20'
@@ -221,11 +228,22 @@
                 "
               >
                 <div
-                  class="h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0"
+                  class="h-7 w-7 rounded-xl border flex items-center justify-center transition-all shrink-0 text-xs font-black"
+                  :class="
+                    studentAnswers[currentQuestion.id] === opt.id
+                      ? 'border-indigo-400 bg-indigo-500 text-white shadow-md'
+                      : 'border-white/20 bg-white/5 text-slate-400'
+                  "
+                >
+                  {{ ['A', 'B', 'C', 'D', 'E', 'F'][optIdx] || optIdx + 1 }}
+                </div>
+                <span class="text-xs sm:text-sm font-semibold flex-1 leading-relaxed">{{ opt.text }}</span>
+                <div
+                  class="h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ml-auto"
                   :class="
                     studentAnswers[currentQuestion.id] === opt.id
                       ? 'border-indigo-400 bg-indigo-500'
-                      : 'border-slate-500'
+                      : 'border-slate-500/60'
                   "
                 >
                   <div
@@ -233,17 +251,16 @@
                     class="h-2 w-2 rounded-full bg-white"
                   ></div>
                 </div>
-                <span class="text-xs sm:text-sm font-semibold flex-1">{{ opt.text }}</span>
               </div>
             </template>
 
             <!-- 2. Checkbox Options -->
             <template v-else-if="currentQuestion.type === 'checkbox'">
               <div
-                v-for="opt in currentQuestion.options"
+                v-for="(opt, optIdx) in currentQuestion.options"
                 :key="opt.id"
                 @click="toggleCheckboxOption(currentQuestion.id, opt.id)"
-                class="rounded-2xl p-4 border transition-all cursor-pointer flex items-center gap-3 active:scale-[0.99]"
+                class="rounded-2xl p-3.5 sm:p-4 border transition-all cursor-pointer flex items-center gap-3 active:scale-[0.99]"
                 :class="
                   isOptionChecked(currentQuestion.id, opt.id)
                     ? 'border-emerald-500 bg-emerald-600/20 ring-2 ring-emerald-500/40 font-black text-white shadow-lg'
@@ -251,16 +268,26 @@
                 "
               >
                 <div
-                  class="h-5 w-5 rounded-lg border-2 flex items-center justify-center transition-all shrink-0"
+                  class="h-7 w-7 rounded-xl border flex items-center justify-center transition-all shrink-0 text-xs font-black"
+                  :class="
+                    isOptionChecked(currentQuestion.id, opt.id)
+                      ? 'border-emerald-400 bg-emerald-500 text-white shadow-md'
+                      : 'border-white/20 bg-white/5 text-slate-400'
+                  "
+                >
+                  {{ ['A', 'B', 'C', 'D', 'E', 'F'][optIdx] || optIdx + 1 }}
+                </div>
+                <span class="text-xs sm:text-sm font-semibold flex-1 leading-relaxed">{{ opt.text }}</span>
+                <div
+                  class="h-5 w-5 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ml-auto"
                   :class="
                     isOptionChecked(currentQuestion.id, opt.id)
                       ? 'border-emerald-400 bg-emerald-500 text-white text-xs font-black'
-                      : 'border-slate-500'
+                      : 'border-slate-500/60'
                   "
                 >
                   <span v-if="isOptionChecked(currentQuestion.id, opt.id)">✓</span>
                 </div>
-                <span class="text-xs sm:text-sm font-semibold flex-1">{{ opt.text }}</span>
               </div>
             </template>
 
@@ -279,12 +306,12 @@
           </div>
 
           <!-- Question Footer Navigation -->
-          <div class="flex items-center justify-between border-t border-white/10 pt-4">
+          <div class="flex items-center justify-between border-t border-white/10 pt-4 gap-2">
             <button
               type="button"
               :disabled="currentQuestionIdx === 0"
               @click="goToPrevQuestion"
-              class="px-4 py-2 rounded-xl border border-white/15 text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/5 cursor-pointer"
+              class="px-4 py-2.5 rounded-xl border border-white/15 text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/5 cursor-pointer"
             >
               ← Oldingi
             </button>
@@ -293,7 +320,7 @@
               v-if="currentQuestionIdx < preparedQuestions.length - 1"
               type="button"
               @click="goToNextQuestion"
-              class="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs shadow-lg shadow-blue-500/25 hover:brightness-110 active:scale-95 transition cursor-pointer"
+              class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs shadow-lg shadow-blue-500/25 hover:brightness-110 active:scale-95 transition cursor-pointer"
             >
               Keyingi →
             </button>
@@ -301,8 +328,8 @@
             <button
               v-else
               type="button"
-              @click="confirmFinish"
-              class="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition cursor-pointer"
+              @click="openFinishConfirmModal"
+              class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition cursor-pointer"
             >
               Imtihonni Yakunlash ✓
             </button>
@@ -398,6 +425,131 @@
         </button>
       </div>
     </div>
+
+    <!-- ==========================================
+         PHASE 2.5: BEAUTIFUL FINISH CONFIRMATION MODAL (No window.confirm!)
+         ========================================== -->
+    <Transition name="fade">
+      <div
+        v-if="showFinishModal"
+        class="fixed inset-0 z-50 bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 sm:p-6"
+      >
+        <div
+          class="w-full max-w-md apple-glass-card rounded-[2.5rem] p-6 sm:p-7 space-y-5 border border-white/20 bg-[#0e172a]/95 shadow-2xl relative overflow-hidden"
+        >
+          <!-- Ambient Glow Top -->
+          <div class="absolute -top-20 left-1/2 -translate-x-1/2 w-56 h-28 bg-emerald-500/20 blur-3xl rounded-full pointer-events-none"></div>
+
+          <!-- Header Icon & Title -->
+          <div class="text-center space-y-2 relative z-10">
+            <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-400 text-2xl shadow-xl shadow-emerald-500/30">
+              🏁
+            </div>
+            <h3 class="text-lg sm:text-xl font-black text-white tracking-tight">
+              Testni yakunlaysizmi?
+            </h3>
+            <p class="text-xs text-slate-400">
+              Yakunlaganingizdan so'ng javoblar tekshiriladi va natija saqlanadi.
+            </p>
+          </div>
+
+          <!-- Question Answered Summary Card -->
+          <div class="space-y-3 bg-black/40 rounded-2xl p-4 border border-white/10 relative z-10">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">Jami savollar:</span>
+              <span class="font-black text-white font-mono">{{ preparedQuestions.length }} ta</span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">Javob berilgan:</span>
+              <span class="font-black text-emerald-400 font-mono">{{ answeredQuestionsCount }} ta</span>
+            </div>
+            <div
+              v-if="unansweredQuestionsCount > 0"
+              class="flex items-center justify-between text-xs pt-1 border-t border-white/10"
+            >
+              <span class="text-amber-400 font-bold flex items-center gap-1">
+                <span>⚠️</span> <span>Belgilanmagan:</span>
+              </span>
+              <span class="font-black text-amber-400 font-mono">{{ unansweredQuestionsCount }} ta savol!</span>
+            </div>
+            <div v-else class="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5 pt-1 border-t border-white/10">
+              <span>✅</span> <span>Barcha savollarga javob belgilangan!</span>
+            </div>
+
+            <!-- Quick Jump Question Navigator Dots -->
+            <div class="pt-2">
+              <div class="text-[10px] text-slate-400 font-bold mb-1.5 uppercase tracking-wider">
+                Savollar holati (bosib o'tishingiz mumkin):
+              </div>
+              <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
+                <button
+                  v-for="(q, idx) in preparedQuestions"
+                  :key="q.id"
+                  type="button"
+                  @click="jumpToQuestionFromModal(idx)"
+                  class="h-7 w-7 rounded-lg text-xs font-black transition flex items-center justify-center cursor-pointer border"
+                  :class="
+                    isQuestionAnswered(q.id)
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30'
+                      : 'bg-white/5 border-white/15 text-slate-400 hover:border-amber-400 hover:text-amber-300'
+                  "
+                  :title="`Savol ${idx + 1} ga o'tish`"
+                >
+                  {{ idx + 1 }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center gap-2.5 pt-1 relative z-10">
+            <button
+              type="button"
+              @click="showFinishModal = false"
+              class="flex-1 rounded-2xl border border-white/15 bg-white/5 hover:bg-white/10 py-3 text-xs font-bold text-slate-300 active:scale-95 transition cursor-pointer text-center"
+            >
+              Davom ettirish
+            </button>
+            <button
+              type="button"
+              @click="handleConfirmFinishAndSubmit"
+              class="flex-1 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-500 hover:brightness-110 py-3 text-xs font-black text-white shadow-xl shadow-emerald-500/30 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer text-center"
+            >
+              <span>Ha, Yakunlash</span>
+              <span>🚀</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Image Zoom Lightbox Modal -->
+    <Transition name="fade">
+      <div
+        v-if="isImageZoomed && currentQuestion.imageUrl"
+        class="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center p-4 cursor-zoom-out"
+        @click="isImageZoomed = false"
+      >
+        <div class="absolute top-4 right-4 z-50">
+          <button
+            type="button"
+            @click.stop="isImageZoomed = false"
+            class="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white font-black text-lg flex items-center justify-center transition active:scale-95 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+        <img
+          :src="currentQuestion.imageUrl"
+          :alt="currentQuestion.text"
+          class="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/20"
+          @click.stop
+        />
+        <p class="text-xs text-slate-400 mt-3 text-center">
+          Yopish uchun ekranning istalgan joyini bosing
+        </p>
+      </div>
+    </Transition>
   </div>
   </Teleport>
 </template>
@@ -430,8 +582,42 @@ const currentQuestionIdx = ref(0);
 const studentAnswers = ref<Record<string, string | string[]>>({});
 const shortAnswerInput = ref("");
 
+const showFinishModal = ref(false);
+const isImageZoomed = ref(false);
+
 const startedAt = ref(0);
 const finalResult = ref<ExamResult | null>(null);
+
+const answeredQuestionsCount = computed(() => {
+  return preparedQuestions.value.filter((q) => isQuestionAnswered(q.id)).length;
+});
+
+const unansweredQuestionsCount = computed(() => {
+  return Math.max(0, preparedQuestions.value.length - answeredQuestionsCount.value);
+});
+
+function isQuestionAnswered(questionId: string): boolean {
+  const ans = studentAnswers.value[questionId];
+  if (ans === undefined || ans === null || ans === "") return false;
+  if (Array.isArray(ans)) return ans.length > 0;
+  return true;
+}
+
+function openFinishConfirmModal() {
+  showFinishModal.value = true;
+}
+
+function jumpToQuestionFromModal(idx: number) {
+  showFinishModal.value = false;
+  currentQuestionIdx.value = idx;
+  syncShortAnswerInput();
+  resetQuestionTimer();
+}
+
+function handleConfirmFinishAndSubmit() {
+  showFinishModal.value = false;
+  finishExam();
+}
 
 // Per-question timer
 const questionSecondsRemaining = ref(30);
@@ -594,9 +780,7 @@ function goToNextQuestion() {
 }
 
 function confirmFinish() {
-  if (confirm("Haqiqatan ham testni yakunlamoqchimisiz?")) {
-    finishExam();
-  }
+  openFinishConfirmModal();
 }
 
 function finishExam() {
